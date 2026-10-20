@@ -109,7 +109,12 @@ info 1.0), results with `%SRCROOT%`-relative locations, a snippet, a stable
 and suppressed findings with `suppressions: [{ kind: "inSource", justification }]`. Levels:
 critical/high = `error`, medium = `warning`, low/info = `note`.
 
-### GitHub code scanning
+### GitHub code scanning — the Watchtower action
+
+`watchtower/action.yml` packages the CLI as a composite GitHub Action: it
+installs Node 24, writes the SARIF report first (so an upload step with
+`if: always()` has it even when the gate fails), then prints the text report
+and fails the job at the chosen severity.
 
 ```yaml
 name: watchtower
@@ -121,19 +126,23 @@ jobs:
   sast:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Manuelma4/alcazar/watchtower@main  # pin a release commit SHA in production
         with:
-          node-version: 22
-      - name: Watchtower (SARIF for code scanning)
-        run: node watchtower/bin/watchtower.mjs scan rampart apps --format sarif --output watchtower.sarif --fail-on none
-      - uses: github/codeql-action/upload-sarif@v3
+          paths: src/cobol src/fortran    # spaces or new lines
+          fail-on: high                   # critical | high | medium | low | info | none
+          exclude: '**/generated/**'      # optional glob patterns
+          sarif-file: watchtower.sarif    # default
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        if: always()
         with:
           sarif_file: watchtower.sarif
           category: watchtower
-      - name: Watchtower (gate)
-        run: node watchtower/bin/watchtower.mjs scan rampart apps --fail-on low
 ```
+
+Inputs reach the action's script through environment variables, never by
+template expansion inside it, so a path or pattern cannot inject shell code.
+Paths containing spaces are not supported.
 
 ## Suppressions
 

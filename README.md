@@ -193,12 +193,27 @@ $ node watchtower/bin/watchtower.mjs scan examples/vulnerable/ACCTXFER.cbl
 * **Dogfooded**: CI fails if Watchtower finds anything in Alcazar's own COBOL
   and Fortran — and if it stops finding all 33 rules in `examples/vulnerable`.
 
+Watchtower is also a **GitHub Action** — scan your own legacy code on every
+pull request:
+
 ```yaml
-# .github/workflows/watchtower.yml (in your repository)
-- run: node watchtower/bin/watchtower.mjs scan . --format sarif --output watchtower.sarif --fail-on none
-- uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
-  with:
-    sarif_file: watchtower.sarif
+# .github/workflows/watchtower.yml, in your repository
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  watchtower:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Manuelma4/alcazar/watchtower@main   # pin a release commit SHA in production
+        with:
+          paths: src/cobol src/fortran
+          fail-on: high
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        if: always()
+        with:
+          sarif_file: watchtower.sarif
 ```
 
 <details open><summary><b>COBOL</b> — 16 rules</summary>

@@ -72,6 +72,8 @@
        01  WS-FS-REJ                   PIC XX.
        01  WS-EOF-SW                   PIC X VALUE "N".
            88  WS-EOF                  VALUE "Y".
+       01  WS-LEDGER-SW                PIC X VALUE "N".
+           88  WS-LEDGER-OPEN          VALUE "Y".
        01  WS-OK-SW                    PIC X VALUE "N".
            88  WS-OK-OPEN              VALUE "Y".
        01  WS-REJ-SW                   PIC X VALUE "N".
@@ -106,32 +108,41 @@
            MOVE WS-RETURN-CODE TO RETURN-CODE
            STOP RUN.
 
+      * A missing file reads as empty - TXNGUARD always creates all
+      * three - so deleting one is a verdict, not an I/O error: a
+      * deleted ledger leaves its records over (RECORD-MISMATCH), a
+      * deleted record file starves the first entry that needs it,
+      * and deleting everything leaves a valid empty ledger that only
+      * the anchor kept by Gatehouse can contradict.
        1000-VERIFY-LEDGER.
            OPEN INPUT LEDGER
-           IF WS-FS-LEDGER NOT = "00"
-               DISPLAY "LEDGERCK: cannot open LEDGER.DAT, status "
-                   WS-FS-LEDGER UPON SYSERR
-               MOVE 16 TO WS-RETURN-CODE
-           ELSE
+           EVALUATE WS-FS-LEDGER
+               WHEN "00"
+                   SET WS-LEDGER-OPEN TO TRUE
+               WHEN "35"
+                   SET WS-EOF TO TRUE
+               WHEN OTHER
+                   DISPLAY "LEDGERCK: cannot open LEDGER.DAT, status "
+                       WS-FS-LEDGER UPON SYSERR
+                   MOVE 16 TO WS-RETURN-CODE
+           END-EVALUATE
+           IF WS-RETURN-CODE = 0
                PERFORM 1100-OPEN-RECORDS
-               IF WS-RETURN-CODE = 0
-                   PERFORM 2000-NEXT-ENTRY
-                       UNTIL WS-EOF OR NOT WS-CHAIN-INTACT
-               END-IF
-               IF WS-RETURN-CODE = 0 AND WS-CHAIN-INTACT
-                   PERFORM 4000-CHECK-LEFTOVERS
-               END-IF
-               PERFORM 1200-CLOSE-FILES
-      *        A kernel or I/O failure (12, 16) is not a verdict on
-      *        the ledger: it is reported as such, never as "broken".
-               IF WS-RETURN-CODE = 0 AND NOT WS-CHAIN-INTACT
-                   MOVE 4 TO WS-RETURN-CODE
-               END-IF
+           END-IF
+           IF WS-RETURN-CODE = 0
+               PERFORM 2000-NEXT-ENTRY
+                   UNTIL WS-EOF OR NOT WS-CHAIN-INTACT
+           END-IF
+           IF WS-RETURN-CODE = 0 AND WS-CHAIN-INTACT
+               PERFORM 4000-CHECK-LEFTOVERS
+           END-IF
+           PERFORM 1200-CLOSE-FILES
+      *    A kernel or I/O failure (12, 16) is not a verdict on the
+      *    ledger: it is reported as such, never as "broken".
+           IF WS-RETURN-CODE = 0 AND NOT WS-CHAIN-INTACT
+               MOVE 4 TO WS-RETURN-CODE
            END-IF.
 
-      * A missing ACCEPTED or REJECTED file reads as empty: TXNGUARD
-      * always creates both, so the first entry that needs a record
-      * from a deleted file is a RECORD-MISMATCH.
        1100-OPEN-RECORDS.
            OPEN INPUT TXN-OK
            EVALUATE WS-FS-OK
@@ -157,7 +168,9 @@
            END-EVALUATE.
 
        1200-CLOSE-FILES.
-           CLOSE LEDGER
+           IF WS-LEDGER-OPEN
+               CLOSE LEDGER
+           END-IF
            IF WS-OK-OPEN
                CLOSE TXN-OK
            END-IF

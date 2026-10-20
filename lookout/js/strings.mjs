@@ -392,6 +392,8 @@ export const STRINGS = Object.freeze({
   'seal.status.validBody': '{entries} entries checked by {n} independent verifiers in {ms}.',
   'seal.status.broken': 'Chain broken at entry {seq}',
   'seal.status.stale': 'The ledger changed since it was last verified. Verify it again.',
+  'seal.status.unverified': 'Not verified',
+  'seal.status.unverifiedBody': 'The last verification could not complete (a verifier failed or timed out), so the ledger is not known to be intact. Verify it again.',
   'seal.verifiers.title': 'Verifiers',
   'seal.verifiers.sub': 'A verdict counts only when the implementations agree.',
   'seal.verifier.agrees': 'Agrees',

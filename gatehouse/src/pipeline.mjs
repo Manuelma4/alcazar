@@ -9,7 +9,7 @@ import { HttpError } from './http.mjs';
 import { deriveKeys, genesisMac, keyLines, tamperLedger, tamperRecord, trimRecords, verifyLedger } from './ledger.mjs';
 import { reasonText } from './messages.mjs';
 import {
-  RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSummary, txnInFile,
+  RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSeal, parseSummary, txnInFile,
 } from './records.mjs';
 import { Gate } from './gate.mjs';
 import { runLegacy } from './runner.mjs';
@@ -22,6 +22,12 @@ async function readJobFile(dir, name) {
     if (error.code === 'ENOENT') return '';
     throw error;
   }
+}
+
+/** Cents of a submitted amount, as ALZAMNT reads an accepted one (else null). */
+function submittedCents(amount) {
+  const m = /^\+?(\d+)(?:\.(\d{1,2}))? *$/.exec(amount);
+  return m ? String(BigInt(m[1]) * 100n + BigInt((m[2] ?? '').padEnd(2, '0'))) : null;
 }
 
 export class Pipeline {
@@ -89,23 +95,35 @@ export class Pipeline {
       throw new HttpError(502, 'P-LEGACY', 'TXNGUARD failed', { legacyRc: guard.code });
     }
 
+    // Every sealed file is read once: these bytes are parsed, scored,
+    // verified and shown — nothing reads the job directory again in between.
+    // The anchor comes from TXNGUARD's stdout, a pipe only Gatehouse holds.
+    let seal;
+    let files;
     let summary;
     let accepted;
     let rejected;
     let entries;
     try {
+      seal = parseSeal(guard.stdout);
+      files = {
+        ledger: await readFile(join(dir, 'LEDGER.DAT'), 'latin1'),
+        accepted: await readFile(join(dir, 'ACCEPTED.DAT'), 'latin1'),
+        rejected: await readFile(join(dir, 'REJECTED.DAT'), 'latin1'),
+      };
       summary = parseSummary(await readFile(join(dir, 'SUMMARY.DAT'), 'latin1'));
-      accepted = parseAccepted(await readFile(join(dir, 'ACCEPTED.DAT'), 'latin1'));
-      rejected = parseRejected(await readFile(join(dir, 'REJECTED.DAT'), 'latin1'));
-      entries = parseLedger(await readFile(join(dir, 'LEDGER.DAT'), 'latin1'));
+      accepted = parseAccepted(files.accepted);
+      rejected = parseRejected(files.rejected);
+      entries = parseLedger(files.ledger);
     } catch (error) {
       if (error instanceof RecordError) throw new HttpError(502, 'P-LEGACY', 'TXNGUARD produced malformed output');
       throw error;
     }
     if (summary.job !== jobId || summary.records !== transactions.length || summary.accepted !== accepted.length ||
-        summary.rejected !== rejected.length || summary.ledgerEntries !== entries.length) {
+        summary.rejected !== rejected.length || summary.ledgerEntries !== seal.entries || summary.ledgerHead !== seal.head) {
       throw new HttpError(502, 'P-LEGACY', 'TXNGUARD output is inconsistent');
     }
+    this.matchInput(transactions, entries, accepted, rejected, seal);
     stages.push({
       name: 'txnguard',
       status: rejected.length ? 'warn' : 'ok',
@@ -114,11 +132,12 @@ export class Pipeline {
       detail: { records: summary.records, accepted: accepted.length, rejected: rejected.length },
     });
 
-    const scan = await this.legacy('fraudscan', ['ACCEPTED.DAT', 'RISK.JSON'], dir, '');
+    // FRAUDSCAN scores exactly these bytes: piped in, its report piped out.
+    const scan = await this.legacy('fraudscan', ['-', '-'], dir, Buffer.from(files.accepted, 'latin1'));
     if (scan.code !== 0) throw new HttpError(502, 'P-LEGACY', 'FRAUDSCAN failed', { legacyRc: scan.code });
     let risk;
     try {
-      risk = parseRisk(await readFile(join(dir, 'RISK.JSON'), 'utf8'));
+      risk = parseRisk(scan.stdout);
     } catch (error) {
       if (error instanceof RecordError) throw new HttpError(502, 'P-LEGACY', 'FRAUDSCAN produced malformed output');
       throw error;
@@ -131,8 +150,8 @@ export class Pipeline {
       detail: { scored: risk.n, flagged: risk.flagged },
     });
 
-    const state = { jobId, dir, anchor: { entries: summary.ledgerEntries, head: summary.ledgerHead } };
-    const verification = await this.verify(state);
+    const state = { jobId, dir, anchor: { entries: seal.entries, head: seal.head } };
+    const verification = await this.verify(state, files);
     stages.push({
       name: 'seal',
       status: verification.valid ? 'ok' : 'error',
@@ -168,7 +187,7 @@ export class Pipeline {
       ledger: {
         algorithm: 'HMAC-SHA256',
         genesis: genesisMac(this.keys.ledger, jobId),
-        head: summary.ledgerHead,
+        head: seal.head,
         entries,
         verification,
       },
@@ -177,15 +196,59 @@ export class Pipeline {
   }
 
   /**
+   * What TXNGUARD sealed must be what Gatehouse sent: one ledger entry per
+   * submitted transfer, in order, and every accepted record equal to its
+   * transfer field by field, the account tokens recomputed with K_token. An
+   * input file altered under TXNGUARD's feet — or a TXNGUARD that altered a
+   * transfer — cannot pass.
+   */
+  matchInput(transactions, entries, accepted, rejected, seal) {
+    const fail = () => {
+      throw new HttpError(502, 'P-LEGACY', 'TXNGUARD output does not match the submitted batch');
+    };
+    if (seal.entries !== transactions.length || entries.length !== transactions.length ||
+        accepted.length + rejected.length !== transactions.length) fail();
+    let a = 0;
+    let r = 0;
+    entries.forEach((entry, index) => {
+      const t = transactions[index];
+      if (entry.seq !== index + 1) fail();
+      if (entry.type === 'A') {
+        const record = accepted[a];
+        a += 1;
+        if (!record || record.id !== t.id.trimEnd() || record.timestamp !== t.timestamp ||
+            record.amountCents !== submittedCents(t.amount) || record.currency !== t.currency || record.channel !== t.channel ||
+            record.memo !== (t.memo ?? '').trimEnd() || record.fromToken !== this.token(t.from) || record.toToken !== this.token(t.to)) {
+          fail();
+        }
+      } else {
+        const record = rejected[r];
+        r += 1;
+        if (!record || record.line !== index + 1) fail();
+      }
+    });
+  }
+
+  /**
    * Verify a job's ledger — the chain and every ACCEPTED / REJECTED record
    * it seals — three ways: LEDGERCK (COBOL + Fortran HMAC), an independent
    * Node.js / OpenSSL implementation, and the anchor (entry count and head
    * MAC recorded when the job was sealed).
+   *
+   * Node verifies `files` when given — the bytes the caller parsed and will
+   * show — and the job's files as they are now otherwise. LEDGERCK reads the
+   * job directory itself. If the files change in between, the two verdicts
+   * are about different bytes and cannot agree on "valid" (that would take
+   * a second valid ledger with the same head, i.e. a forged MAC): the result
+   * is then "broken", never "valid".
    */
-  async verify(state) {
+  async verify(state, files = null) {
     const started = performance.now();
-    const text = await readJobFile(state.dir, 'LEDGER.DAT');
-    const records = { accepted: await readJobFile(state.dir, 'ACCEPTED.DAT'), rejected: await readJobFile(state.dir, 'REJECTED.DAT') };
+    const current = files ?? {
+      ledger: await readJobFile(state.dir, 'LEDGER.DAT'),
+      accepted: await readJobFile(state.dir, 'ACCEPTED.DAT'),
+      rejected: await readJobFile(state.dir, 'REJECTED.DAT'),
+    };
     const check = await this.legacy('ledgerck', [state.jobId], state.dir, this.checkKeys);
     if (check.code !== 0 && check.code !== 4) {
       throw new HttpError(502, 'P-LEGACY', 'LEDGERCK failed', { legacyRc: check.code });
@@ -196,7 +259,7 @@ export class Pipeline {
     } catch {
       throw new HttpError(502, 'P-LEGACY', 'LEDGERCK produced malformed output');
     }
-    const node = verifyLedger(text, this.keys.ledger, state.jobId, records);
+    const node = verifyLedger(current.ledger, this.keys.ledger, state.jobId, current);
     const agree = cobol.valid === node.valid && cobol.entries === node.entries && cobol.reason === node.reason &&
       cobol.brokenAt === node.brokenAt && cobol.head === node.head;
     if (!agree) {

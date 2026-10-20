@@ -133,6 +133,9 @@ function chainCard(job, stale) {
     verdict = banner({ tone: 'warn', icon: 'alert', title: t('seal.status.stale') });
   } else if (v.valid) {
     verdict = banner({ tone: 'ok', icon: 'seal', title: t('seal.status.valid'), body: t('seal.status.validBody', { entries: formatInt(v.entries), n: v.verifiedBy.length, ms: formatMs(v.ms) }) });
+  } else if (v.reason === null) {
+    // Gatehouse could not complete a verification: no verdict, no "valid".
+    verdict = banner({ tone: 'warn', icon: 'alert', title: t('seal.status.unverified'), body: t('seal.status.unverifiedBody') });
   } else {
     verdict = banner({
       tone: 'danger',

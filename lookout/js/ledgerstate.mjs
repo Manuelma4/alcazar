@@ -14,7 +14,8 @@
 export function chainStates(job, stale) {
   const entries = job.ledger.entries;
   const v = job.ledger.verification;
-  const unverified = stale || v.stale === true;
+  // No verdict at all (a verifier failed): nothing is known, nothing is broken.
+  const unverified = stale || v.stale === true || (!v.valid && v.reason === null);
   const states = entries.map(() => (unverified ? 'unknown' : 'verified'));
   const ghosts = [];
   if (unverified || v.valid) return { states, ghosts, breakIndex: null };

@@ -152,7 +152,17 @@ export async function createApp(config, { log = defaultLog } = {}) {
   async function jobCommand(res, entry, action, value) {
     if (action === '/verify') {
       if (!isEmptyObject(value)) throw new HttpError(400, 'P-SCHEMA', 'verify takes an empty object');
-      const verification = await pipeline.verify(entry.state);
+      let verification;
+      try {
+        verification = await pipeline.verify(entry.state);
+      } catch (error) {
+        // A verifier that failed or timed out proves nothing: the job must
+        // stop showing its last "valid". (A busy gate is not a verdict.)
+        if (error instanceof HttpError && (error.code === 'P-LEGACY' || error.code === 'P-TIMEOUT')) {
+          entry.job.ledger.verification = { valid: false, entries: 0, head: null, brokenAt: null, reason: null, verifiedBy: [], ms: 0 };
+        }
+        throw error;
+      }
       entry.job.ledger.verification = verification;
       sendJson(res, 200, verification);
       return;

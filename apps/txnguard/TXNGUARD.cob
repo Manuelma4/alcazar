@@ -17,6 +17,9 @@
       *                        also seals its ACCEPTED or REJECTED
       *                        record (ledger format v2)
       *          SUMMARY.DAT   KEY=VALUE run summary
+      *   stdout ALZ-SEAL|ENTRIES=nnnnnn|HEAD=<64 hex> when the run
+      *          ends with 0 or 4: the anchor, through a pipe the
+      *          caller owns rather than a file in the job directory
       *
       *   Return codes   0 all accepted      4 some rejected
       *                  8 input error      12 key or self-test error
@@ -170,6 +173,7 @@
 
       * Summary lines.
        01  WS-LABEL                    PIC X(20).
+       01  WS-SEAL-LINE                PIC X(100).
        01  WS-NUMBER                   PIC 9(18).
        01  WS-NUM-EDIT                 PIC Z(17)9.
 
@@ -712,7 +716,18 @@
                    PERFORM 8000-WRITE-FAILED
                END-IF
            END-IF
+           IF WS-RETURN-CODE < 8
+               PERFORM 9400-ANNOUNCE-SEAL
+           END-IF
            PERFORM ALZ-WIPE-KEYS.
+
+      * The entry count and head MAC once more, on stdout: whoever can
+      * rewrite SUMMARY.DAT cannot rewrite what TXNGUARD printed.
+       9400-ANNOUNCE-SEAL.
+           MOVE SPACES TO WS-SEAL-LINE
+           STRING "ALZ-SEAL|ENTRIES=" WS-SEALED "|HEAD=" WS-PREV-MAC
+               DELIMITED BY SIZE INTO WS-SEAL-LINE
+           DISPLAY FUNCTION TRIM(WS-SEAL-LINE TRAILING).
 
        9100-WRITE-SUMMARY.
            MOVE "ALZ-SUMMARY=1" TO SUMMARY-RECORD

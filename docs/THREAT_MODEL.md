@@ -22,7 +22,9 @@ explicitly **not** covered.
 1. **Remote attacker** — sends arbitrary HTTP to Gatehouse, or lures an
    operator's browser to a hostile page (CSRF, DNS rebinding, XSS payloads).
 2. **Malicious insider** — has write access to the job directory and edits,
-   deletes or truncates ledger files after the fact.
+   deletes or truncates its files: after the fact, or even while a job runs
+   (between TXNGUARD and Gatehouse, on TXNGUARD's input, during
+   verification).
 3. **Hostile contributor** — submits code that looks harmless in review
    (Trojan Source, code hidden past column 72, unsafe legacy idioms).
 4. **Compromised supply chain** — a malicious npm package or base image.
@@ -72,7 +74,8 @@ flowchart LR
 | **T**ampering: injection (SQL, HTML, formulas, shell) | B1, B2 | No shell anywhere (spawn with argv), SEPA character set, formula-prefix rule, DOM built without HTML parsing + Trusted Types | Siege `xss-memo`, `sqli-memo`, `formula-injection`, `cmd-injection` |
 | **T**ampering: editing the ledger | Disk | HMAC-SHA256 chain over every entry and the previous MAC, files read as fixed-length records (no reader normalisation); LEDGERCK and an independent OpenSSL implementation must agree | Siege `ledger-tamper`, `ledger-delete`; `agreement.test.mjs` (250 random corruptions, identical verdicts) |
 | **T**ampering: editing a decision record (redirecting a payment, rewriting a rejection) | Disk | Each ledger entry seals an HMAC of its whole ACCEPTED or REJECTED record; records with no entry are refused | Siege `record-tamper`, `ledger.test.mjs` |
-| **T**ampering: truncating the ledger (and its records) | Disk | Head MAC and entry count anchored in Gatehouse memory when the job is sealed | Siege `ledger-truncate` |
+| **T**ampering: truncating the ledger (and its records) | Disk | Head MAC and entry count anchored in Gatehouse memory when the job is sealed, taken from TXNGUARD's stdout (not from a file in the job directory) | Siege `ledger-truncate`, `insider.test.mjs` |
+| **T**ampering: editing input or output files while a job runs | Disk | Sealed files read once and those bytes verified; FRAUDSCAN fed through pipes; one ledger entry per submitted transfer and every accepted record checked against the transfer Gatehouse sent (tokens recomputed with `K_token`); LEDGERCK and Node must agree, so concurrent edits can only yield "broken" | `insider.test.mjs` |
 | **T**ampering: Trojan Source / hidden code in contributions | Repo | `scripts/check-unicode.mjs` in CI; Watchtower `ALZ-GEN-001/002`, `ALZ-COB-014` | CI |
 | **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id | `ledger.test.mjs` |
 | **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD, and job directories left by a crash removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core; a card number typed into the memo is refused (E803), however it is grouped and whatever digits surround it | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (15 card formats, 8 look-alikes); Siege `pan-in-memo` |

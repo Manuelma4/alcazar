@@ -3,6 +3,10 @@
 !>
 !>   usage: fraudscan [ACCEPTED.DAT [RISK.JSON]]
 !>
+!> "-" reads the records from standard input or writes the report to
+!> standard output: Gatehouse pipes in the bytes it has verified and reads
+!> the report back, so no file in the job directory sits in between.
+!>
 !> Reads the normalized, pseudonymized ACCEPTED records (accounts are HMAC
 !> tokens: this program never sees an IBAN or a card number) and writes a JSON
 !> risk report: Benford first-digit test, robust z-scores, structuring,
@@ -16,7 +20,7 @@
 !> Exit codes, mainframe style: 0 ok, 8 malformed input, 12 limit exceeded,
 !> 16 I/O error.
 program fraudscan
-  use, intrinsic :: iso_fortran_env, only: int64, real64, error_unit
+  use, intrinsic :: iso_fortran_env, only: int64, real64, error_unit, input_unit, output_unit
   use rampart_stats, only: robust_scale, robust_z, median, first_digit, benford_expected, &
                        chi2_sf, shannon_entropy
   use rampart_json, only: json_string, json_int, json_real
@@ -129,9 +133,13 @@ contains
     allocate(txns(MAX_TXN))
     n = 0
     rc = 16
-    open (newunit=unit, file=path, status='old', action='read', form='formatted', &
-          access='sequential', iostat=ios)
-    if (ios /= 0) return
+    if (path == '-') then
+      unit = input_unit
+    else
+      open (newunit=unit, file=path, status='old', action='read', form='formatted', &
+            access='sequential', iostat=ios)
+      if (ios /= 0) return
+    end if
 
     lineno = 0
     do
@@ -155,7 +163,7 @@ contains
       n = n + 1
     end do
     if (is_iostat_end(ios)) rc = 0
-    close (unit, iostat=ios)
+    if (unit /= input_unit) close (unit, iostat=ios)
   end subroutine read_accepted
 
   !> Strict parse of one ACCEPTED record (layout in docs/ARCHITECTURE.md).
@@ -405,9 +413,13 @@ contains
 
     n = size(txns)
     rc = 16
-    open (newunit=unit, file=path, status='replace', action='write', form='formatted', &
-          access='sequential', iostat=ios)
-    if (ios /= 0) return
+    if (path == '-') then
+      unit = output_unit
+    else
+      open (newunit=unit, file=path, status='replace', action='write', form='formatted', &
+            access='sequential', iostat=ios)
+      if (ios /= 0) return
+    end if
 
     write (unit, '(a)', iostat=ios) '{"schema":"alcazar.fraudscan/v1","n":' // json_int(int(n, int64)) // ','
     call write_benford(unit, txns)
@@ -426,7 +438,11 @@ contains
     end do
     write (unit, '(a)', iostat=ios) '],"flagged":' // json_int(int(count(any(signal, dim=1)), int64)) // '}'
     if (ios /= 0) return
-    close (unit, iostat=ios)
+    if (unit == output_unit) then
+      flush (unit, iostat=ios)
+    else
+      close (unit, iostat=ios)
+    end if
     if (ios == 0) rc = 0
   end subroutine write_report
 

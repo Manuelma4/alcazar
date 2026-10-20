@@ -74,6 +74,7 @@ Alcazar has no dependencies, runtime or development.
 ```console
 $ make demo
 == TXNGUARD (COBOL) ==========================================
+ALZ-SEAL|ENTRIES=000016|HEAD=bb2d92cec5aa9a83...
 return code 4 (0 all accepted, 4 some rejected)
   RECORDS=16  ACCEPTED=4  REJECTED=12  LEDGER-ENTRIES=16  SELFTEST=PASS
 Rejected records:

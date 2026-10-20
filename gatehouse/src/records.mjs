@@ -176,6 +176,13 @@ export function parseSummary(text) {
   };
 }
 
+/** The line TXNGUARD prints on stdout at the end of a run: the anchor. */
+export function parseSeal(stdout) {
+  const m = /^ALZ-SEAL\|ENTRIES=(\d{6})\|HEAD=([0-9a-f]{64})$/.exec(stdout.trim());
+  if (!m) throw new RecordError('unexpected TXNGUARD output');
+  return { entries: Number(m[1]), head: m[2] };
+}
+
 /** The single line LEDGERCK prints. */
 export function parseLedgerck(stdout) {
   const line = stdout.trim();

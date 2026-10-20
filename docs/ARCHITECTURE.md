@@ -9,10 +9,11 @@ flowchart LR
   B[Browser · Lookout<br/>strict CSP + Trusted Types] -->|JSON over HTTP| G[Gatehouse<br/>Node.js gateway, zero deps]
   G -->|fixed-width records<br/>execFile, no shell| T[TXNGUARD<br/>COBOL validator]
   T -->|CALL via C ABI| K[(Rampart Fortran kernel<br/>SHA-256 · HMAC · CT compare)]
-  T -->|ACCEPTED.DAT| F[FRAUDSCAN<br/>Fortran analytics]
-  T -->|LEDGER.DAT| S[Seal<br/>HMAC-chained ledger]
+  T -->|ACCEPTED · REJECTED · LEDGER<br/>seal on stdout| G
+  G -->|verified ACCEPTED bytes, stdin| F[FRAUDSCAN<br/>Fortran analytics]
+  F -->|risk report, stdout| G
+  T -->|every decision| S[Seal<br/>HMAC-chained ledger]
   S -->|LEDGERCK COBOL verifier| G
-  F -->|RISK.JSON| G
   W[Watchtower<br/>COBOL/Fortran SAST] -.->|scans| T
   W -.->|scans| F
 ```
@@ -39,15 +40,25 @@ flowchart LR
    the master key never reaches a legacy program.
 4. TXNGUARD runs the Fortran crypto power-on self-test, validates every record
    with the Rampart COBOL modules, writes `ACCEPTED.DAT`, `REJECTED.DAT`,
-   `LEDGER.DAT`, `SUMMARY.DAT`, and returns a mainframe-style return code
-   (0 = all accepted, 4 = some rejected, 8 = input error, 12 = key/self-test
-   error, 16 = I/O error). `TXNIN.DAT` (raw PANs) is deleted by Gatehouse right
-   after TXNGUARD finishes.
-5. Gatehouse runs `fraudscan` (reads `ACCEPTED.DAT`, writes `RISK.JSON`).
-6. Gatehouse runs `ledgerck` (COBOL verifier) **and** re-verifies the ledger
-   with Node's OpenSSL HMAC — the chain and every `ACCEPTED` / `REJECTED`
-   record it seals; two independent implementations must agree.
-7. The job (masked data only) is kept in memory for 15 minutes (max 40 jobs).
+   `LEDGER.DAT`, `SUMMARY.DAT`, prints the seal on stdout
+   (`ALZ-SEAL|ENTRIES=nnnnnn|HEAD=<64 hex>`) and returns a mainframe-style
+   return code (0 = all accepted, 4 = some rejected, 8 = input error,
+   12 = key/self-test error, 16 = I/O error). `TXNIN.DAT` (raw PANs) is
+   deleted by Gatehouse right after TXNGUARD finishes.
+5. Gatehouse reads the three sealed files **once**; from here on those bytes
+   are what is parsed, scored, verified and shown. The anchor (entry count,
+   head MAC) is taken from TXNGUARD's stdout, a pipe only Gatehouse holds,
+   and must match `SUMMARY.DAT`. What was sealed must be what was sent: one
+   ledger entry per submitted transfer, and every accepted record equal to
+   its transfer field by field, account tokens recomputed with `K_token` —
+   so an input or output file edited while the job runs fails the job.
+6. Gatehouse pipes those `ACCEPTED` bytes into `fraudscan - -` and reads the
+   risk report back from its stdout: no file sits in between.
+7. Gatehouse runs `ledgerck` (COBOL verifier) on the job directory **and**
+   verifies the bytes it holds with Node's OpenSSL HMAC — the chain and every
+   `ACCEPTED` / `REJECTED` record it seals; the two must agree, so a file
+   changed between the two reads can only ever produce "broken".
+8. The job (masked data only) is kept in memory for 15 minutes (max 40 jobs).
 
 ## 2. Record layouts (fixed width, ASCII)
 

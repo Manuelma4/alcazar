@@ -9,7 +9,7 @@ with Trusted Types that it checks on itself.
 |------|--------------|
 | **Overview** | Hero, Gatehouse status and the 7 power-on self-tests, the **fortress map** (a replay of the latest batch), KPI tiles |
 | **Transactions** | Load a batch (Gatehouse sample, pasted JSON or a local file), run it, read rejection reasons, top risk, Benford, the log-scale amount histogram and every transfer (filter, search, record-level detail) |
-| **Seal** | The HMAC-SHA256 chain: verifiers, tamper console (demo mode), ledger map, chain of tiles that cracks at the break, byte-level inspector |
+| **Seal** | The HMAC-SHA256 chain: verifiers, the signed anchor (download), tamper console (demo mode), ledger map, chain of tiles that cracks at the break, byte-level inspector |
 | **Siege** | All `shared/lab.mjs` scenarios against the live gateway, one by one or as a full siege ending in a wax seal |
 | **Watchtower** | The COBOL/Fortran scanner running **in the browser**, the repository self-scan, the rule catalogue, SARIF download |
 | **Defenses** | Headers, sandbox, compiler hardening, self-test — plus checks this page runs on itself |
@@ -35,8 +35,14 @@ throw-away profile) while Gatehouse runs.
 Lookout is served by Gatehouse; there is nothing to build or install.
 
 ```sh
-npm run start:dev   # ALCAZAR_STATIC_RELOAD=1 node gatehouse/src/server.mjs -> http://localhost:8080/
+npm run start:dev   # ALCAZAR_STATIC_RELOAD=1 ALCAZAR_DEMO=1 node gatehouse/src/server.mjs
 ```
+
+Open the sign-in link Gatehouse prints (`http://localhost:8080/#signin=…`),
+or paste its token into the sign-in screen: Lookout trades it for an
+HttpOnly, SameSite=Strict session cookie and drops the token from the
+address bar and the page. A sign-in link works in a fresh tab or in one
+already open; the sign-out button sits in the top bar.
 
 With `ALCAZAR_STATIC_RELOAD=1`
 static files are re-read on every page request: edit, reload. Gatehouse serves

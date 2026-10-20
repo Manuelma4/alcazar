@@ -66,6 +66,7 @@ export function render() {
         pill({ icon: 'rampart', label: t('overview.runtime.cobol'), value: health.runtime.cobol || '\u{2014}' }),
         pill({ icon: 'observatory', label: t('overview.runtime.fortran'), value: health.runtime.fortran || '\u{2014}' }),
         pill({ icon: 'key', label: t('overview.runtime.key'), value: health.keySource ? capitalize(health.keySource) : '\u{2014}' }),
+        pill({ icon: 'lock', label: t('overview.runtime.auth'), value: t(`overview.runtime.auth.${health.auth}`), tone: health.auth === 'token' ? 'ok' : 'warn' }),
         pill({ icon: health.demo ? 'flask' : 'lock', label: t('overview.runtime.demo'), value: health.demo ? t('common.on') : t('common.off'), tone: health.demo ? 'warn' : 'ok' })),
       h('ul', { class: 'selftest-list', 'aria-label': t('overview.runtime.checks') },
         health.selftest.checks.map((c) => h('li', { class: c.status === 'pass' ? 'is-pass' : 'is-fail' },

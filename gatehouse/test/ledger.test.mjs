@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { describe, it } from 'node:test';
 import {
-  deriveKeys, genesisMac, keyLines, recordMac, tamperLedger, tamperRecord, trimRecords, verifyLedger,
+  deriveKeys, genesisMac, keyFromHex, keyLines, recordMac, tamperLedger, tamperRecord, trimRecords, verifyLedger,
 } from '../src/ledger.mjs';
 import { LEDGER_LENGTH, LEDGER_MAC_INPUT } from '../src/records.mjs';
 
@@ -50,6 +50,14 @@ describe('Node / OpenSSL ledger verification', () => {
     assert.ok(Buffer.isBuffer(lines));
     assert.equal(lines.toString('latin1'), `${keys.ledger.toString('hex')}\n${keys.token.toString('hex')}\n`);
     assert.equal(keyLines(Buffer.from([0x00, 0x0f, 0xf0, 0xff])).toString('latin1'), '000ff0ff\n');
+  });
+
+  it('decodes a hex key from bytes, and only lower-case hex', () => {
+    const key = deriveKeys(master).ledger;
+    assert.deepEqual(keyFromHex(keyLines(key).subarray(0, 64)), key);
+    assert.equal(keyFromHex(Buffer.from('A1'.repeat(32))), null);
+    assert.equal(keyFromHex(Buffer.from('a1'.repeat(31))), null);
+    assert.equal(keyFromHex(Buffer.from(`${'a1'.repeat(31)}g1`)), null);
   });
 
   it('builds test ledgers in the v2 layout', () => {

@@ -64,7 +64,7 @@ on stdin, genesis MAC, wiping).
 | `rampart_kat` | Known-answer tests (NIST, RFC 4231) run at start-up. |
 | `rampart_stats` | Heapsort, median, MAD, robust z, Benford, chi-square survival function (incomplete gamma), Shannon entropy. |
 | `rampart_json` | JSON strings and numbers that are valid by construction. |
-| `rampart_capi` | The `bind(C)` entry points. |
+| `rampart_capi` | The `bind(C)` entry points, including `alz_read_line` / `alz_expect_eof`: secrets read from stdin with `read(2)`, never through a buffer the caller cannot wipe. |
 
 ```fortran
 use rampart_hmac, only: hmac_sha256

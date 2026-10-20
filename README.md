@@ -314,12 +314,15 @@ Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
 ## Lessons from the trenches
 
 Building this surfaced real, measurable traps — each now has a defence and a
-test ([all 19](docs/HARDENING.md)):
+test ([all 20](docs/HARDENING.md)):
 
 * GnuCOBOL **splits an over-long LINE SEQUENTIAL line into extra records**,
   **trims the trailing blanks of every record it writes** (so a MAC of the
   record is not a MAC of the file), and a short final record keeps the
   previous record's bytes — all with status `00`.
+* COBOL's **`ACCEPT` keeps a copy of every line it reads** in buffers no
+  program can wipe: three copies of the hex keys survived the wipe, until
+  the keys were read with `read(2)`.
 * A Fortran **module named like a C binding label** compiled into infinite
   recursion; only `-fcheck=recursion` noticed.
 * gfortran **may skip impure functions in `.and.`** — a self-test that silently

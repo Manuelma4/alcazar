@@ -138,8 +138,9 @@ A loop that wipes a key just before it goes out of scope is a dead store an
 optimiser may delete.
 
 *Defence:* `zeroize` writes through a `VOLATILE` dummy argument; TXNGUARD and
-LEDGERCK wipe the hex text of each key as soon as it is decoded, and the
-sub-keys at the end of the run. Gatehouse keeps its copies in `Buffer`s — hex
+LEDGERCK wipe the hex text of each key as soon as it is decoded — read
+without stdio, so that buffer is the only copy (item 20) — and the sub-keys
+at the end of the run. Gatehouse keeps its copies in `Buffer`s — hex
 encoded byte by byte, never through a JavaScript string, which could not be
 wiped — and overwrites them on shutdown. A legacy program never holds the
 master key at all: Gatehouse derives the sub-keys and sends each program only
@@ -266,6 +267,21 @@ back.
 *Defence:* the files the Seal covers (`ACCEPTED`, `REJECTED`, `LEDGER`) are
 ORGANIZATION SEQUENTIAL with the line feed as the record's last byte: the
 bytes written are exactly the bytes MACed and the bytes read back (item 18).
+
+### 20. ACCEPT keeps a copy of every line it reads
+
+TXNGUARD read its keys with `ACCEPT` and wiped the field right after decoding
+them. A scan of the process's writable memory after the wipe still found the
+hex text of both keys three times on the heap: in the C library's stdin
+buffer and in the COBOL run time's line buffer, which no program can reach to
+wipe.
+
+*Defence:* the keys are read with `alz_read_line` (Rampart's C ABI): `read(2)`
+one byte at a time straight into the COBOL field, so the field is the only
+copy; the same scan then finds none. `alz_expect_eof` then makes a program
+refuse to run when stdin holds more than its own keys — LEDGERCK handed
+K-token too is refused. Gatehouse decodes the master key file byte by byte
+as well; the hex never becomes a JavaScript string.
 
 ### Not a vulnerability, but you will see it
 

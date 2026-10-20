@@ -7,7 +7,7 @@
 !> function would leave garbage in COBOL's RETURN-CODE. Lengths are validated
 !> before any buffer is touched.
 module rampart_capi
-  use, intrinsic :: iso_c_binding, only: c_char, c_int8_t, c_int32_t
+  use, intrinsic :: iso_c_binding, only: c_char, c_int, c_int8_t, c_int32_t, c_loc, c_ptr, c_ptrdiff_t, c_size_t
   use rampart_bytes, only: hex_encode, hex_decode
   use rampart_sha256, only: sha256, SHA256_LEN
   use rampart_hmac, only: hmac_sha256
@@ -21,6 +21,8 @@ module rampart_capi
   integer(c_int32_t), parameter, public :: ALZ_E_LENGTH = -1
   integer(c_int32_t), parameter, public :: ALZ_E_HEX = -2
   integer(c_int32_t), parameter, public :: ALZ_E_CAPACITY = -3
+  integer(c_int32_t), parameter, public :: ALZ_E_EOF = -4
+  integer(c_int32_t), parameter, public :: ALZ_E_IO = -5
   integer(c_int32_t), parameter, public :: ALZ_E_SELFTEST = -10
 
   !> Upper bound for any single buffer (16 MiB): bounds the work an untrusted
@@ -29,6 +31,18 @@ module rampart_capi
 
   public :: capi_sha256, capi_sha256_hex, capi_hmac_sha256, capi_hmac_sha256_hex
   public :: capi_ct_equal, capi_hex_decode, capi_hex_encode, capi_zeroize, capi_selftest
+  public :: capi_read_line, capi_expect_eof
+
+  interface
+    !> POSIX read(2). ssize_t has the width of ptrdiff_t on every POSIX ABI.
+    function posix_read(fd, buf, count) result(got) bind(C, name='read')
+      import :: c_int, c_ptr, c_ptrdiff_t, c_size_t
+      integer(c_int), value :: fd
+      type(c_ptr), value :: buf
+      integer(c_size_t), value :: count
+      integer(c_ptrdiff_t) :: got
+    end function posix_read
+  end interface
 
 contains
 
@@ -180,6 +194,68 @@ contains
     call zeroize(buf(1:n))
     rc = ALZ_OK
   end function capi_zeroize
+
+  !> int32_t alz_read_line(uint8_t *buf, const int32_t *cap, int32_t *len)
+  !> One line from standard input, read with read(2) one byte at a time: no
+  !> stdio or language run-time buffer ever holds it, so the caller's buffer
+  !> is the only copy in the process and wiping it wipes the line. The line
+  !> feed is consumed, not stored. ALZ_OK; ALZ_E_CAPACITY when the line is
+  !> longer than cap, ALZ_E_EOF when input ends before a line feed, ALZ_E_IO
+  !> when read fails - in each of these cases the bytes read are wiped and
+  !> len is 0.
+  function capi_read_line(buf, cap, out_len) result(rc) bind(C, name='alz_read_line')
+    integer(c_int8_t), intent(inout) :: buf(*)
+    integer(c_int32_t), intent(in) :: cap
+    integer(c_int32_t), intent(out) :: out_len
+    integer(c_int32_t) :: rc
+    integer(c_int8_t), target :: byte(1)
+    integer(c_ptrdiff_t) :: got
+
+    out_len = 0
+    rc = ALZ_E_LENGTH
+    if (.not. valid_length(cap)) return
+    do
+      got = posix_read(0_c_int, c_loc(byte), 1_c_size_t)
+      if (got /= 1_c_ptrdiff_t) then
+        rc = merge(ALZ_E_EOF, ALZ_E_IO, got == 0_c_ptrdiff_t)
+        exit
+      end if
+      if (byte(1) == 10_c_int8_t) then
+        rc = ALZ_OK
+        exit
+      end if
+      if (out_len == cap) then
+        rc = ALZ_E_CAPACITY
+        exit
+      end if
+      out_len = out_len + 1
+      buf(out_len) = byte(1)
+    end do
+    call zeroize(byte)
+    if (rc /= ALZ_OK) then
+      call zeroize(buf(1:out_len))
+      out_len = 0
+    end if
+  end function capi_read_line
+
+  !> int32_t alz_expect_eof(void) — ALZ_OK when standard input has nothing
+  !> left: a program given more than it needs (a key it must not hold)
+  !> refuses to run. The byte read, if any, is wiped.
+  function capi_expect_eof() result(rc) bind(C, name='alz_expect_eof')
+    integer(c_int32_t) :: rc
+    integer(c_int8_t), target :: byte(1)
+    integer(c_ptrdiff_t) :: got
+
+    got = posix_read(0_c_int, c_loc(byte), 1_c_size_t)
+    if (got == 0_c_ptrdiff_t) then
+      rc = ALZ_OK
+    else if (got > 0_c_ptrdiff_t) then
+      rc = ALZ_E_CAPACITY
+    else
+      rc = ALZ_E_IO
+    end if
+    call zeroize(byte)
+  end function capi_expect_eof
 
   !> int32_t alz_selftest(void) — ALZ_OK when every known-answer test passes.
   function capi_selftest() result(rc) bind(C, name='alz_selftest')

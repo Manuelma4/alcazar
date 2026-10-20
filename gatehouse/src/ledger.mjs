@@ -34,6 +34,24 @@ export function keyLines(...keys) {
   return out;
 }
 
+/**
+ * The inverse of keyLines for one key: 64 lower-case hex digits (bytes, not
+ * a string) to a 32-byte Buffer, or null.
+ */
+export function keyFromHex(bytes) {
+  if (bytes.length !== 64) return null;
+  const key = Buffer.alloc(32);
+  for (let i = 0; i < 64; i += 1) {
+    const nibble = HEX_DIGITS.indexOf(bytes[i]);
+    if (nibble < 0) {
+      key.fill(0);
+      return null;
+    }
+    key[i >> 1] |= i % 2 === 0 ? nibble << 4 : nibble;
+  }
+  return key;
+}
+
 export function genesisMac(ledgerKey, jobId) {
   return createHmac('sha256', ledgerKey).update(`alcazar/genesis/v2|${jobId}`, 'latin1').digest('hex');
 }

@@ -72,7 +72,6 @@
                    PERFORM ALZ-READ-KEY-LINE
                    IF ALZ-OK
                        MOVE ALZ-KEY-BIN TO ALZ-TOKEN-KEY
-                       PERFORM ALZ-CHECK-SEPARATION
                    END-IF
                END-IF
            END-IF
@@ -83,27 +82,50 @@
                DISPLAY ALZ-PROGRAM-NAME ": stdin must carry each key"
                    " as 64 lower-case hex digits on its own line"
                    UPON SYSERR
+           ELSE
+               PERFORM ALZ-CHECK-STDIN-DRAINED
+               IF ALZ-OK AND ALZ-NEEDS-TOKEN-KEY
+                   PERFORM ALZ-CHECK-SEPARATION
+               END-IF
            END-IF.
 
+      * Not ACCEPT: it reads through stdio and the COBOL run time,
+      * whose buffers keep the hex text after ALZ-KEY-HEX is wiped.
+      * alz_read_line reads with read(2), byte by byte, into
+      * ALZ-KEY-HEX only.
        ALZ-READ-KEY-LINE.
-           MOVE -1 TO ALZ-RC
            MOVE SPACES TO ALZ-KEY-HEX
-           ACCEPT ALZ-KEY-HEX
-           IF ALZ-KEY-HEX(1:64) IS ALZ-HEX
-              AND ALZ-KEY-HEX(65:16) = SPACES
-               MOVE 64 TO ALZ-HEX-LEN
-               MOVE 32 TO ALZ-OUT-CAP
-               CALL "alz_hex_decode" USING ALZ-KEY-HEX ALZ-HEX-LEN
-                                           ALZ-KEY-BIN ALZ-OUT-CAP
-                                           ALZ-OUT-LEN
-                                 RETURNING ALZ-RC
-               IF ALZ-OK AND ALZ-OUT-LEN NOT = 32
+           MOVE 80 TO ALZ-OUT-CAP
+           CALL "alz_read_line" USING ALZ-KEY-HEX ALZ-OUT-CAP
+                                      ALZ-OUT-LEN
+                            RETURNING ALZ-RC
+           IF ALZ-OK
+               IF ALZ-OUT-LEN = 64 AND ALZ-KEY-HEX(1:64) IS ALZ-HEX
+                   MOVE 64 TO ALZ-HEX-LEN
+                   MOVE 32 TO ALZ-OUT-CAP
+                   CALL "alz_hex_decode" USING ALZ-KEY-HEX ALZ-HEX-LEN
+                                               ALZ-KEY-BIN ALZ-OUT-CAP
+                                               ALZ-OUT-LEN
+                                     RETURNING ALZ-RC
+                   IF ALZ-OK AND ALZ-OUT-LEN NOT = 32
+                       MOVE -1 TO ALZ-RC
+                   END-IF
+               ELSE
                    MOVE -1 TO ALZ-RC
                END-IF
            END-IF
            MOVE 80 TO ALZ-MSG-LEN
            CALL "alz_zeroize" USING ALZ-KEY-HEX ALZ-MSG-LEN
                           RETURNING ALZ-WIPE-RC.
+
+      * A program given more than its keys - LEDGERCK handed K-token
+      * too - refuses to run: least privilege on the receiving side.
+       ALZ-CHECK-STDIN-DRAINED.
+           CALL "alz_expect_eof" RETURNING ALZ-RC
+           IF NOT ALZ-OK
+               DISPLAY ALZ-PROGRAM-NAME ": stdin carries more than"
+                   " the keys this program may hold" UPON SYSERR
+           END-IF.
 
       * The same key twice means the sender skipped the derivation:
       * tokens would then be MACs under the ledger key.

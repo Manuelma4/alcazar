@@ -20,8 +20,10 @@ import { validateBatch } from '../gatehouse/src/schema.mjs';
 import { scan } from '../watchtower/src/index.mjs';
 
 const BIN = join(ROOT, 'build', 'bin');
-// K-ledger and K-token, as Gatehouse sends them (LEDGERCK reads only the first).
+// The sub-keys as Gatehouse sends them: K-ledger and K-token to TXNGUARD,
+// K-ledger alone to LEDGERCK (which refuses anything more).
 const KEY = `${'a1'.repeat(32)}\n${'b2'.repeat(32)}\n`;
+const LEDGER_KEY = `${'a1'.repeat(32)}\n`;
 const work = mkdtempSync(join(tmpdir(), 'alcazar-bench-'));
 const rows = [];
 
@@ -79,7 +81,7 @@ const scanTimes = [];
 for (let i = 0; i < 30; i += 1) scanTimes.push(time(() => run(join(BIN, 'fraudscan'), ['ACCEPTED.DAT', 'RISK.JSON'], work)));
 report('FRAUDSCAN — score the accepted transfers (Fortran)', scanTimes, 'records', JSON.parse(readFileSync(join(work, 'RISK.JSON'), 'utf8')).n);
 const check = [];
-for (let i = 0; i < 30; i += 1) check.push(time(() => run(join(BIN, 'ledgerck'), ['j-bench'], work, KEY)));
+for (let i = 0; i < 30; i += 1) check.push(time(() => run(join(BIN, 'ledgerck'), ['j-bench'], work, LEDGER_KEY)));
 report('LEDGERCK — verify a 1,000-entry ledger and the records it seals (COBOL + Fortran)', check, 'entries', 1000);
 
 // 2. Gatehouse end to end (HTTP, validation, all programs, double verification).

@@ -10,6 +10,7 @@ import {
   HttpError, checkHost, checkSameOrigin, readJsonBody, securityHeaders, sendError, sendJson,
 } from './http.mjs';
 import { JobStore } from './jobs.mjs';
+import { keyFromHex } from './ledger.mjs';
 import { Pipeline } from './pipeline.mjs';
 import { RateLimiter } from './ratelimit.mjs';
 import { RLIMITS_AVAILABLE, runLegacy } from './runner.mjs';
@@ -393,9 +394,17 @@ async function loadMasterKey(file) {
   if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) {
     throw new Error(`${file} must not be accessible by group or others (chmod 600)`);
   }
-  const text = (await readFile(file, 'utf8')).trim();
-  if (!/^[0-9a-f]{64}$/.test(text)) throw new Error(`${file} must contain 64 lower-case hex digits`);
-  return { key: Buffer.from(text, 'hex'), source: 'file' };
+  // Bytes from start to finish: a hex string could never be wiped.
+  const raw = await readFile(file);
+  try {
+    let end = raw.length;
+    while (end > 0 && (raw[end - 1] === 0x0a || raw[end - 1] === 0x0d)) end -= 1;
+    const key = keyFromHex(raw.subarray(0, end));
+    if (!key) throw new Error(`${file} must contain 64 lower-case hex digits`);
+    return { key, source: 'file' };
+  } finally {
+    raw.fill(0);
+  }
 }
 
 async function readManifest(path) {

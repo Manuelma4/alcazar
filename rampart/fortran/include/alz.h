@@ -23,7 +23,9 @@ extern "C" {
 #define ALZ_DIFFERENT     1   /* alz_ct_equal: the buffers differ */
 #define ALZ_E_LENGTH     (-1) /* a length is negative or above ALZ_MAX_LEN */
 #define ALZ_E_HEX        (-2) /* malformed hexadecimal input */
-#define ALZ_E_CAPACITY   (-3) /* output buffer too small */
+#define ALZ_E_CAPACITY   (-3) /* output buffer too small, or more input than expected */
+#define ALZ_E_EOF        (-4) /* alz_read_line: input ended before a line feed */
+#define ALZ_E_IO         (-5) /* alz_read_line, alz_expect_eof: read(2) failed */
 #define ALZ_E_SELFTEST  (-10) /* a known-answer test failed */
 
 #define ALZ_MAX_LEN      16777216 /* 16 MiB per buffer */
@@ -50,6 +52,13 @@ int32_t alz_hex_decode(const char *hex, const int32_t *hexlen,
 
 /* Overwrite a buffer with zeros (stores the compiler may not remove). */
 int32_t alz_zeroize(uint8_t *buf, const int32_t *len);
+
+/* Secrets on standard input, without stdio: alz_read_line reads one line
+ * with read(2), byte by byte, into buf (the line feed is not stored), so
+ * the caller's buffer is the only copy to wipe. alz_expect_eof returns
+ * ALZ_OK only if nothing is left on standard input. */
+int32_t alz_read_line(uint8_t *buf, const int32_t *cap, int32_t *len);
+int32_t alz_expect_eof(void);
 
 /* Power-on self-test: ALZ_OK when every known-answer test passes. */
 int32_t alz_selftest(void);

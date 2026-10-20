@@ -4,7 +4,7 @@
 // leftover card numbers, backslash targets, shutdown, eviction).
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -174,6 +174,17 @@ describe('Least-privilege keys for the legacy programs', { skip: SKIP_REASON }, 
     assert.match(result.stderr, /K-ledger and K-token must differ/);
   });
 
+  it('LEDGERCK refuses to be handed K-token too', async () => {
+    const result = await run('ledgerck', keyLines(keys.ledger, keys.token));
+    assert.equal(result.code, 12);
+    assert.match(result.stderr, /more than the keys this program may hold/);
+  });
+
+  it('TXNGUARD refuses a key line without its line feed', async () => {
+    const result = await run('txnguard', keyLines(keys.ledger, keys.token).subarray(0, 129));
+    assert.equal(result.code, 12);
+  });
+
   it('LEDGERCK verifies with K-ledger alone', async () => {
     const result = await run('ledgerck', keyLines(keys.ledger));
     assert.equal(result.code, 0, result.stderr);
@@ -215,5 +226,30 @@ describe('TXNGUARD finds card numbers however they are typed', { skip: SKIP_REAS
     });
     // And no full card number in what Gatehouse returns.
     assert.ok(!JSON.stringify(job).includes('4111111111111111'));
+  });
+});
+
+describe('Master key file', { skip: SKIP_REASON }, () => {
+  it('is read as bytes, with or without a final newline, and refused when malformed or readable by others', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'alcazar-keyfile-'));
+    const file = join(dir, 'master.key');
+    try {
+      await writeFile(file, `${'5c'.repeat(32)}\n`, { mode: 0o600 });
+      const gh = await startGatehouse({ ALCAZAR_KEY_FILE: file }, { workDir: join(dir, 'work') });
+      try {
+        const health = await (await fetch(`${gh.base}/api/health`)).json();
+        assert.equal(health.keySource, 'file');
+        assert.equal(health.selftest.status, 'pass');
+      } finally {
+        await gh.stop();
+      }
+      await writeFile(file, `${'5C'.repeat(32)}\n`);
+      await assert.rejects(startGatehouse({ ALCAZAR_KEY_FILE: file }, { workDir: join(dir, 'work') }), /64 lower-case hex digits/);
+      await writeFile(file, `${'5c'.repeat(32)}`);
+      await chmod(file, 0o644);
+      await assert.rejects(startGatehouse({ ALCAZAR_KEY_FILE: file }, { workDir: join(dir, 'work') }), /chmod 600/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

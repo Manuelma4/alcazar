@@ -172,6 +172,19 @@
            MOVE "MT84MALT011000012345MTLCAST001S" TO T-IBAN
            MOVE "IBAN MT valid (31)" TO T-NAME
            PERFORM 2900-RUN-IBAN
+           MOVE "QA58DOHB00001234567890ABCDEFG" TO T-IBAN
+           MOVE "IBAN QA valid (registry update)" TO T-NAME
+           PERFORM 2900-RUN-IBAN
+           MOVE "JO94CBJO0010000000000131000302" TO T-IBAN
+           MOVE "IBAN JO valid (30)" TO T-NAME
+           PERFORM 2900-RUN-IBAN
+           MOVE "FR0230006000011234567890163" TO T-IBAN
+           MOVE "IBAN check digits 02 valid" TO T-NAME
+           PERFORM 2900-RUN-IBAN
+           MOVE "FR9930006000011234567890163" TO T-IBAN
+           MOVE "IBAN alias with check digits 99" TO T-NAME
+           MOVE 3 TO T-EXPECT
+           PERFORM 2900-RUN-IBAN
            MOVE "FR7630006000011234567890188" TO T-IBAN
            MOVE "IBAN bad check digits" TO T-NAME
            MOVE 3 TO T-EXPECT
@@ -356,6 +369,9 @@
            PERFORM 7900-RUN-CURRENCY
            MOVE "eur" TO T-CCY
            MOVE "currency lower case" TO T-NAME
+           PERFORM 7900-RUN-CURRENCY
+           MOVE "BGN" TO T-CCY
+           MOVE "currency BGN (euro since 2026)" TO T-NAME
            PERFORM 7900-RUN-CURRENCY.
 
        7900-RUN-CURRENCY.

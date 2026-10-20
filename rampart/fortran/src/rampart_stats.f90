@@ -79,11 +79,17 @@ contains
     end if
   end function median
 
-  !> Robust location (median) and scale (MAD / 0.6745, or the scaled mean
-  !> absolute deviation when the MAD is zero).
-  pure subroutine robust_scale(x, center, scale)
+  !> Robust location (median) and scale (MAD / 0.6745).
+  !>
+  !> When the MAD is zero (at least half the values are identical) the scale
+  !> is `floor` if one is given: the usual fallback, the mean absolute
+  !> deviation, is inflated by the very outliers being looked for — with
+  !> k outliers among n values their z would stay near n / (1.25 k) however
+  !> large they are. Without a floor that fallback is kept, scaled by 1.2533.
+  pure subroutine robust_scale(x, center, scale, floor)
     real(real64), intent(in) :: x(:)
     real(real64), intent(out) :: center, scale
+    real(real64), intent(in), optional :: floor
     real(real64) :: m
 
     center = median(x)
@@ -92,6 +98,9 @@ contains
     m = median(abs(x - center))
     if (m > 0.0_real64) then
       scale = m / MAD_FACTOR
+      if (present(floor)) scale = max(scale, floor)
+    else if (present(floor)) then
+      scale = floor
     else
       scale = MEANAD_FACTOR * sum(abs(x - center)) / real(size(x), real64)
     end if

@@ -23,22 +23,30 @@
            CLASS ALZ-UPPER IS "ABCDEFGHIJKLMNOPQRSTUVWXYZ".
        DATA DIVISION.
        WORKING-STORAGE SECTION.
-      * Country code + IBAN length (SWIFT IBAN registry), read-only.
+      * Country code + IBAN length (SWIFT IBAN registry, all 88
+      * countries), read-only and sorted for SEARCH ALL.
        01  WS-COUNTRY-DATA.
            05  FILLER PIC X(40)
-               VALUE "AD24AE23AL28AT20BA20BE16BG22BH22BR29CH21".
+               VALUE "AD24AE23AL28AT20AZ28BA20BE16BG22BH22BI27".
            05  FILLER PIC X(40)
-               VALUE "CY28CZ24DE22DK18EE20ES24FI18FO18FR27GB22".
+               VALUE "BR29BY28CH21CR22CY28CZ24DE22DJ27DK18DO28".
            05  FILLER PIC X(40)
-               VALUE "GE22GI23GL18GR27HR21HU28IE22IL23IS26IT27".
+               VALUE "EE20EG29ES24FI18FK18FO18FR27GB22GE22GI23".
            05  FILLER PIC X(40)
-               VALUE "KZ20LI21LT20LU20LV21MC27MD24ME22MK19MT31".
+               VALUE "GL18GR27GT28HR21HU28IE22IL23IQ23IS26IT27".
            05  FILLER PIC X(40)
-               VALUE "NL18NO15PL28PT25RO24RS22SA24SE24SI19SK24".
-           05  FILLER PIC X(20)
-               VALUE "SM27TR26UA29VA22XK20".
+               VALUE "JO30KW30KZ20LB28LC32LI21LT20LU20LV21LY25".
+           05  FILLER PIC X(40)
+               VALUE "MC27MD24ME22MK19MN20MR27MT31MU30NI28NL18".
+           05  FILLER PIC X(40)
+               VALUE "NO15OM23PK24PL28PS29PT25QA29RO24RS22RU33".
+           05  FILLER PIC X(40)
+               VALUE "SA24SC31SD18SE24SI19SK24SM27SO23ST25SV28".
+           05  FILLER PIC X(32)
+               VALUE "TL23TN24TR26UA29VA22VG24XK20YE30".
        01  WS-COUNTRY-TABLE REDEFINES WS-COUNTRY-DATA.
-           05  WS-COUNTRY OCCURS 55 TIMES INDEXED BY CX.
+           05  WS-COUNTRY OCCURS 88 TIMES
+                   ASCENDING KEY IS WS-CC INDEXED BY CX.
                10  WS-CC               PIC XX.
                10  WS-CC-LEN           PIC 99.
        01  WS-ALPHABET                 PIC X(26)
@@ -87,8 +95,7 @@
            END-IF.
 
        2000-CHECK-COUNTRY.
-           SET CX TO 1
-           SEARCH WS-COUNTRY
+           SEARCH ALL WS-COUNTRY
                AT END
                    MOVE 2 TO LK-RC
                WHEN WS-CC(CX) = LK-IBAN(1:2)
@@ -100,7 +107,16 @@
       * Move the first four characters to the end, read letters as
       * A = 10 ... Z = 35, and reduce modulo 97 digit by digit so no
       * intermediate exceeds five digits. A valid IBAN leaves 1.
+      *
+      * MOD 97-10 only ever produces check digits 02 to 98. 00, 01 and
+      * 99 can still satisfy the remainder test, which would give one
+      * account two valid IBANs (FR02... and FR99... for the same
+      * BBAN) and let a transfer dodge the same-account and per-sender
+      * checks: ISO 13616 treats them as invalid, and so do we.
        3000-CHECK-DIGITS.
+           IF LK-IBAN(3:2) = "00" OR "01" OR "99"
+               MOVE 3 TO LK-RC
+           END-IF
            MOVE 0 TO LS-REM
            PERFORM VARYING LS-I FROM 5 BY 1 UNTIL LS-I > LS-LEN
                MOVE LK-IBAN(LS-I:1) TO LS-CH

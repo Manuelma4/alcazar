@@ -13,10 +13,11 @@
        DATA DIVISION.
        LINKAGE SECTION.
        01  LK-CURRENCY                 PIC X(3).
+      *    No BGN: Bulgaria adopted the euro on 1 January 2026.
            88  LK-CURRENCY-ALLOWED     VALUE "EUR" "USD" "GBP" "CHF"
                                              "SEK" "NOK" "DKK" "PLN"
-                                             "CZK" "HUF" "RON" "BGN"
-                                             "CAD" "AUD" "NZD".
+                                             "CZK" "HUF" "RON" "CAD"
+                                             "AUD" "NZD".
        01  LK-RC                       PIC S9(9) COMP-5.
 
        PROCEDURE DIVISION USING LK-CURRENCY LK-RC.

@@ -248,6 +248,10 @@ contains
     digest(32) = 0_int8
     rc = capi_ct_equal(bytes, digest, n)
     call expect('alz_ct_equal different', rc == ALZ_DIFFERENT)
+    n = 0
+    rc = capi_ct_equal(bytes, digest, n)
+    call expect('alz_ct_equal refuses a zero length', rc == ALZ_E_LENGTH)
+    n = 32
     rc = capi_zeroize(bytes, n)
     call expect('alz_zeroize', rc == ALZ_OK .and. all(bytes == 0_int8))
     call expect('alz_selftest', capi_selftest() == ALZ_OK)

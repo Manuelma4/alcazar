@@ -68,7 +68,7 @@ flowchart LR
 | **S**poofing: API use without the operator | B1 | Optional bearer token (`ALCAZAR_API_TOKEN`), compared in constant time | `server.test.mjs` |
 | **T**ampering: record injection via CR/LF or over-long fields | B1, B2 | Printable ASCII only at Gatehouse; fixed-length records with no terminators in COBOL; LOW-VALUES pre-fill catches fragments | Siege `record-injection`, COBOL tests |
 | **T**ampering: sign flip, truncation, fractional cents | B2 | Strict amount grammar, ON SIZE ERROR, separate sign | Siege `sign-flip`, `truncation`, `salami` |
-| **T**ampering: forged identifiers (IBAN, card) | B2 | ISO 7064 MOD 97-10, ISO 13616 country lengths, Luhn | Siege `iban-checksum`, `pan-luhn` |
+| **T**ampering: forged identifiers (IBAN, card) | B2 | ISO 7064 MOD 97-10 with the never-issued check digits 00/01/99 refused (one account, two IBANs), ISO 13616 country lengths, Luhn | Siege `iban-checksum`, `iban-alias`, `pan-luhn` |
 | **T**ampering: injection (SQL, HTML, formulas, shell) | B1, B2 | No shell anywhere (spawn with argv), SEPA character set, formula-prefix rule, DOM built without HTML parsing + Trusted Types | Siege `xss-memo`, `sqli-memo`, `formula-injection`, `cmd-injection` |
 | **T**ampering: editing the ledger | Disk | HMAC-SHA256 chain over every entry and the previous MAC; LEDGERCK and an independent OpenSSL implementation must agree | Siege `ledger-tamper`, `ledger-delete` |
 | **T**ampering: truncating the ledger | Disk | Head MAC and entry count anchored in Gatehouse memory when the job is sealed | Siege `ledger-truncate` |

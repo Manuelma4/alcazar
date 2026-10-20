@@ -303,7 +303,7 @@ Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
 ## Lessons from the trenches
 
 Building this surfaced real, measurable traps — each now has a defence and a
-test ([all 16](docs/HARDENING.md)):
+test ([all 18](docs/HARDENING.md)):
 
 * GnuCOBOL **splits an over-long LINE SEQUENTIAL line into extra records**, and
   a short final record keeps the previous record's bytes — with status `00`.

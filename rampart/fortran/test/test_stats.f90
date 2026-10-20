@@ -65,6 +65,16 @@ contains
     call robust_scale(x, center, scale)
     call expect('constant sample: z(center) = 0', near(robust_z(7.0_real64, center, scale), 0.0_real64, 0.0_real64))
     call expect('constant sample: z(other) capped', near(robust_z(8.0_real64, center, scale), 99.0_real64, 0.0_real64))
+
+    ! MAD = 0 with outliers: the floor must be used, or identical small
+    ! transfers would hide a huge one (z stayed near n / (1.25 k)).
+    x = log10([100.0_real64, 100.0_real64, 100.0_real64, 900000.0_real64, 900000.0_real64])
+    call robust_scale(x, center, scale, 0.25_real64)
+    call expect('MAD = 0 uses the floor', near(scale, 0.25_real64, 0.0_real64))
+    call expect('MAD = 0 outlier is extreme', robust_z(log10(900000.0_real64), center, scale) > 15.0_real64)
+    x = log10([100.0_real64, 101.0_real64, 102.0_real64, 103.0_real64, 104.0_real64])
+    call robust_scale(x, center, scale, 0.25_real64)
+    call expect('floor applies to tight samples too', near(scale, 0.25_real64, 0.0_real64))
   end subroutine test_robust_z
 
   subroutine test_benford()
@@ -126,6 +136,7 @@ contains
     call expect('json zero', json_real(0.0_real64) == '0')
     call expect('json tiny uses exponent', index(json_real(1.0e-9_real64), 'E-') > 0)
     call expect('json NaN is null', json_real(ieee_nan()) == 'null')
+    call expect('json huge round-trips', json_real(huge(1.0_real64)) == '1.7976931348623157E+308')
     call expect('json int', json_int(-42_int64) == '-42')
     call expect('json escapes', json_string('a"b\c' // achar(10) // achar(1)) == '"a\"b\\c\u000A\u0001"')
     call expect('json escapes non-ASCII', json_string(char(233)) == '"\u00E9"')

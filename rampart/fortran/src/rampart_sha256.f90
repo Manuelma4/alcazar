@@ -63,15 +63,18 @@ contains
   pure subroutine sha256_update(ctx, data)
     type(sha256_ctx), intent(inout) :: ctx
     integer(int8), intent(in) :: data(:)
-    integer :: pos, take
+    ! 64-bit positions: pos would overflow a default integer at 2**31 - 1.
+    integer(int64) :: pos, total
+    integer :: take
 
-    ctx%nbytes = ctx%nbytes + int(size(data), int64)
-    pos = 1
-    do while (pos <= size(data))
-      take = min(SHA256_BLOCK - ctx%used, size(data) - pos + 1)
-      ctx%block(ctx%used:ctx%used + take - 1) = data(pos:pos + take - 1)
+    total = size(data, kind=int64)
+    ctx%nbytes = ctx%nbytes + total
+    pos = 1_int64
+    do while (pos <= total)
+      take = int(min(int(SHA256_BLOCK - ctx%used, int64), total - pos + 1_int64))
+      ctx%block(ctx%used:ctx%used + take - 1) = data(pos:pos + int(take, int64) - 1_int64)
       ctx%used = ctx%used + take
-      pos = pos + take
+      pos = pos + int(take, int64)
       if (ctx%used == SHA256_BLOCK) then
         call compress(ctx%h, ctx%block)
         ctx%used = 0

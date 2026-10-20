@@ -212,6 +212,31 @@ batches instead of half-working.
 starts the restricted Node process, and the Docker image uses the same
 launcher as `npm start`.
 
+### 17. Some write errors only exist at CLOSE
+
+With a file-size limit (or a full tmpfs), every `WRITE` to the ledger
+returned status `00` — the records were only buffered — and the failure
+surfaced when `CLOSE` flushed the last buffer. TXNGUARD did not check
+`CLOSE`, so a ledger cut at 8 KiB came with `RC=0` and a summary claiming
+every entry. (Gatehouse still failed closed: its own verification saw the
+short chain.)
+
+*Defence:* TXNGUARD closes and checks every data file *before* writing the
+summary, checks every summary write and the summary's own `CLOSE`, and turns
+any failure into return code 16.
+
+### 18. A full final line can conjure a phantom record
+
+Reading the 21-byte LINE SEQUENTIAL file `ABCDEFGHIJ\nKLMNOPQRST` (no final
+newline) into a 10-byte record, GnuCOBOL 3.2 returned `ABCDEFGHIJ` (00),
+then `KLMNOPQRST` (06), then a phantom `T` (00), then end of file. Combined
+with CR stripping, a LINE SEQUENTIAL reader verifies a *normalised* view of
+the file, not its bytes.
+
+*Defence:* the Seal ledger is read as fixed-length records whose last byte
+must be a line feed (see the ledger format v2 below), and the Node verifier
+rejects a missing final newline the same way.
+
 ### Not a vulnerability, but you will see it
 
 On Debian 13, every GnuCOBOL program prints *"program compiled against libxml

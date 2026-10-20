@@ -234,8 +234,7 @@ contains
     has_z = .false.
     if (size(txns) == 0) return
     logs = log10(real(txns%cents, real64) / 100.0_real64)
-    call robust_scale(logs, gcenter, gscale)
-    gscale = max(gscale, SCALE_FLOOR)
+    call robust_scale(logs, gcenter, gscale, SCALE_FLOOR)
 
     done = .false.
     do i = 1, size(txns)
@@ -243,8 +242,7 @@ contains
       member = txns%sender == txns(i)%sender
       done = done .or. member
       if (count(member) >= MIN_GROUP) then
-        call robust_scale(pack(logs, member), center, scale)
-        scale = max(scale, SCALE_FLOOR)
+        call robust_scale(pack(logs, member), center, scale, SCALE_FLOOR)
         where (member) z = robust_z(logs, center, scale)
         where (member) has_z = .true.
       else if (size(txns) >= MIN_GROUP) then

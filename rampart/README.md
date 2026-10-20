@@ -24,12 +24,12 @@ real size of the caller's field. Every return code is a `PIC S9(9) COMP-5`.
 |--------|------|---------|
 | `ALZTEXT` | `policy text rc position` | Character policies: `I` identifier, `N` upper alphanumeric, `D` digits, `A` letters, `H` hex, `S` SEPA character set, `P` printable ASCII, `F` no spreadsheet-formula prefix. `rc` 0 ok, 1 bad character (at `position`), 2 formula prefix, 3 empty. |
 | `ALZSANIT` | `policy text` | Replaces, in place, every character outside the policy with `?` — for writing untrusted text to reports and logs. |
-| `ALZIBAN` | `iban rc` | ISO 13616 structure, country length (55 countries) and ISO 7064 MOD 97-10 check digits. `rc` 0 ok, 1 format, 2 country/length, 3 check digits. |
+| `ALZIBAN` | `iban rc` | ISO 13616 structure, country length (all 88 countries of the SWIFT registry, binary search) and ISO 7064 MOD 97-10 check digits, refusing 00, 01 and 99 — they can satisfy the check but are never issued, and would give one account two valid IBANs. `rc` 0 ok, 1 format, 2 country/length, 3 check digits. The BBAN's national structure is not checked. |
 | `ALZLUHN` | `pan rc` | 12–19 digits and the Luhn check digit. |
 | `ALZMASK` | `mode input output` | PCI DSS masking: `P` BIN + last 4, `L` last 4, `I` IBAN country + last 4. Length preserved. |
 | `ALZAMNT` | `text sign cents rc position` | Strict decimal parser: `[+-]`, 1–13 digits, optional 1–2 decimals. Never `NUMVAL`; overflow is `rc 2`, not truncation; the sign comes back separately. |
 | `ALZDATE` | `timestamp rc` | `YYYYMMDDHHMMSS` with `FUNCTION TEST-DATE-YYYYMMDD`; digits are checked before any numeric field is touched. |
-| `ALZCCY` | `currency rc` | ISO 4217 allowlist. |
+| `ALZCCY` | `currency rc` | ISO 4217 allowlist of two-decimal currencies (no BGN: Bulgaria adopted the euro in 2026). |
 
 ```cobol
        COPY ALZCAPI.

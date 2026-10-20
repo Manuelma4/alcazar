@@ -13,12 +13,15 @@ import { SKIP_REASON, postJson, startGatehouse } from './helpers.mjs';
 
 /** SWIFT IBAN registry lengths, as in ALZIBAN. */
 const IBAN_LENGTHS = {
-  AD: 24, AE: 23, AL: 28, AT: 20, BA: 20, BE: 16, BG: 22, BH: 22, BR: 29, CH: 21, CY: 28, CZ: 24, DE: 22, DK: 18,
-  EE: 20, ES: 24, FI: 18, FO: 18, FR: 27, GB: 22, GE: 22, GI: 23, GL: 18, GR: 27, HR: 21, HU: 28, IE: 22, IL: 23,
-  IS: 26, IT: 27, KZ: 20, LI: 21, LT: 20, LU: 20, LV: 21, MC: 27, MD: 24, ME: 22, MK: 19, MT: 31, NL: 18, NO: 15,
-  PL: 28, PT: 25, RO: 24, RS: 22, SA: 24, SE: 24, SI: 19, SK: 24, SM: 27, TR: 26, UA: 29, VA: 22, XK: 20,
+  AD: 24, AE: 23, AL: 28, AT: 20, AZ: 28, BA: 20, BE: 16, BG: 22, BH: 22, BI: 27, BR: 29, BY: 28, CH: 21, CR: 22,
+  CY: 28, CZ: 24, DE: 22, DJ: 27, DK: 18, DO: 28, EE: 20, EG: 29, ES: 24, FI: 18, FK: 18, FO: 18, FR: 27, GB: 22,
+  GE: 22, GI: 23, GL: 18, GR: 27, GT: 28, HR: 21, HU: 28, IE: 22, IL: 23, IQ: 23, IS: 26, IT: 27, JO: 30, KW: 30,
+  KZ: 20, LB: 28, LC: 32, LI: 21, LT: 20, LU: 20, LV: 21, LY: 25, MC: 27, MD: 24, ME: 22, MK: 19, MN: 20, MR: 27,
+  MT: 31, MU: 30, NI: 28, NL: 18, NO: 15, OM: 23, PK: 24, PL: 28, PS: 29, PT: 25, QA: 29, RO: 24, RS: 22, RU: 33,
+  SA: 24, SC: 31, SD: 18, SE: 24, SI: 19, SK: 24, SM: 27, SO: 23, ST: 25, SV: 28, TL: 23, TN: 24, TR: 26, UA: 29,
+  VA: 22, VG: 24, XK: 20, YE: 30,
 };
-const CURRENCIES = new Set(['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'CAD', 'AUD', 'NZD']);
+const CURRENCIES = new Set(['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'CAD', 'AUD', 'NZD']);
 const CHANNELS = new Set(['ATM', 'WEB', 'POS', 'BRN', 'MOB', 'API']);
 const SEPA = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/-?:().,\'+ ');
 const LIMIT_CENTS = 100000000n;
@@ -41,6 +44,8 @@ function ibanRc(iban) {
   const v = trimEnd(iban);
   if (v.length < 15 || v.length > 34 || !/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(v)) return 1;
   if (IBAN_LENGTHS[v.slice(0, 2)] !== v.length) return 2;
+  // MOD 97-10 only produces 02..98: 00, 01 and 99 are aliases.
+  if (['00', '01', '99'].includes(v.slice(2, 4))) return 3;
   return mod97(v.slice(4) + v.slice(0, 4)) === 1 ? 0 : 3;
 }
 
@@ -56,10 +61,6 @@ function luhnValid(pan) {
 
 function daysInMonth(y, m) {
   return [31, (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
-}
-
-function dayNumber(y, m, d) {
-  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 
 /** The ALZAMNT state machine, written independently from the spec. */
@@ -103,7 +104,7 @@ function parseAmount(text) {
 }
 
 /** Reason code TXNGUARD must give, applying the checks in their order. */
-function expectedCode(t, seen, today) {
+function expectedCode(t, seen, nowUtcSeconds) {
   const id = trimEnd(t.id);
   if (id === '' || !/^[A-Z0-9-]+$/.test(id)) return 'E101';
   const key = t.id.padEnd(12, ' ');
@@ -114,7 +115,7 @@ function expectedCode(t, seen, today) {
   if (!/^\d{14}$/.test(ts)) return 'E201';
   const [y, mo, d, h, mi, s] = [0, 4, 6, 8, 10, 12].map((i) => Number(ts.slice(i, i + (i === 0 ? 4 : 2))));
   if (y < 1601 || mo < 1 || mo > 12 || d < 1 || d > daysInMonth(y, mo) || h > 23 || mi > 59 || s > 59) return 'E201';
-  if (dayNumber(y, mo, d) > today + 1) return 'E202';
+  if (Date.UTC(y, mo - 1, d, h, mi, s) / 1000 > nowUtcSeconds + 86400) return 'E202';
 
   const from = ibanRc(t.from);
   if (from !== 0) return from === 3 ? 'E302' : 'E301';
@@ -218,6 +219,7 @@ function generator(seed, { chaos = false } = {}) {
         () => `F7${t.from.slice(2)}`,
         () => `${t.from.slice(0, 2)}AB${t.from.slice(4)}`,
         () => t.from.slice(0, 14),
+        () => `${t.from.slice(0, 2)}${pick(['00', '01', '99'])}${t.from.slice(4)}`,
       ])();
     },
     to: (t) => {
@@ -231,7 +233,7 @@ function generator(seed, { chaos = false } = {}) {
       ]);
     },
     currency: (t) => {
-      t.currency = pick(['BTC', 'eur', 'EU', 'E1R', 'XAU', 'JPY']);
+      t.currency = pick(['BTC', 'eur', 'EU', 'E1R', 'XAU', 'JPY', 'BGN']);
     },
     pan: (t) => {
       t.pan = pick([
@@ -329,8 +331,7 @@ describe('TXNGUARD agrees with the reference model', { skip: SKIP_REASON }, () =
       assert.equal(res.status, 200);
       const job = await res.json();
 
-      const now = new Date();
-      const today = dayNumber(now.getFullYear(), now.getMonth() + 1, now.getDate());
+      const nowUtcSeconds = Math.floor(Date.now() / 1000);
       const seen = new Set();
       const actual = new Map(job.rejections.map((r) => [r.line, r.code]));
       const accepted = new Map(job.accepted.map((a) => [a.id, a]));
@@ -338,7 +339,7 @@ describe('TXNGUARD agrees with the reference model', { skip: SKIP_REASON }, () =
       const codes = new Map();
       batch.forEach((raw, index) => {
         const t = normalized(raw);
-        const want = expectedCode(t, seen, today);
+        const want = expectedCode(t, seen, nowUtcSeconds);
         const got = actual.get(index + 1) ?? 'A000';
         codes.set(want, (codes.get(want) ?? 0) + 1);
         if (want !== got) mismatches.push({ line: index + 1, want, got, t: raw });

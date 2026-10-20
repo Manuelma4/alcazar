@@ -56,7 +56,7 @@ flowchart LR
 | 13 | 14 | TXN-TS | `YYYYMMDDHHMMSS` (UTC) |
 | 27 | 34 | FROM-IBAN | IBAN, electronic format |
 | 61 | 34 | TO-IBAN | IBAN, electronic format |
-| 95 | 18 | AMOUNT | decimal text `[+-]?\d{1,13}(\.\d{1,2})?` |
+| 95 | 18 | AMOUNT | decimal text `[+-]?\d+(\.\d{1,2})?`, at most 13 significant integer digits (leading zeros allowed) |
 | 113 | 3 | CURRENCY | ISO 4217 alpha-3 |
 | 116 | 19 | CARD-PAN | 12–19 digits, or spaces |
 | 135 | 3 | CHANNEL | `ATM` `WEB` `POS` `BRN` `MOB` `API` |
@@ -110,11 +110,11 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED(34)|PA
 | E101 | TXN-ID | empty or outside `[A-Z0-9-]` |
 | E102 | TXN-ID | duplicate in batch (replay) |
 | E201 | TXN-TS | not a valid calendar timestamp |
-| E202 | TXN-TS | more than one day in the future |
+| E202 | TXN-TS | more than 24 hours in the future (both in UTC) |
 | E301 | FROM-IBAN | bad format, charset or country length |
-| E302 | FROM-IBAN | ISO 7064 mod 97-10 checksum failed |
+| E302 | FROM-IBAN | ISO 7064 MOD 97-10 check failed, or check digits 00, 01 or 99 (aliases of a real IBAN) |
 | E303 | TO-IBAN | bad format, charset or country length |
-| E304 | TO-IBAN | checksum failed |
+| E304 | TO-IBAN | check failed, or check digits 00, 01 or 99 |
 | E305 | TO-IBAN | sender and beneficiary are the same account |
 | E401 | AMOUNT | grammar (e.g. more than 2 decimals, stray characters) |
 | E402 | AMOUNT | overflow: more than 13 integer digits (would truncate) |

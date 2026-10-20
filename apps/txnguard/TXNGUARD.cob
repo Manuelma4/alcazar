@@ -101,8 +101,26 @@
        01  WS-AMOUNT-RC                PIC S9(9) COMP-5.
        01  WS-WORK                     PIC X(34).
        01  WS-WORK-LEN                 PIC S9(9) COMP-5.
-       01  WS-TODAY                    PIC 9(8).
-       01  WS-TS-DATE                  PIC 9(8).
+      * "Now" in UTC seconds; TXN-TS is UTC. FUNCTION CURRENT-DATE is
+      * local time followed by the offset from UTC (+HHMM / -HHMM).
+       01  WS-NOW                      PIC X(21).
+       01  WS-NOW-PARTS REDEFINES WS-NOW.
+           05  WS-NOW-DATE             PIC 9(8).
+           05  WS-NOW-HOUR             PIC 99.
+           05  WS-NOW-MINUTE           PIC 99.
+           05  WS-NOW-SECOND           PIC 99.
+           05  FILLER                  PIC 99.
+           05  WS-NOW-OFFSET-SIGN      PIC X.
+           05  WS-NOW-OFFSET-HOUR      PIC 99.
+           05  WS-NOW-OFFSET-MINUTE    PIC 99.
+       01  WS-NOW-UTC-SECONDS          PIC S9(12) COMP-3.
+       01  WS-OFFSET-SECONDS           PIC S9(6) COMP-3.
+       01  WS-TS-PARTS.
+           05  WS-TS-DATE              PIC 9(8).
+           05  WS-TS-HOUR              PIC 99.
+           05  WS-TS-MINUTE            PIC 99.
+           05  WS-TS-SECOND            PIC 99.
+       01  WS-TS-SECONDS               PIC S9(12) COMP-3.
 
       * Transaction ids seen in this batch (replay detection).
        01  WS-SEEN-COUNT               PIC 9(4) VALUE 0.
@@ -129,7 +147,7 @@
            PERFORM ALZ-PREPARE-KEYS
            IF ALZ-KEYS-READY
                MOVE ALZ-GENESIS TO WS-PREV-MAC
-               MOVE FUNCTION CURRENT-DATE(1:8) TO WS-TODAY
+               PERFORM 1100-NOW-IN-UTC
                PERFORM 1000-OPEN-FILES
            ELSE
                MOVE 12 TO WS-RETURN-CODE
@@ -158,6 +176,24 @@
                    MOVE 16 TO WS-RETURN-CODE
                END-IF
            END-IF.
+
+       1100-NOW-IN-UTC.
+           MOVE FUNCTION CURRENT-DATE TO WS-NOW
+           COMPUTE WS-NOW-UTC-SECONDS =
+               FUNCTION INTEGER-OF-DATE(WS-NOW-DATE) * 86400
+               + WS-NOW-HOUR * 3600 + WS-NOW-MINUTE * 60 + WS-NOW-SECOND
+           MOVE 0 TO WS-OFFSET-SECONDS
+           IF WS-NOW-OFFSET-HOUR IS NUMERIC
+              AND WS-NOW-OFFSET-MINUTE IS NUMERIC
+               COMPUTE WS-OFFSET-SECONDS =
+                   WS-NOW-OFFSET-HOUR * 3600 + WS-NOW-OFFSET-MINUTE * 60
+           END-IF
+           EVALUATE WS-NOW-OFFSET-SIGN
+               WHEN "+"
+                   SUBTRACT WS-OFFSET-SECONDS FROM WS-NOW-UTC-SECONDS
+               WHEN "-"
+                   ADD WS-OFFSET-SECONDS TO WS-NOW-UTC-SECONDS
+           END-EVALUATE.
 
        2000-NEXT-RECORD.
       *    Pre-fill the record area: GnuCOBOL returns status 00 for a
@@ -279,9 +315,13 @@
            CALL "ALZDATE" USING TI-TS ALZ-RC
            EVALUATE ALZ-RC
                WHEN 0
-                   MOVE TI-TS(1:8) TO WS-TS-DATE
-                   IF FUNCTION INTEGER-OF-DATE(WS-TS-DATE) >
-                      FUNCTION INTEGER-OF-DATE(WS-TODAY) + 1
+      *            More than 24 hours ahead of now, both in UTC.
+                   MOVE TI-TS TO WS-TS-PARTS
+                   COMPUTE WS-TS-SECONDS =
+                       FUNCTION INTEGER-OF-DATE(WS-TS-DATE) * 86400
+                       + WS-TS-HOUR * 3600 + WS-TS-MINUTE * 60
+                       + WS-TS-SECOND
+                   IF WS-TS-SECONDS > WS-NOW-UTC-SECONDS + 86400
                        MOVE "E202" TO WS-REASON
                        MOVE "TXN-TS" TO WS-FIELD
                        MOVE "FUTURE" TO WS-DETAIL
@@ -570,23 +610,43 @@
       *----------------------------------------------------------------
       * End of job.
       *----------------------------------------------------------------
+      * Data files are closed - and their statuses checked - before the
+      * summary is written: a full disk or a file-size limit often
+      * surfaces only when CLOSE flushes the last buffer, and a summary
+      * must never vouch for a ledger that was cut short.
        9000-FINISH.
            IF WS-RETURN-CODE = 0 AND WS-REJECTED > 0
                MOVE 4 TO WS-RETURN-CODE
            END-IF
            IF WS-FILES-OPEN
+               CLOSE TXN-IN
+               CLOSE TXN-OK
+               IF WS-FS-OK NOT = "00"
+                   PERFORM 8000-WRITE-FAILED
+               END-IF
+               CLOSE TXN-REJ
+               IF WS-FS-REJ NOT = "00"
+                   PERFORM 8000-WRITE-FAILED
+               END-IF
+               CLOSE LEDGER
+               IF WS-FS-LEDGER NOT = "00"
+                   PERFORM 8000-WRITE-FAILED
+               END-IF
                PERFORM 9100-WRITE-SUMMARY
-               CLOSE TXN-IN TXN-OK TXN-REJ LEDGER SUMMARY
+               CLOSE SUMMARY
+               IF WS-FS-SUMMARY NOT = "00"
+                   PERFORM 8000-WRITE-FAILED
+               END-IF
            END-IF
            PERFORM ALZ-WIPE-KEYS.
 
        9100-WRITE-SUMMARY.
            MOVE "ALZ-SUMMARY=1" TO SUMMARY-RECORD
-           WRITE SUMMARY-RECORD
+           PERFORM 9300-WRITE-SUMMARY-LINE
            MOVE SPACES TO SUMMARY-RECORD
            STRING "JOB=" ALZ-JOB-ID DELIMITED BY SPACE
                INTO SUMMARY-RECORD
-           WRITE SUMMARY-RECORD
+           PERFORM 9300-WRITE-SUMMARY-LINE
            MOVE "RECORDS" TO WS-LABEL
            MOVE WS-RECORDS TO WS-NUMBER
            PERFORM 9200-NUMBER-LINE
@@ -610,9 +670,9 @@
            MOVE SPACES TO SUMMARY-RECORD
            STRING "LEDGER-HEAD=" WS-PREV-MAC DELIMITED BY SIZE
                INTO SUMMARY-RECORD
-           WRITE SUMMARY-RECORD
+           PERFORM 9300-WRITE-SUMMARY-LINE
            MOVE "SELFTEST=PASS" TO SUMMARY-RECORD
-           WRITE SUMMARY-RECORD
+           PERFORM 9300-WRITE-SUMMARY-LINE
            MOVE "RC" TO WS-LABEL
            MOVE WS-RETURN-CODE TO WS-NUMBER
            PERFORM 9200-NUMBER-LINE.
@@ -622,7 +682,13 @@
            MOVE SPACES TO SUMMARY-RECORD
            STRING FUNCTION TRIM(WS-LABEL) "=" FUNCTION TRIM(WS-NUM-EDIT)
                DELIMITED BY SIZE INTO SUMMARY-RECORD
-           WRITE SUMMARY-RECORD.
+           PERFORM 9300-WRITE-SUMMARY-LINE.
+
+       9300-WRITE-SUMMARY-LINE.
+           WRITE SUMMARY-RECORD
+           IF WS-FS-SUMMARY NOT = "00"
+               PERFORM 8000-WRITE-FAILED
+           END-IF.
 
        COPY ALZKEYP.
        END PROGRAM TXNGUARD.

@@ -61,7 +61,9 @@ contains
     else if (abs(x) < tiny(x)) then
       out = '0'
     else if (abs(x) < 1.0e-4_real64 .or. abs(x) >= 1.0e15_real64) then
-      write (buf, '(es22.14e3)') x
+      ! 17 significant digits: every double round-trips (15 could round
+      ! huge(x) up to a number JSON.parse reads as Infinity).
+      write (buf, '(es25.16e3)') x
       out = trim(adjustl(buf))
     else
       write (buf, '(f0.6)') x

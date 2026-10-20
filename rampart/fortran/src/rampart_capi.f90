@@ -98,14 +98,16 @@ contains
   end function capi_hmac_sha256_hex
 
   !> int32_t alz_ct_equal(const uint8_t *a, const uint8_t *b, const int32_t *len)
-  !> Returns ALZ_OK (0) when equal, ALZ_DIFFERENT (1) otherwise.
+  !> Returns ALZ_OK (0) when equal, ALZ_DIFFERENT (1) otherwise. A length of
+  !> zero is refused: "two empty MACs are equal" is how verification bugs
+  !> turn into forgeries.
   function capi_ct_equal(a, b, n) result(rc) bind(C, name='alz_ct_equal')
     integer(c_int8_t), intent(in) :: a(*), b(*)
     integer(c_int32_t), intent(in) :: n
     integer(c_int32_t) :: rc
 
     rc = ALZ_E_LENGTH
-    if (.not. valid_length(n)) return
+    if (.not. valid_length(n) .or. n < 1) return
     if (ct_equal(a(1:n), b(1:n))) then
       rc = ALZ_OK
     else
@@ -121,7 +123,9 @@ contains
     integer(c_int8_t), intent(inout) :: out(*)
     integer(c_int32_t), intent(out) :: outlen
     integer(c_int32_t) :: rc
-    character(len=:), allocatable :: text
+    ! VOLATILE: the copy of what may be a key is wiped before it is freed,
+    ! and the compiler may not drop those stores as dead.
+    character(len=:), allocatable, volatile :: text
     integer :: i, n
     logical :: ok
 
@@ -136,6 +140,9 @@ contains
       text(i:i) = hex(i)
     end do
     call hex_decode(text, out(1:outcap), n, ok)
+    do i = 1, hexlen
+      text(i:i) = '0'
+    end do
     rc = ALZ_E_HEX
     if (.not. ok) return
     outlen = int(n, c_int32_t)

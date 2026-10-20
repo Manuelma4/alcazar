@@ -17,12 +17,12 @@ npm run start:dev  # plain node, static files re-read on every page request
 | Input | JSON only (`application/json`), ≤ 512 KiB, ≤ 1,000 transfers, known keys only, printable ASCII only, lengths that fit the fixed-width record. Business rules are left to TXNGUARD, which re-validates everything anyway. |
 | Cross-site use | `Origin` and `Sec-Fetch-Site` must be same-origin for every state-changing request; the `Host` header must be local or allow-listed (DNS rebinding); forms cannot send `application/json`. |
 | Legacy execution | `spawn` with an argv array and `shell: false`; environment reduced to `PATH` and `LC_ALL`; the key on stdin; SIGKILL after the timeout; stdout/stderr capped; `prlimit` CPU / memory / file-size / no-core limits on Linux. |
-| Data exposure | `TXNIN.DAT` (raw card numbers) is deleted as soon as TXNGUARD finishes; responses only contain what the COBOL layer masked or tokenised. |
+| Data exposure | `TXNIN.DAT` (raw card numbers) is deleted as soon as TXNGUARD finishes, and job directories left by a crash are removed at start-up; responses only contain what the COBOL layer masked or tokenised. |
 | Legacy output | Parsed strictly as untrusted data (`records.mjs`); anything unexpected is a 502, never a partial answer. |
 | Ledger | Verified by LEDGERCK (COBOL + Fortran HMAC) and by Node/OpenSSL (`ledger.mjs`) — they must agree — and checked against the anchor taken when the job was sealed. |
 | Static files | Loaded once into an in-memory map; a URL is never turned into a file path. |
 | Headers | Strict CSP with Trusted Types, COOP/COEP/CORP, `nosniff`, `DENY` framing, `no-referrer`, a restrictive Permissions-Policy, optional HSTS — on every response, errors included. |
-| Abuse | Token-bucket rate limit per client, 2 concurrent jobs, bounded job store (40 jobs, 15-minute TTL), header and request timeouts. |
+| Abuse | Token-bucket rate limit per client, at most 4 legacy processes at once on every path (batch, verify, tamper) with a bounded queue, 2 concurrent batches taken only after the body is read, a bounded job store (40 jobs, 15-minute TTL, jobs in use never evicted), header and request timeouts, bounded shutdown. |
 | Start-up | Power-on self-test: the Fortran known-answer tests, then a real two-transfer batch whose ledger and tokens must match OpenSSL. If anything fails, the batch endpoints answer 503. |
 
 ## Configuration
@@ -37,9 +37,10 @@ npm run start:dev  # plain node, static files re-read on every page request
 | `ALCAZAR_API_TOKEN` | — | Require `Authorization: Bearer …` on the API (except `/api/health`). |
 | `ALCAZAR_DEMO` | `1` | Enables the ledger tamper endpoint used by the Siege lab. **Set to `0` in production.** |
 | `ALCAZAR_ALLOWED_HOSTS` | — | Extra host names accepted in the `Host` header. |
-| `ALCAZAR_TRUST_PROXY` | `0` | Use `X-Forwarded-For` for rate limiting (only behind a trusted proxy). |
+| `ALCAZAR_TRUST_PROXY` | `0` | Number of trusted reverse proxies that append to `X-Forwarded-For`; the client is that many entries from the right (entries further left are client-controlled and ignored). |
 | `ALCAZAR_HSTS` | `0` | Send `Strict-Transport-Security` (when served over TLS). |
 | `ALCAZAR_JOB_TIMEOUT_MS` | `10000` | Wall-clock limit per legacy program run. |
+| `ALCAZAR_MAX_PROCESSES` / `ALCAZAR_PROCESS_QUEUE` | `4` / `32` | Legacy processes running at once across every request path, and how many more may wait before callers get `503 P-BUSY`. |
 | `ALCAZAR_RATE_CAPACITY` / `ALCAZAR_RATE_REFILL` | `120` / `2` | Token bucket size and refill per second. |
 | `ALCAZAR_STATIC_RELOAD` | `0` | Development only: re-read static files on every page request. |
 

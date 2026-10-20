@@ -2,7 +2,7 @@
 // Gatehouse: the only door into the legacy batch core.
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { STATUS_CODES, createServer } from 'node:http';
 import { join } from 'node:path';
 import { ROOT, VERSION } from './config.mjs';
@@ -32,6 +32,7 @@ const STATIC_MOUNTS = [
  */
 export async function createApp(config, { log = defaultLog } = {}) {
   await mkdir(config.workDir, { recursive: true, mode: 0o700 });
+  await reapOrphans(config.workDir, log);
   const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile);
   const pipeline = new Pipeline({ config, masterKey });
   masterKey.fill(0);
@@ -109,14 +110,16 @@ export async function createApp(config, { log = defaultLog } = {}) {
 
   async function postBatch(req, res) {
     requireBatchCore();
+    // The body is read and validated before a batch slot is taken, so slow
+    // or stalled uploads cannot hold the batch core hostage.
+    const started = performance.now();
+    const { value } = await readJsonBody(req, config.limits.maxBodyBytes);
+    const transactions = validateBatch(value, config.limits.maxTransactions);
     if (running >= config.limits.maxConcurrentJobs) {
       throw new HttpError(503, 'P-BUSY', 'Too many batches in progress, retry shortly');
     }
     running += 1;
     try {
-      const started = performance.now();
-      const { value } = await readJsonBody(req, config.limits.maxBodyBytes);
-      const transactions = validateBatch(value, config.limits.maxTransactions);
       const { job, state } = await pipeline.run(transactions, { validationMs: performance.now() - started });
       jobs.add(job, state);
       sendJson(res, 200, job);
@@ -137,6 +140,16 @@ export async function createApp(config, { log = defaultLog } = {}) {
     checkSameOrigin(req);
     requireBatchCore();
     const { value } = await readJsonBody(req, 4096);
+    // Pinned while its files are in use: eviction picks another job.
+    entry.busy += 1;
+    try {
+      await jobCommand(res, entry, action, value);
+    } finally {
+      entry.busy -= 1;
+    }
+  }
+
+  async function jobCommand(res, entry, action, value) {
     if (action === '/verify') {
       if (!isEmptyObject(value)) throw new HttpError(400, 'P-SCHEMA', 'verify takes an empty object');
       const verification = await pipeline.verify(entry.state);
@@ -160,7 +173,11 @@ export async function createApp(config, { log = defaultLog } = {}) {
   async function route(req, res) {
     // Origin-form targets only: "//host/path" would otherwise parse as a
     // network-path reference and smuggle a different authority.
-    if (!req.url?.startsWith('/') || req.url.startsWith('//')) throw new HttpError(404, 'P-NOTFOUND', 'Not found');
+    // A backslash is turned into "/" by URL parsing after this check, so
+    // "/\host" would smuggle an authority too: no target may contain one.
+    if (!req.url?.startsWith('/') || req.url.startsWith('//') || req.url.includes('\\')) {
+      throw new HttpError(404, 'P-NOTFOUND', 'Not found');
+    }
     const url = new URL(req.url, 'http://gatehouse.invalid');
     const path = url.pathname;
     if (path.length > 512) throw new HttpError(414, 'P-NOTFOUND', 'Path too long');
@@ -172,9 +189,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
       return;
     }
 
-    const client = config.trustProxy
-      ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress
-      : req.socket.remoteAddress;
+    const client = clientAddress(req, config.trustProxyHops);
     const rate = limiter.take(client ?? 'unknown');
     if (!rate.allowed) throw new HttpError(429, 'P-RATE', 'Too many requests', { retryAfter: rate.retryAfterS });
 
@@ -280,12 +295,41 @@ export async function createApp(config, { log = defaultLog } = {}) {
     health,
     listen: () => new Promise((resolve) => server.listen(config.port, config.host, () => resolve(server.address()))),
     async close() {
-      await new Promise((resolve) => server.close(resolve));
-      server.closeAllConnections?.();
+      // Stop accepting, drop idle keep-alive sockets now, and give requests
+      // in flight a few seconds before cutting them: shutdown is bounded.
+      const closed = new Promise((resolve) => server.close(resolve));
+      server.closeIdleConnections?.();
+      const deadline = setTimeout(() => server.closeAllConnections?.(), 3000);
+      await closed;
+      clearTimeout(deadline);
       await jobs.close();
       pipeline.wipe();
     },
   };
+}
+
+/**
+ * The client address for rate limiting. Behind N trusted proxies that each
+ * append to X-Forwarded-For, the client is the N-th entry from the right;
+ * everything to its left was written by the client and is never trusted.
+ */
+function clientAddress(req, hops) {
+  if (hops > 0) {
+    const entries = String(req.headers['x-forwarded-for'] ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+    if (entries.length >= hops) return entries[entries.length - hops];
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
+/**
+ * Gatehouse owns its work directory: job directories left by a crash (one may
+ * still hold a raw TXNIN.DAT with card numbers) are removed at start-up.
+ */
+async function reapOrphans(workDir, log) {
+  const entries = await readdir(workDir, { withFileTypes: true });
+  const orphans = entries.filter((e) => e.isDirectory() && /^job-/.test(e.name));
+  await Promise.all(orphans.map((e) => rm(join(workDir, e.name), { recursive: true, force: true })));
+  if (orphans.length) log('warn', 'removed job directories left by a previous run', { count: orphans.length });
 }
 
 function methodNotAllowed(allow) {

@@ -11,6 +11,7 @@ import { reasonText } from './messages.mjs';
 import {
   RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSummary, txnInFile,
 } from './records.mjs';
+import { Gate } from './gate.mjs';
 import { runLegacy } from './runner.mjs';
 
 export class Pipeline {
@@ -23,6 +24,7 @@ export class Pipeline {
     // wiped. The legacy programs read it from stdin.
     this.keyLine = Buffer.concat([Buffer.from(masterKey.toString('hex'), 'latin1'), Buffer.from('\n')]);
     this.keys = deriveKeys(masterKey);
+    this.gate = new Gate(config.limits.maxProcesses, config.limits.processQueue);
   }
 
   bin(name) {
@@ -31,12 +33,13 @@ export class Pipeline {
 
   async legacy(name, args, dir, stdin) {
     const { jobTimeoutMs, maxOutputBytes } = this.config.limits;
-    let result;
-    try {
-      result = await runLegacy(this.bin(name), args, { cwd: dir, stdin, timeoutMs: jobTimeoutMs, maxOutputBytes });
-    } catch {
-      throw new HttpError(502, 'P-LEGACY', `${name} could not be started`);
-    }
+    const result = await this.gate.run(async () => {
+      try {
+        return await runLegacy(this.bin(name), args, { cwd: dir, stdin, timeoutMs: jobTimeoutMs, maxOutputBytes });
+      } catch {
+        throw new HttpError(502, 'P-LEGACY', `${name} could not be started`);
+      }
+    });
     if (result.timedOut) throw new HttpError(504, 'P-TIMEOUT', `${name} exceeded ${jobTimeoutMs} ms`);
     return result;
   }

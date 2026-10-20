@@ -74,11 +74,11 @@ flowchart LR
 | **T**ampering: truncating the ledger | Disk | Head MAC and entry count anchored in Gatehouse memory when the job is sealed | Siege `ledger-truncate` |
 | **T**ampering: Trojan Source / hidden code in contributions | Repo | `scripts/check-unicode.mjs` in CI; Watchtower `ALZ-GEN-001/002`, `ALZ-COB-014` | CI |
 | **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id | `ledger.test.mjs` |
-| **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core | `server.test.mjs` asserts no raw PAN in responses |
+| **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD, and job directories left by a crash removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` |
 | **I**nformation disclosure: account identity in analytics | B2 | FRAUDSCAN sees only HMAC tokens (`K_token`), never IBANs | `parseAccepted` tests |
 | **I**nformation disclosure: key exposure | B2 | Key on stdin only (not argv, not env), sub-keys per purpose, wiped after use; key file refused if group/world readable | `ALZKEYP.cpy`, `app.mjs` |
 | **I**nformation disclosure: timing side channel on MAC checks | B3 | Constant-time comparison in Fortran (`alz_ct_equal`) and Node (`timingSafeEqual`) | `test_crypto.f90` |
-| **D**enial of service: huge or many requests | B1 | 512 KiB body cap, 1,000 transactions per batch, token-bucket rate limit, 2 concurrent jobs, bounded job store with TTL, header/request timeouts | `server.test.mjs`, Siege `flood` |
+| **D**enial of service: huge or many requests | B1 | 512 KiB body cap, 1,000 transactions per batch, token-bucket rate limit keyed on the trusted proxy's hop, at most 4 legacy processes at once on every path with a bounded queue, batch slots taken only after the body is read, bounded job store with TTL, header/request timeouts, bounded shutdown | `server.test.mjs`, `review.test.mjs`, Siege `flood` |
 | **D**enial of service: a runaway legacy program | B2 | SIGKILL after the timeout, bounded stdout/stderr, prlimit CPU / memory / file size / no core dumps (Linux) | `runner.mjs` |
 | **E**levation: path traversal | B1 | Static files served from an in-memory map; no URL becomes a path | Siege `path-traversal` |
 | **E**levation: hijacking the legacy runtime | B2 | `-fstatic-call`, allow-listed environment (no `COB_LIBRARY_PATH`, `DD_*`, `LD_PRELOAD`), no shell | `runner.mjs` |
@@ -101,8 +101,9 @@ flowchart LR
   had an independent cryptographic or side-channel audit beyond the
   constant-time comparison. For production cryptography prefer a vetted
   library (OpenSSL, libsodium) behind the same `alz.h` ABI.
-* **Rate limiting is per client IP** and in memory; behind a proxy set
-  `ALCAZAR_TRUST_PROXY=1` and limit at the edge too.
+* **Rate limiting is per client IP** and in memory; behind N proxies set
+  `ALCAZAR_TRUST_PROXY=N` (the client is the N-th `X-Forwarded-For` entry from
+  the right) and limit at the edge too.
 * **Demo mode** (`ALCAZAR_DEMO=1`, the default for the showcase) exposes the
   ledger *tamper* endpoint for the Siege lab. It only rewrites the job's own
   files, but production deployments must set `ALCAZAR_DEMO=0`.

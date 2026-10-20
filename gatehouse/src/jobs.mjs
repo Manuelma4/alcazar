@@ -19,16 +19,23 @@ export class JobStore {
   }
 
   add(job, state) {
-    while (this.entries.size >= this.maxJobs) this.remove(this.entries.keys().next().value);
+    // Evict the oldest jobs that are not in use; a job being verified or
+    // tampered with is never pulled from under the request (the store may
+    // then briefly hold more than maxJobs).
+    while (this.entries.size >= this.maxJobs) {
+      const idle = [...this.entries.values()].find((e) => e.busy === 0);
+      if (!idle) break;
+      this.remove(idle.job.job);
+    }
     const expiresAt = this.now() + this.ttlMs;
     job.expiresAt = new Date(expiresAt).toISOString();
-    this.entries.set(job.job, { job, state, expiresAt });
+    this.entries.set(job.job, { job, state, expiresAt, busy: 0 });
   }
 
   get(id) {
     const entry = this.entries.get(id);
     if (!entry) return null;
-    if (entry.expiresAt <= this.now()) {
+    if (entry.expiresAt <= this.now() && entry.busy === 0) {
       this.remove(id);
       return null;
     }

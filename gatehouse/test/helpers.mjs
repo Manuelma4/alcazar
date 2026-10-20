@@ -12,9 +12,12 @@ export const BINARIES_BUILT = ['txnguard', 'ledgerck', 'fraudscan', 'alzselftest
   .every((name) => existsSync(join(ROOT, 'build', 'bin', name)));
 export const SKIP_REASON = BINARIES_BUILT ? false : 'legacy binaries not built (run `make` first)';
 
-/** @param {Record<string, string>} [env] */
-export async function startGatehouse(env = {}) {
-  const workDir = await mkdtemp(join(tmpdir(), 'alcazar-test-'));
+/**
+ * @param {Record<string, string>} [env]
+ * @param {{ workDir?: string }} [options]  reuse an existing work directory
+ */
+export async function startGatehouse(env = {}, options = {}) {
+  const workDir = options.workDir ?? (await mkdtemp(join(tmpdir(), 'alcazar-test-')));
   const config = loadConfig({ ALCAZAR_PORT: '0', ALCAZAR_WORK_DIR: workDir, ...env });
   const app = await createApp(config, { log: () => {} });
   const address = await app.listen();

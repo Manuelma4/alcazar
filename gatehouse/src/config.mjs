@@ -24,7 +24,8 @@ export function loadConfig(env = process.env) {
     demo: (env.ALCAZAR_DEMO ?? '1') === '1',
     hsts: env.ALCAZAR_HSTS === '1',
     staticReload: env.ALCAZAR_STATIC_RELOAD === '1',
-    trustProxy: env.ALCAZAR_TRUST_PROXY === '1',
+    // Number of trusted reverse proxies in front of Gatehouse (0 = none).
+    trustProxyHops: integer(env.ALCAZAR_TRUST_PROXY ?? '0', 0, 10, 'ALCAZAR_TRUST_PROXY'),
     // Extra host names accepted in the Host header, besides localhost.
     allowedHosts: Object.freeze(
       (env.ALCAZAR_ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
@@ -38,6 +39,10 @@ export function loadConfig(env = process.env) {
       // batch; bounded, and well within a 64 MB tmpfs.
       maxJobs: 40,
       maxConcurrentJobs: 2,
+      // Legacy processes running at once across every request path, and
+      // how many more may wait for a slot before callers get 503.
+      maxProcesses: integer(env.ALCAZAR_MAX_PROCESSES ?? '4', 1, 64, 'ALCAZAR_MAX_PROCESSES'),
+      processQueue: integer(env.ALCAZAR_PROCESS_QUEUE ?? '32', 0, 1000, 'ALCAZAR_PROCESS_QUEUE'),
       maxOutputBytes: 4 * 1024 * 1024,
       rateCapacity: integer(env.ALCAZAR_RATE_CAPACITY ?? '120', 1, 100000, 'ALCAZAR_RATE_CAPACITY'),
       rateRefillPerSecond: integer(env.ALCAZAR_RATE_REFILL ?? '2', 1, 100000, 'ALCAZAR_RATE_REFILL'),

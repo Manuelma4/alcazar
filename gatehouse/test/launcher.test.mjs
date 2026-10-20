@@ -20,7 +20,7 @@ describe('The hardened launcher from an accented path', { skip: SKIP_REASON }, (
   let base;
   before(async () => {
     // Created as NFD (e + combining acute), then reached as NFC.
-    base = await mkdtemp(join(tmpdir(), 'alcazar-Securité-'));
+    base = await mkdtemp(join(tmpdir(), 'alcazar-Securite\u0301-'));
     await Promise.all(PARTS.map((part) => cp(join(ROOT, part), join(base, 'repo', part), { recursive: true })));
   });
   after(() => rm(base, { recursive: true, force: true }));

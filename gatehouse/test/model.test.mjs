@@ -24,7 +24,13 @@ const IBAN_LENGTHS = {
 const CURRENCIES = new Set(['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'CAD', 'AUD', 'NZD']);
 const CHANNELS = new Set(['ATM', 'WEB', 'POS', 'BRN', 'MOB', 'API']);
 const SEPA = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/-?:().,\'+ ');
-const LIMIT_CENTS = 100000000n;
+// Single-transfer limits in minor units; any other currency gets the default.
+const LIMIT_CENTS = {
+  EUR: 100000000n, USD: 100000000n, GBP: 100000000n, CHF: 100000000n, SEK: 1000000000n, NOK: 1000000000n,
+  DKK: 750000000n, PLN: 400000000n, CZK: 2500000000n, HUF: 40000000000n, RON: 500000000n, CAD: 100000000n,
+  AUD: 100000000n, NZD: 100000000n,
+};
+const DEFAULT_LIMIT_CENTS = 100000000n;
 
 // ---------------------------------------------------------------- model ---
 
@@ -127,7 +133,7 @@ function expectedCode(t, seen, nowUtcSeconds) {
   if (amount.rc === 1) return 'E401';
   if (amount.rc === 2) return 'E402';
   if (amount.sign === '-' || amount.cents === 0n) return 'E403';
-  if (amount.cents > LIMIT_CENTS) return 'E404';
+  if (amount.cents > (Object.hasOwn(LIMIT_CENTS, t.currency) ? LIMIT_CENTS[t.currency] : DEFAULT_LIMIT_CENTS)) return 'E404';
 
   if (!CURRENCIES.has(t.currency.padEnd(3, ' '))) return 'E501';
 
@@ -255,6 +261,12 @@ function generator(seed, { chaos = false } = {}) {
         '10.005', '12.', '.50', '1e9', '1,000.00', '--5', '+', ' 12.00', '12 .50', '12.00 x', '1000000.00', '1000000.01',
         '+12.5', '7', '00000000000000000.1', '12.3.4',
       ]);
+      // Around every currency's own limit, too.
+      if (chance(0.3)) {
+        t.currency = pick([...CURRENCIES]);
+        t.amount = pick(['1000000.00', '1000000.01', '7500000.00', '7500000.01', '10000000.00', '10000000.01',
+          '400000000.00', '400000000.01', '25000000.01', '4000000.01', '5000000.01']);
+      }
     },
     currency: (t) => {
       t.currency = pick(['BTC', 'eur', 'EU', 'E1R', 'XAU', 'JPY', 'BGN']);
@@ -382,8 +394,10 @@ describe('TXNGUARD agrees with the reference model', { skip: SKIP_REASON }, () =
       });
       if (process.env.ALCAZAR_MODEL_DEBUG) console.log(Object.fromEntries([...codes].sort()));
       assert.deepEqual(mismatches.slice(0, 10), [], `${mismatches.length} mismatches`);
-      // The generator must exercise most rules, or the test proves little.
-      assert.ok(codes.size >= 18, `only ${codes.size} distinct outcomes: ${[...codes.keys()].join(' ')}`);
+      // The generator must exercise most rules, or the test proves little. In
+      // chaos mode several fields break at once and the earliest check wins.
+      const minimum = chaos ? 15 : 20;
+      assert.ok(codes.size >= minimum, `only ${codes.size} distinct outcomes: ${[...codes.keys()].join(' ')}`);
       assert.equal(job.ledger.verification.valid, true);
     });
   }

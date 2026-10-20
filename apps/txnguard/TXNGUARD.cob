@@ -74,8 +74,33 @@
        COPY ALZKEYW.
        COPY ALZLEDG.
        01  WS-MAX-RECORDS              PIC 9(4) VALUE 1000.
-      * Single-transfer limit: 1,000,000.00 in minor units.
-       01  WS-LIMIT-CENTS              PIC 9(15) VALUE 100000000.
+      * Single-transfer limits in minor units, per currency:
+      * 1,000,000.00 in EUR, USD, GBP, CHF, CAD, AUD and NZD, round
+      * local figures near EUR 1,000,000 elsewhere (1,000,000.00 HUF
+      * is about EUR 2,500). A currency outside the table - refused
+      * with E501 just after - is held to the default, 1,000,000.00.
+       01  WS-LIMIT-TABLE.
+           05  FILLER  PIC X(18) VALUE "EUR000000100000000".
+           05  FILLER  PIC X(18) VALUE "USD000000100000000".
+           05  FILLER  PIC X(18) VALUE "GBP000000100000000".
+           05  FILLER  PIC X(18) VALUE "CHF000000100000000".
+           05  FILLER  PIC X(18) VALUE "SEK000001000000000".
+           05  FILLER  PIC X(18) VALUE "NOK000001000000000".
+           05  FILLER  PIC X(18) VALUE "DKK000000750000000".
+           05  FILLER  PIC X(18) VALUE "PLN000000400000000".
+           05  FILLER  PIC X(18) VALUE "CZK000002500000000".
+           05  FILLER  PIC X(18) VALUE "HUF000040000000000".
+           05  FILLER  PIC X(18) VALUE "RON000000500000000".
+           05  FILLER  PIC X(18) VALUE "CAD000000100000000".
+           05  FILLER  PIC X(18) VALUE "AUD000000100000000".
+           05  FILLER  PIC X(18) VALUE "NZD000000100000000".
+       01  WS-LIMITS REDEFINES WS-LIMIT-TABLE.
+           05  WS-LIMIT-ENTRY          OCCURS 14 TIMES
+                                       INDEXED BY WS-LX.
+               10  WS-LIMIT-CCY        PIC X(3).
+               10  WS-LIMIT-VALUE      PIC 9(15).
+       01  WS-DEFAULT-LIMIT            PIC 9(15) VALUE 100000000.
+       01  WS-LIMIT-CENTS              PIC 9(15).
        01  WS-FILE-STATUS.
            05  WS-FS-IN                PIC XX.
            05  WS-FS-OK                PIC XX.
@@ -394,6 +419,7 @@
        3500-CHECK-AMOUNT.
            CALL "ALZAMNT" USING TI-AMOUNT WS-SIGN WS-CENTS
                                 WS-AMOUNT-RC ALZ-POS
+           PERFORM 3550-FIND-LIMIT
            IF WS-VALID
                EVALUATE TRUE
                    WHEN WS-AMOUNT-RC = 1
@@ -414,6 +440,14 @@
                        MOVE "OVER-LIMIT" TO WS-DETAIL
                END-EVALUATE
            END-IF.
+
+       3550-FIND-LIMIT.
+           MOVE WS-DEFAULT-LIMIT TO WS-LIMIT-CENTS
+           SET WS-LX TO 1
+           SEARCH WS-LIMIT-ENTRY
+               WHEN WS-LIMIT-CCY(WS-LX) = TI-CURRENCY
+                   MOVE WS-LIMIT-VALUE(WS-LX) TO WS-LIMIT-CENTS
+           END-SEARCH.
 
        3600-CHECK-CURRENCY.
            CALL "ALZCCY" USING TI-CURRENCY ALZ-RC

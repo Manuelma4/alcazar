@@ -14,7 +14,7 @@ export const REASONS = Object.freeze({
   E401: 'Amount is not a decimal with at most two places',
   E402: 'Amount has more than 13 integer digits and would be truncated',
   E403: 'Amount is zero or negative',
-  E404: 'Amount is above the single-transfer limit of 1,000,000.00',
+  E404: 'Amount is above the single-transfer limit for its currency (1,000,000.00 in euros)',
   E501: 'Currency is not on the allowlist',
   E601: 'Card number is not 12 to 19 digits',
   E602: 'Card number fails the Luhn check',

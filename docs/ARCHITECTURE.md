@@ -148,7 +148,7 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
 | E401 | AMOUNT | grammar (e.g. more than 2 decimals, stray characters) |
 | E402 | AMOUNT | overflow: more than 13 integer digits (would truncate) |
 | E403 | AMOUNT | zero or negative |
-| E404 | AMOUNT | above the single-transfer limit (1,000,000.00) |
+| E404 | AMOUNT | above the single-transfer limit of its currency: 1,000,000.00 in EUR, USD, GBP, CHF, CAD, AUD, NZD; 10,000,000.00 SEK and NOK; 7,500,000.00 DKK; 4,000,000.00 PLN; 25,000,000.00 CZK; 400,000,000.00 HUF; 5,000,000.00 RON (any other currency: 1,000,000.00, then E501) |
 | E501 | CURRENCY | not in the allowlist |
 | E601 | CARD-PAN | not 12–19 digits |
 | E602 | CARD-PAN | Luhn check failed |

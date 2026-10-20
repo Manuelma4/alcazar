@@ -412,7 +412,7 @@ export const RULES = Object.freeze([
     language: 'any',
     precision: 'high',
     summary: 'The file contains Unicode bidirectional override or isolate characters.',
-    rationale: 'Bidi controls (U+202A-U+202E, U+2066-U+2069) reorder how text is displayed without changing what the compiler reads (CVE-2021-42574). Code can look like a comment or a harmless string in review while doing something else.',
+    rationale: 'Bidi controls (U+061C, U+200E, U+200F, U+202A-U+202E, U+2066-U+2069) reorder how text is displayed without changing what the compiler reads (CVE-2021-42574). Code can look like a comment or a harmless string in review while doing something else.',
     fix: 'Remove the characters. Right-to-left text belongs in external resources, not in source; make editors and CI reject bidi controls.',
   }),
   defineRule({

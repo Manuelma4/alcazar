@@ -24,6 +24,14 @@ describe('ALZ-GEN-001 bidirectional controls', () => {
     assert.match(found[0].message, /U\+202E RIGHT-TO-LEFT OVERRIDE/);
   });
 
+  it('flags the bidi marks too: LRM, RLM and the Arabic letter mark', () => {
+    for (const code of [0x200e, 0x200f, 0x061c]) {
+      const found = findingsOf(scan(`x = "a${String.fromCodePoint(code)}b"\n`, { filename: 'notes.txt' }), 'ALZ-GEN-001');
+      assert.equal(found.length, 1, code.toString(16));
+      assert.match(found[0].message, /MARK/);
+    }
+  });
+
   it('works for Fortran and for unknown languages', () => {
     assert.equal(findingsOf(scanFortran(`x = 1 ! ${RLO}\n`), 'ALZ-GEN-001').length, 1);
     const unknown = scan(`hello ${LRI}world${PDI}\n`, { filename: 'notes.txt' });
@@ -37,6 +45,15 @@ describe('ALZ-GEN-002 invisible characters and homoglyphs', () => {
     const source = `program p\nimplicit none\ninteger :: a${ZWSP}b\nprint *, '${BOM}'\nend program p\n`;
     const found = findingsOf(scanFortran(source), 'ALZ-GEN-002');
     assert.deepEqual(found.map((f) => f.line), [3, 4]);
+  });
+
+  it('flags every default-ignorable character: soft hyphen, fillers, variation selectors, tags', () => {
+    for (const [code, name] of [[0x00ad, 'SOFT HYPHEN'], [0x3164, 'HANGUL FILLER'], [0xfe0f, 'DEFAULT IGNORABLE'], [0xe0041, 'DEFAULT IGNORABLE']]) {
+      const found = findingsOf(scanFortran(`x = 1 ! ok${String.fromCodePoint(code)}\n`), 'ALZ-GEN-002');
+      assert.equal(found.length, 1, code.toString(16));
+      assert.match(found[0].message, new RegExp(`U\\+${code.toString(16).toUpperCase().padStart(4, '0')} ${name}`));
+      assert.equal(found[0].column, 11);
+    }
   });
 
   it('allows a leading byte-order mark', () => {

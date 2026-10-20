@@ -14,17 +14,13 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', 'build', 'var']);
 const TEXT = new Set(['.mjs', '.js', '.json', '.md', '.html', '.css', '.svg', '.yml', '.yaml', '.sh', '.cob', '.cbl',
   '.cpy', '.f90', '.f', '.for', '.h', '.c', '.txt', '.webmanifest', '']);
 const EXEMPT = /^examples\/vulnerable\/trojan_source\.[a-z]+$/;
-// Code points, not a regex literal: an editor or tool that "helpfully"
-// decodes escapes cannot corrupt this list.
-const SUSPICIOUS = [
-  [0x200b, 0x200d], // zero-width space / non-joiner / joiner
-  [0x202a, 0x202e], // bidi embeddings and overrides
-  [0x2060, 0x2060], // word joiner
-  [0x2066, 0x2069], // bidi isolates
-  [0x180e, 0x180e], // Mongolian vowel separator
-  [0xfeff, 0xfeff], // zero-width no-break space / BOM
-];
-const isSuspicious = (code) => SUSPICIOUS.some(([lo, hi]) => code >= lo && code <= hi);
+// Unicode properties, spelled in ASCII: every bidirectional control (marks,
+// embeddings, overrides, isolates) and every default-ignorable code point
+// (zero-width characters, soft hyphen, fillers, variation selectors, tags,
+// the BOM). No invisible character appears in this file, and no tool that
+// "helpfully" decodes escapes can corrupt the list.
+const SUSPICIOUS = /^[\p{Bidi_Control}\p{Default_Ignorable_Code_Point}]$/u;
+const isSuspicious = (code) => SUSPICIOUS.test(String.fromCodePoint(code));
 
 async function* files(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

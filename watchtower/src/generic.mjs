@@ -4,7 +4,7 @@
  * material (ALZ-GEN-003). All scanners are single-pass and regex-free.
  */
 import {
-  BIDI_NAMES, INVISIBLE_NAMES, MAX_SNIPPET, escapeInvisible, formatCodePoint, isAsciiLetterCode,
+  BIDI_NAMES, MAX_SNIPPET, escapeInvisible, formatCodePoint, invisibleName, isAsciiLetterCode,
   isDigitCode, isNonAsciiLetter,
 } from './text.mjs';
 
@@ -44,20 +44,26 @@ function scanSpecialCharacters(text, line, sink) {
   /** @type {{ col: number, names: Set<string>, count: number } | null} */
   let invisible = null;
   for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    if (code < 0x180e) continue;
+    let code = text.charCodeAt(i);
+    if (code < 0xad) continue;
+    const col = i + 1;
+    // Astral invisibles too (tags, variation selectors supplement…).
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      code = /** @type {number} */ (text.codePointAt(i));
+      if (code > 0xffff) i += 1;
+    }
     const bidiName = BIDI_NAMES.get(code);
     if (bidiName) {
-      bidi ??= { col: i + 1, names: new Set(), count: 0 };
+      bidi ??= { col, names: new Set(), count: 0 };
       bidi.count += 1;
       bidi.names.add(`${formatCodePoint(code)} ${bidiName}`);
       continue;
     }
-    const invisibleName = INVISIBLE_NAMES.get(code);
-    if (invisibleName) {
-      invisible ??= { col: i + 1, names: new Set(), count: 0 };
+    const name = invisibleName(code);
+    if (name) {
+      invisible ??= { col, names: new Set(), count: 0 };
       invisible.count += 1;
-      invisible.names.add(`${formatCodePoint(code)} ${invisibleName}`);
+      invisible.names.add(`${formatCodePoint(code)} ${name}`);
     }
   }
   if (bidi) {

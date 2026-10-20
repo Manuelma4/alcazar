@@ -12,7 +12,7 @@ The file contains Unicode bidirectional override or isolate characters.
 
 ## What Watchtower detects
 
-Any Unicode bidirectional control character, U+202A to U+202E (embeddings and overrides) and U+2066 to U+2069 (isolates), anywhere in the file: code, comments or literals, in any language. One finding per line, listing the characters found.
+Any Unicode bidirectional control character (the Bidi_Control property): the marks U+061C, U+200E and U+200F, U+202A to U+202E (embeddings and overrides) and U+2066 to U+2069 (isolates), anywhere in the file: code, comments or literals, in any language. One finding per line, listing the characters found.
 
 ## Why it matters in legacy systems
 

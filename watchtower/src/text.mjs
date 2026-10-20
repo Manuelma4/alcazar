@@ -4,8 +4,11 @@
  * single-character Unicode property tests.
  */
 
-/** Unicode bidirectional embedding / override / isolate controls. */
+/** Every Unicode bidirectional control (the Bidi_Control property): marks, embeddings, overrides, isolates. */
 export const BIDI_NAMES = new Map([
+  [0x061c, 'ARABIC LETTER MARK'],
+  [0x200e, 'LEFT-TO-RIGHT MARK'],
+  [0x200f, 'RIGHT-TO-LEFT MARK'],
   [0x202a, 'LEFT-TO-RIGHT EMBEDDING'],
   [0x202b, 'RIGHT-TO-LEFT EMBEDDING'],
   [0x202c, 'POP DIRECTIONAL FORMATTING'],
@@ -17,17 +20,50 @@ export const BIDI_NAMES = new Map([
   [0x2069, 'POP DIRECTIONAL ISOLATE'],
 ]);
 
-/** Invisible / zero-width characters. */
+/** Invisible characters, by name; invisibleName() also knows the rest of Default_Ignorable_Code_Point. */
 export const INVISIBLE_NAMES = new Map([
+  [0x00ad, 'SOFT HYPHEN'],
+  [0x034f, 'COMBINING GRAPHEME JOINER'],
+  [0x115f, 'HANGUL CHOSEONG FILLER'],
+  [0x1160, 'HANGUL JUNGSEONG FILLER'],
+  [0x17b4, 'KHMER VOWEL INHERENT AQ'],
+  [0x17b5, 'KHMER VOWEL INHERENT AA'],
+  [0x180e, 'MONGOLIAN VOWEL SEPARATOR'],
   [0x200b, 'ZERO WIDTH SPACE'],
   [0x200c, 'ZERO WIDTH NON-JOINER'],
   [0x200d, 'ZERO WIDTH JOINER'],
   [0x2060, 'WORD JOINER'],
-  [0x180e, 'MONGOLIAN VOWEL SEPARATOR'],
+  [0x2061, 'FUNCTION APPLICATION'],
+  [0x2062, 'INVISIBLE TIMES'],
+  [0x2063, 'INVISIBLE SEPARATOR'],
+  [0x2064, 'INVISIBLE PLUS'],
+  [0x3164, 'HANGUL FILLER'],
   [0xfeff, 'ZERO WIDTH NO-BREAK SPACE'],
+  [0xffa0, 'HALFWIDTH HANGUL FILLER'],
 ]);
 
 const LETTER_OR_MARK = /^[\p{L}\p{M}]$/u;
+const DEFAULT_IGNORABLE = /^\p{Default_Ignorable_Code_Point}$/u;
+
+/**
+ * The name of an invisible code point — a named one, or any other
+ * Default_Ignorable_Code_Point (variation selectors, tags, fillers…) — or
+ * undefined. Bidi controls are BIDI_NAMES' and are not reported twice.
+ * @param {number} codePoint
+ * @returns {string | undefined}
+ */
+export function invisibleName(codePoint) {
+  if (codePoint < 0xad) return undefined;
+  const named = INVISIBLE_NAMES.get(codePoint);
+  if (named) return named;
+  if (BIDI_NAMES.has(codePoint) || (codePoint >= 0xd800 && codePoint <= 0xdfff)) return undefined;
+  return DEFAULT_IGNORABLE.test(String.fromCodePoint(codePoint)) ? 'DEFAULT IGNORABLE CODE POINT' : undefined;
+}
+
+/** A bidi control or an invisible character: never shown verbatim. */
+export function isHiddenCode(codePoint) {
+  return BIDI_NAMES.has(codePoint) || invisibleName(codePoint) !== undefined;
+}
 
 /** Maximum snippet length kept on a finding. */
 export const MAX_SNIPPET = 400;
@@ -90,7 +126,7 @@ export function isAsciiLetterCode(code) {
 export function isNonAsciiWordCode(code) {
   if (code < 128) return false;
   if (code >= 0xd800 && code <= 0xdfff) return true;
-  if (INVISIBLE_NAMES.has(code)) return true;
+  if (invisibleName(code) !== undefined) return true;
   return LETTER_OR_MARK.test(String.fromCharCode(code));
 }
 
@@ -163,15 +199,18 @@ export function sanitizeForTerminal(text) {
   let out = '';
   let start = 0;
   for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
+    let code = text.charCodeAt(i);
+    const at = i;
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      code = /** @type {number} */ (text.codePointAt(i));
+      if (code > 0xffff) i += 1;
+    }
     let replacement = null;
     if (code === 9) replacement = ' ';
     else if (code < 32 || code === 127 || (code >= 0x80 && code < 0xa0)) replacement = '\u{FFFD}';
-    else if (BIDI_NAMES.has(code) || INVISIBLE_NAMES.has(code) || code === 0x2028 || code === 0x2029) {
-      replacement = '\u{FFFD}';
-    }
+    else if (isHiddenCode(code) || code === 0x2028 || code === 0x2029) replacement = '\u{FFFD}';
     if (replacement !== null) {
-      out += text.slice(start, i) + replacement;
+      out += text.slice(start, at) + replacement;
       start = i + 1;
     }
   }
@@ -188,7 +227,7 @@ export function escapeInvisible(text) {
   let out = '';
   for (const ch of text) {
     const cp = /** @type {number} */ (ch.codePointAt(0));
-    if (cp < 32 || cp === 127 || BIDI_NAMES.has(cp) || INVISIBLE_NAMES.has(cp)) {
+    if (cp < 32 || cp === 127 || isHiddenCode(cp)) {
       out += `\\u{${cp.toString(16).toUpperCase()}}`;
     } else {
       out += ch;

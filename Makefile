@@ -58,7 +58,7 @@ GFORTRAN_LIBDIR := $(shell dirname "$$($(FC) -print-file-name=libgfortran.$(SHLI
 #                   path (COB_LIBRARY_PATH) can be used to hijack a call.
 # -A / -Q         : hardening flags for the generated C and the link.
 C_HARDEN  := -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fno-strict-aliasing
-COB_WARN  := -Wall
+COB_WARN  := -Wall -Werror
 COBFLAGS  ?= -std=default -O2 -debug -fstatic-call $(COB_WARN) -A "$(C_HARDEN)" \
              $(if $(LD_HARDEN),-Q "$(LD_HARDEN)")
 COB_INC   := -I rampart/cobol/copybooks

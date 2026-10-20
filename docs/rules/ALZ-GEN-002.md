@@ -12,7 +12,7 @@ Zero-width characters, or non-ASCII letters inside identifiers, can make differe
 
 ## What Watchtower detects
 
-Zero-width and invisible characters (U+200B, U+200C, U+200D, U+2060, U+180E, and U+FEFF anywhere but at offset 0, where it is a byte-order mark) on any line, and COBOL or Fortran identifiers that contain non-ASCII letters, such as a Cyrillic A (U+0410) in `WS-BALANCE`. Non-ASCII text in comments and literals is fine.
+Invisible characters — every Default_Ignorable_Code_Point that is not a bidi control: zero-width characters (U+200B to U+200D, U+2060 to U+2064), the soft hyphen U+00AD, the Hangul fillers, U+180E, variation selectors, tag characters, and U+FEFF anywhere but at offset 0, where it is a byte-order mark — on any line, and COBOL or Fortran identifiers that contain non-ASCII letters, such as a Cyrillic A (U+0410) in `WS-BALANCE`. Non-ASCII text in comments and literals is fine.
 
 ## Why it matters in legacy systems
 

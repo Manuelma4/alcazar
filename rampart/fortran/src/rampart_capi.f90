@@ -61,6 +61,7 @@ contains
 
   !> int32_t alz_sha256(const uint8_t *msg, const int32_t *len, uint8_t digest[32])
   function capi_sha256(msg, msglen, digest) result(rc) bind(C, name='alz_sha256')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; msglen is range-checked before any access
     integer(c_int8_t), intent(in) :: msg(*)
     integer(c_int32_t), intent(in) :: msglen
     integer(c_int8_t), intent(out) :: digest(SHA256_LEN)
@@ -75,6 +76,7 @@ contains
 
   !> int32_t alz_sha256_hex(const uint8_t *msg, const int32_t *len, char hex[64])
   function capi_sha256_hex(msg, msglen, hex) result(rc) bind(C, name='alz_sha256_hex')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; only passed on to alz_sha256, which checks msglen
     integer(c_int8_t), intent(in) :: msg(*)
     integer(c_int32_t), intent(in) :: msglen
     character(kind=c_char), intent(out) :: hex(2 * SHA256_LEN)
@@ -90,6 +92,7 @@ contains
   !> int32_t alz_hmac_sha256(const uint8_t *key, const int32_t *keylen,
   !>                         const uint8_t *msg, const int32_t *msglen, uint8_t mac[32])
   function capi_hmac_sha256(key, keylen, msg, msglen, mac) result(rc) bind(C, name='alz_hmac_sha256')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; keylen and msglen are range-checked first
     integer(c_int8_t), intent(in) :: key(*), msg(*)
     integer(c_int32_t), intent(in) :: keylen, msglen
     integer(c_int8_t), intent(out) :: mac(SHA256_LEN)
@@ -105,6 +108,7 @@ contains
   !> int32_t alz_hmac_sha256_hex(const uint8_t *key, const int32_t *keylen,
   !>                             const uint8_t *msg, const int32_t *msglen, char hex[64])
   function capi_hmac_sha256_hex(key, keylen, msg, msglen, hex) result(rc) bind(C, name='alz_hmac_sha256_hex')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; only passed on to alz_hmac_sha256, which checks both
     integer(c_int8_t), intent(in) :: key(*), msg(*)
     integer(c_int32_t), intent(in) :: keylen, msglen
     character(kind=c_char), intent(out) :: hex(2 * SHA256_LEN)
@@ -123,6 +127,7 @@ contains
   !> zero is refused: "two empty MACs are equal" is how verification bugs
   !> turn into forgeries.
   function capi_ct_equal(a, b, n) result(rc) bind(C, name='alz_ct_equal')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; n is range-checked (and must be >= 1) first
     integer(c_int8_t), intent(in) :: a(*), b(*)
     integer(c_int32_t), intent(in) :: n
     integer(c_int32_t) :: rc
@@ -139,8 +144,10 @@ contains
   !> int32_t alz_hex_decode(const char *hex, const int32_t *hexlen,
   !>                        uint8_t *out, const int32_t *outcap, int32_t *outlen)
   function capi_hex_decode(hex, hexlen, out, outcap, outlen) result(rc) bind(C, name='alz_hex_decode')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; hexlen is range-checked first
     character(kind=c_char), intent(in) :: hex(*)
     integer(c_int32_t), intent(in) :: hexlen, outcap
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; outcap is checked, and bounds every write
     integer(c_int8_t), intent(inout) :: out(*)
     integer(c_int32_t), intent(out) :: outlen
     integer(c_int32_t) :: rc
@@ -173,8 +180,10 @@ contains
   !> int32_t alz_hex_encode(const uint8_t *bytes, const int32_t *len, char *hex)
   !> hex must hold 2 * len characters.
   function capi_hex_encode(bytes, n, hex) result(rc) bind(C, name='alz_hex_encode')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; n is range-checked first
     integer(c_int8_t), intent(in) :: bytes(*)
     integer(c_int32_t), intent(in) :: n
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; alz.h: hex holds 2 * n characters
     character(kind=c_char), intent(inout) :: hex(*)
     integer(c_int32_t) :: rc
     character(len=:), allocatable :: text
@@ -192,6 +201,7 @@ contains
 
   !> int32_t alz_zeroize(uint8_t *buf, const int32_t *len)
   function capi_zeroize(buf, n) result(rc) bind(C, name='alz_zeroize')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; n is range-checked first
     integer(c_int8_t), intent(inout) :: buf(*)
     integer(c_int32_t), intent(in) :: n
     integer(c_int32_t) :: rc
@@ -213,6 +223,7 @@ contains
   !> stays unread); ALZ_E_IO when read fails. In each of these cases the
   !> bytes read are wiped and len is 0.
   function capi_read_line(buf, cap, out_len) result(rc) bind(C, name='alz_read_line')
+    ! watchtower-ignore ALZ-FOR-002 -- C interop needs assumed size; cap is range-checked, and bounds every write
     integer(c_int8_t), intent(inout) :: buf(*)
     integer(c_int32_t), intent(in) :: cap
     integer(c_int32_t), intent(out) :: out_len

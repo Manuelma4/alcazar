@@ -3,7 +3,10 @@
 // Regenerate the README screenshots of Lookout (docs/assets/lookout-*.png).
 //
 //   npm start            # Gatehouse on http://localhost:8080 (another terminal)
-//   node scripts/screenshots.mjs [--base http://localhost:8080] [--chrome PATH]
+//   node scripts/screenshots.mjs --token TOKEN [--base http://localhost:8080] [--chrome PATH]
+//
+// TOKEN is the operator token: the end of the sign-in link Gatehouse printed
+// (or ALCAZAR_API_TOKEN in the environment). It goes to Gatehouse only.
 //
 // Drives a headless Chrome through the DevTools Protocol with nothing but
 // Node.js built-ins, in a throw-away profile (never the user's own).
@@ -20,6 +23,7 @@ const option = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const BASE = option('--base', 'http://localhost:8080');
+const TOKEN = option('--token', process.env.ALCAZAR_API_TOKEN ?? '');
 const CHROME = option('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const OUT = fileURLToPath(new URL('../docs/assets/', import.meta.url));
 const PORT = 9333;
@@ -125,6 +129,12 @@ async function main() {
     await page.send('Page.enable');
     await page.send('Runtime.enable');
     await viewport(1440, 900, 'dark');
+    if (TOKEN) {
+      // A sign-in link, as an operator would open it: Lookout signs in and
+      // drops the token from the address bar.
+      await page.send('Page.navigate', { url: `${BASE}/#signin=${encodeURIComponent(TOKEN)}` });
+      await waitFor(`document.readyState === 'complete' && !location.hash.startsWith('#signin=') && !!document.querySelector('.signout-slot button')`);
+    }
     await page.send('Page.navigate', { url: `${BASE}/#/overview` });
     await waitFor(`document.readyState === 'complete' && !!document.querySelector('main h1')`);
     await sleep(1200);

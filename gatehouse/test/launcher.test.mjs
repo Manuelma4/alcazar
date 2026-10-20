@@ -26,7 +26,10 @@ describe('The hardened launcher from an accented path', { skip: SKIP_REASON }, (
   after(() => rm(base, { recursive: true, force: true }));
 
   it('starts, writes its job directory and passes its self-test, whichever way the path is spelled', async () => {
-    for (const spelling of [base.normalize('NFC'), base.normalize('NFD')]) {
+    // On macOS (APFS) both spellings reach the same directory; elsewhere
+    // they are two different names, and only the one created exists.
+    const spellings = process.platform === 'darwin' ? [base.normalize('NFC'), base.normalize('NFD')] : [base];
+    for (const spelling of spellings) {
       const child = spawn(process.execPath, [join(spelling, 'repo', 'scripts', 'start-hardened.mjs')], {
         env: { ...process.env, ALCAZAR_HOST: '127.0.0.1', ALCAZAR_PORT: '0', ALCAZAR_AUTH: 'none', ALCAZAR_WORK_DIR: join(spelling, 'work') },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -45,7 +48,7 @@ describe('The hardened launcher from an accented path', { skip: SKIP_REASON }, (
           closed.then((code) => reject(new Error(`the launcher exited with ${code}: ${err}`)));
         });
         const health = await (await fetch(`${url}api/health`)).json();
-        assert.equal(health.selftest.status, 'pass', `${spelling === base.normalize('NFC') ? 'NFC' : 'NFD'}: ${JSON.stringify(health.selftest)}`);
+        assert.equal(health.selftest.status, 'pass', `${spelling === spelling.normalize('NFC') ? 'NFC' : 'NFD'}: ${JSON.stringify(health.selftest)}`);
       } finally {
         child.kill('SIGTERM');
         await closed;

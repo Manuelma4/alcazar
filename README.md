@@ -121,7 +121,9 @@ flowchart LR
    with LEDGERCK *and* with Node's OpenSSL, and compares the head with the
    anchor it kept — so even a truncated ledger is caught.
 
-A 200-transfer batch goes through all four in about **50 ms**.
+A 200-transfer batch goes through all four in about **50 ms**, and the
+GnuCOBOL and gfortran run-time checks cost only 6–21 %
+([benchmarks](docs/BENCHMARKS.md)).
 
 ## The Siege
 
@@ -279,7 +281,8 @@ More in the [Watchtower README](watchtower/README.md).
 
 Details: [threat model](docs/THREAT_MODEL.md) ·
 [hardening notes](docs/HARDENING.md) ·
-[architecture and API](docs/ARCHITECTURE.md) · [security policy](SECURITY.md)
+[architecture and API](docs/ARCHITECTURE.md) · [benchmarks](docs/BENCHMARKS.md) ·
+[security policy](SECURITY.md)
 
 ## Lessons from the trenches
 

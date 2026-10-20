@@ -141,8 +141,11 @@ Lookout works under it with no console violations on any view:
   (memos, ids, scanner snippets, Siege payloads) render as visible escapes
   (`\u{202E}`); the scanner warns and offers a reveal view when a source
   contains them.
-* **Masked data only.** After a batch is submitted the page keeps a masked
-  projection (IBAN first 4 + last 4, PAN BIN + last 4) — never the card number.
+* **Masked data only.** Once a batch is sent the transactions view lets go
+  of it, pasted text included, and keeps a masked projection: IBAN first 4 +
+  last 4, PAN BIN + last 4, and every card-like run of digits in a memo down
+  to its last 4 — the card numbers TXNGUARD refused (E803) and any it
+  missed. Accepted memos and tampered records are shown masked the same way.
 * **Storage** holds per-viewer conveniences only: theme, last view
   (`localStorage`), and the current job id (`sessionStorage`), all wrapped in
   try/catch. No data leaves for third parties; Defenses verifies this live.

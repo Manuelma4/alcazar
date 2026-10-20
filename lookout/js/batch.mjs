@@ -2,10 +2,11 @@
 // projection of it. Pure (no DOM) so it is unit-tested in Node.
 //
 // After submission the dashboard keeps only what it needs to explain a
-// rejection — amount text, currency, channel, masked IBANs, memo — and never
-// the card number: raw PANs exist only in the request body.
+// rejection — amount text, currency, channel, masked IBANs, the memo with
+// its card-like digits masked — and never the card number: the transactions
+// view lets go of the raw batch once it is sent.
 
-import { maskIban, maskPan } from './format.mjs';
+import { maskIban, maskMemo, maskPan } from './format.mjs';
 
 export const MAX_TRANSACTIONS = 1000;
 export const MAX_BODY_BYTES = 512 * 1024;
@@ -57,7 +58,7 @@ export function projectInput(transactions) {
       amount: cut(x.amount, 24),
       currency: cut(x.currency, 8),
       channel: cut(x.channel, 8),
-      memo: cut(x.memo, 48),
+      memo: maskMemo(cut(x.memo, 48)),
       card: x.pan ? maskPan(cut(x.pan, 32)) : '',
     };
   });

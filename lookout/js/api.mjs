@@ -5,6 +5,8 @@
 // explicit types (unknown fields dropped, maps rebuilt on null-prototype
 // objects), so the views can only ever render well-typed values — as text.
 
+import { maskMemo } from './format.mjs';
+
 export const STAGES = Object.freeze(['gatehouse', 'txnguard', 'fraudscan', 'seal']);
 export const SIGNALS = Object.freeze(['ZSCORE', 'STRUCTURING', 'VELOCITY', 'ENTROPY']);
 export const VERIFIERS = Object.freeze(['cobol-fortran', 'node-openssl', 'anchor']);
@@ -237,7 +239,8 @@ export function normalizeJob(d) {
         currency: str(a.currency),
         channel: str(a.channel),
         panMasked: a.panMasked === null || a.panMasked === undefined || a.panMasked === '' ? null : str(a.panMasked),
-        memo: str(a.memo),
+        // Display only: a card number ALZPANSC missed is not shown either.
+        memo: maskMemo(str(a.memo)),
       };
     }),
     risk: normalizeRisk(d.risk),
@@ -264,14 +267,23 @@ function normalizeAnchor(d) {
   };
 }
 
+// ACCEPTED record: MEMO is its last 40 bytes, from byte 166.
+const ACCEPTED_MEMO = 166;
+
 function normalizeTamper(d) {
+  const file = oneOf(d.file, TAMPER_FILES, 'LEDGER.DAT');
+  const record = (v) => {
+    if (v === null || v === undefined) return null;
+    const text = str(v);
+    return file === 'ACCEPTED.DAT' ? text.slice(0, ACCEPTED_MEMO) + maskMemo(text.slice(ACCEPTED_MEMO)) : text;
+  };
   return {
     tampered: bool(d.tampered),
     seq: num(d.seq),
     mode: oneOf(d.mode, TAMPER_MODES, str(d.mode)),
-    file: oneOf(d.file, TAMPER_FILES, 'LEDGER.DAT'),
-    before: d.before === null || d.before === undefined ? null : str(d.before),
-    after: d.after === null || d.after === undefined ? null : str(d.after),
+    file,
+    before: record(d.before),
+    after: record(d.after),
   };
 }
 

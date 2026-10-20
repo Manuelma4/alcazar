@@ -216,6 +216,27 @@ export function maskPan(pan) {
   return `${digits.slice(0, 6)}${'*'.repeat(digits.length - 10)}${digits.slice(-4)}`;
 }
 
+/**
+ * A memo with every card-like run of digits — 12 or more, with single
+ * spaces, dots, dashes or slashes between them — masked down to its last 4,
+ * one character for one, so fixed-width records stay aligned. TXNGUARD
+ * refuses card numbers in memos (E803), and this page shows the refused
+ * ones — and any it missed — masked too.
+ */
+export function maskMemo(memo) {
+  return String(memo ?? '').replace(/\d(?:[ ./-]?\d){11,}/g, (run) => {
+    let keep = 4;
+    let out = '';
+    for (let i = run.length - 1; i >= 0; i -= 1) {
+      const c = run[i];
+      const digit = c >= '0' && c <= '9';
+      out = (digit && keep <= 0 ? '*' : c) + out;
+      if (digit) keep -= 1;
+    }
+    return out;
+  });
+}
+
 // Characters that are invisible, reorder text, or end lines: C0/C1 controls,
 // format characters (bidi overrides and isolates, zero-width joiners, BOM,
 // soft hyphen) and the Unicode line/paragraph separators.

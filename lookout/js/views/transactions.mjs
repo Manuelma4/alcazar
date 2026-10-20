@@ -133,6 +133,12 @@ function loaderCard(cleanups) {
     const job = await runBatch(ui.loaded.transactions, ui.loaded.source);
     setBusy(runBtn, false);
     if (job) {
+      // The raw batch (card numbers included) is let go once it is sent:
+      // the page keeps only its masked projection.
+      ui.paste = '';
+      const pasted = document.getElementById('tx-paste');
+      if (pasted) pasted.value = '';
+      setLoaded(null);
       status.set('ok', t('batch.done', {
         accepted: formatInt(job.summary.accepted),
         rejected: formatInt(job.summary.rejected),

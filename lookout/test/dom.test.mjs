@@ -9,7 +9,7 @@ import { dirname, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  escapeInvisible, formatBytes, formatCentsPlain, formatCountdown, formatMoney, formatTimestamp, hasInvisible, maskIban, maskPan,
+  escapeInvisible, formatBytes, formatCentsPlain, formatCountdown, formatMoney, formatTimestamp, hasInvisible, maskIban, maskMemo, maskPan,
   parseTimestamp, shortHash, splitCents, splitInvisible,
 } from '../js/format.mjs';
 import { STRINGS, t } from '../js/strings.mjs';
@@ -196,6 +196,16 @@ describe('batch: parsing input and keeping only a masked projection', () => {
     assert.ok(!JSON.stringify(row).includes('4111111111111111'));
     assert.ok(!JSON.stringify(row).includes('30006000011234567890'));
   });
+
+  test('masks card-like digits in memos, typed any way, and leaves dates, phones and words alone', () => {
+    assert.equal(maskMemo('card 4111 1111 1111 1111 exp 12/28'), 'card **** **** **** 1111 exp 12/28');
+    assert.equal(maskMemo('ref 41111111111111111234'), 'ref ****************1234');
+    assert.equal(maskMemo('4111-1111.1111/1111'), '****-****.****/1111');
+    for (const memo of ['Rent October', 'tel +33 6 12 34 56 78', 'invoice 2026-10-20 n 0042', '']) assert.equal(maskMemo(memo), memo);
+    const [row] = projectInput([{ id: 'X', memo: 'card 4111 1111 1111 1111 exp 12/28' }]);
+    assert.equal(row.memo, 'card **** **** **** 1111 exp 12/28');
+    assert.equal(maskMemo('x'.repeat(30) + '4111111111111111').length, 46, 'one character for one');
+  });
 });
 
 // ---------------------------------------------------------------------
@@ -247,6 +257,11 @@ describe('jobmodel: joining a job back into input order', () => {
 });
 
 describe('api: responses are projected onto the contract', () => {
+  test('accepted memos come masked, so a card number TXNGUARD missed is not shown either', () => {
+    const job = normalizeJob({ accepted: [{ id: 'A', memo: 'ref 41111111111111111234' }] });
+    assert.equal(job.accepted[0].memo, 'ref ****************1234');
+  });
+
   test('unknown values are dropped, maps are null-prototype', () => {
     const job = fakeJob();
     assert.deepEqual(job.risk.transactions[2].signals, ['ZSCORE']);

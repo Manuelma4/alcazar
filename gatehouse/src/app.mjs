@@ -353,7 +353,9 @@ export async function createApp(config, { log = defaultLog } = {}) {
     }
     const status = code === 'ERR_HTTP_REQUEST_TIMEOUT' ? 408 : code === 'HPE_HEADER_OVERFLOW' ? 431 : 400;
     log('warn', 'client error', { code, status });
-    socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+    // The security headers too: every response carries them, even these.
+    const lines = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join('');
+    socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n${lines}Connection: close\r\nContent-Length: 0\r\n\r\n`);
   });
 
   return {

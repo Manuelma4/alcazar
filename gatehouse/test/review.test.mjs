@@ -3,7 +3,7 @@
 // Gatehouse (process fan-out, slot hoarding, X-Forwarded-For spoofing,
 // leftover card numbers, backslash targets, shutdown, eviction).
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
@@ -15,6 +15,7 @@ import { Gate } from '../src/gate.mjs';
 import { HttpError } from '../src/http.mjs';
 import { deriveKeys, keyLines } from '../src/ledger.mjs';
 import { Pipeline } from '../src/pipeline.mjs';
+import { txnInLines } from '../src/records.mjs';
 import { runLegacy } from '../src/runner.mjs';
 import { SKIP_REASON, VALID, postJson, startGatehouse } from './helpers.mjs';
 
@@ -401,4 +402,27 @@ describe('FRAUDSCAN, trusted for its shape only', { skip: SKIP_REASON }, () => {
         /FRAUDSCAN output does not match the accepted records/.test(error.message));
     });
   }
+});
+
+describe('A write that only fails at CLOSE (HARDENING 17)', { skip: process.platform === 'win32' ? 'no ulimit' : SKIP_REASON }, () => {
+  it('is never a sealed job: no seal on stdout, and a failing return code', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'alcazar-fsize-'));
+    try {
+      const keys = deriveKeys(Buffer.alloc(32, 0x17));
+      const batch = Array.from({ length: 200 }, (_, i) => ({ ...VALID, id: `F-${i + 1}`, from: 'FR7630006000011234567890189' }));
+      // A file-size limit far below the batch's ledger (200 entries of 313 bytes).
+      const result = spawnSync('/bin/sh', ['-c', 'ulimit -f 16 && exec "$0" "$1"', join(ROOT, 'build', 'bin', 'txnguard'), 'j-fsize'], {
+        cwd: dir,
+        input: Buffer.concat([keyLines(keys.ledger, keys.token), txnInLines(batch)]),
+        encoding: 'latin1',
+        env: { PATH: '/usr/bin:/bin', LC_ALL: 'C' },
+      });
+      assert.doesNotMatch(result.stdout, /ALZ-SEAL/);
+      // 16, the I/O error code — or the kernel's SIGXFSZ, where it is not ignored.
+      assert.ok(result.status === 16 || result.signal === 'SIGXFSZ', `return code ${result.status}, signal ${result.signal}: ${result.stderr}`);
+      if (result.status === 16) assert.match(result.stderr, /write error/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

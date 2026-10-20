@@ -215,11 +215,15 @@ describe('Gatehouse HTTP parser errors', { skip: SKIP_REASON }, () => {
         const socket = connect(Number(url.port), url.hostname, () => socket.end(payload));
         let data = '';
         socket.on('data', (chunk) => { data += chunk; });
-        socket.on('end', () => resolve(data.split('\r\n')[0]));
+        socket.on('end', () => resolve(data));
         socket.on('error', reject);
       });
-      assert.equal(await raw('NONSENSE\r\n\r\n'), 'HTTP/1.1 400 Bad Request');
-      assert.equal(await raw(`GET / HTTP/1.1\r\nHost: localhost\r\nX-Big: ${'a'.repeat(20000)}\r\n\r\n`), 'HTTP/1.1 431 Request Header Fields Too Large');
+      const nonsense = await raw('NONSENSE\r\n\r\n');
+      assert.equal(nonsense.split('\r\n')[0], 'HTTP/1.1 400 Bad Request');
+      // Even a request the parser refuses gets the security headers.
+      assert.match(nonsense, /\r\ncontent-security-policy: default-src 'none'/i);
+      assert.match(nonsense, /\r\nx-content-type-options: nosniff\r\n/i);
+      assert.equal((await raw(`GET / HTTP/1.1\r\nHost: localhost\r\nX-Big: ${'a'.repeat(20000)}\r\n\r\n`)).split('\r\n')[0], 'HTTP/1.1 431 Request Header Fields Too Large');
       assert.equal((await fetch(`${gh.base}/api/health`)).status, 200);
     } finally {
       await gh.stop();

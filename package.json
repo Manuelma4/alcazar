@@ -1,0 +1,23 @@
+{
+  "name": "alcazar",
+  "version": "0.1.0",
+  "description": "Security toolkit for legacy COBOL & Fortran: hardened runtime libraries, a static analyzer, a hardened web gateway and a dashboard.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "bin": {
+    "watchtower": "./watchtower/bin/watchtower.mjs"
+  },
+  "scripts": {
+    "start": "node scripts/start-hardened.mjs",
+    "start:dev": "ALCAZAR_STATIC_RELOAD=1 node gatehouse/src/server.mjs",
+    "test": "node --test",
+    "test:watchtower": "node --test 'watchtower/test/*.test.mjs'",
+    "test:gatehouse": "node --test 'gatehouse/test/*.test.mjs'",
+    "scan": "node watchtower/bin/watchtower.mjs scan rampart apps --fail-on low",
+    "check:unicode": "node scripts/check-unicode.mjs"
+  }
+}

@@ -23,8 +23,8 @@ is still standing — and still in use. Like the code it protects.
 
 | | Part | What it is | Built with |
 |-|------|------------|-----------|
-| ![](https://img.shields.io/badge/-%20-22B8A7) | **[Rampart](rampart/)** | Security libraries: character policies, IBAN and card validation, PCI DSS masking, strict amount parsing — and a Fortran kernel with SHA-256, HMAC, constant-time comparison and robust statistics behind a C ABI | COBOL, Fortran 2018 |
-| ![](https://img.shields.io/badge/-%20-D9B45A) | **Seal** | An HMAC-SHA256-chained audit ledger, verified twice (COBOL + Fortran, and OpenSSL) plus an external anchor | COBOL, Fortran |
+| ![](https://img.shields.io/badge/-%20-22B8A7) | **[Rampart](rampart/)** | Security libraries: character policies, IBAN and card validation, card numbers found in free text, PCI DSS masking, strict amount parsing — and a Fortran kernel with SHA-256, HMAC, constant-time comparison and robust statistics behind a C ABI | COBOL, Fortran 2018 |
+| ![](https://img.shields.io/badge/-%20-D9B45A) | **Seal** | An HMAC-SHA256-chained audit ledger that also seals every decision record, verified twice (COBOL + Fortran, and OpenSSL) plus an external anchor | COBOL, Fortran |
 | ![](https://img.shields.io/badge/-%20-9B7BFF) | **[Watchtower](watchtower/)** | A static analyzer for the vulnerabilities specific to COBOL and Fortran, with SARIF output for GitHub code scanning | JavaScript |
 | ![](https://img.shields.io/badge/-%20-4C7DFF) | **[Gatehouse](gatehouse/)** | The only door: a hardened gateway that runs the legacy programs without a shell, with an allow-listed environment and resource limits | Node.js, zero dependencies |
 | ![](https://img.shields.io/badge/-%20-E5484D) | **Siege** | 29 attacks, each contained by a named layer — in the dashboard *and* in CI | Shared JavaScript |
@@ -61,7 +61,7 @@ that fails them.
 
 ```bash
 brew install gnucobol gcc        # Debian/Ubuntu: sudo apt install gnucobol3 gfortran make
-make && make test                # warnings are errors; 185 COBOL/Fortran checks
+make && make test                # warnings are errors; 209 COBOL/Fortran checks
 npm test                         # Gatehouse, Siege, Watchtower and Lookout tests
 npm start                        # Gatehouse under the Node.js permission model
 ```
@@ -108,8 +108,9 @@ flowchart LR
    with no line terminators.
 2. **TXNGUARD** (COBOL) re-checks everything and applies the business rules
    with Rampart: IBAN check digits, Luhn, a strict amount grammar that refuses
-   to truncate, an ISO 4217 allowlist, real calendar dates, replays, the SEPA
-   character set, spreadsheet-formula prefixes. Accounts leave it only as
+   to truncate, per-currency transfer limits, an ISO 4217 allowlist, real
+   calendar dates, replays, the SEPA character set, spreadsheet-formula
+   prefixes, card numbers typed into the memo. Accounts leave it only as
    HMAC tokens and masked IBANs; card numbers only as BIN + last 4. The raw
    input file is deleted as soon as it finishes.
 3. **FRAUDSCAN** (Fortran) scores what was accepted: Benford's law (chi-square
@@ -323,6 +324,9 @@ test ([all 19](docs/HARDENING.md)):
 * gfortran **may skip impure functions in `.and.`** — a self-test that silently
   skips a check.
 * `F0.6` writes 0.5 as **`.500000`, which is not JSON**.
+* **Statistics lie across currencies**: 5,000 SEK next to a sender's 50 EUR
+  transfers is a 100× "outlier", and a fixed 9,000–10,000 band calls 9,500 SEK
+  structuring. FRAUDSCAN never compares the two.
 * Under Node's permission model, **`spawn()` writes into the `env` object you
   pass**, paths are compared byte for byte (NFC vs NFD on macOS), and a grant
   for a directory that does not exist yet covers nothing inside it.

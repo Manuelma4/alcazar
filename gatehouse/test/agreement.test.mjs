@@ -6,7 +6,6 @@
 // Fortran HMAC kernel) and the Node.js / OpenSSL verifier must return the
 // same verdict, entry count, break position, reason and head every time.
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,7 +46,7 @@ function mutate(files, rand) {
   const r = pick(Math.max(records.length, 1));
   const byte = () => BYTES[pick(BYTES.length)];
   const out = { ...files };
-  switch (pick(9)) {
+  switch (pick(10)) {
     case 0: out[name] = text.slice(0, at) + byte() + text.slice(at + 1); break;
     case 1: out[name] = text.slice(0, at) + text.slice(at + 1 + pick(4)); break;
     case 2: out[name] = text.slice(0, at) + byte() + text.slice(at); break;
@@ -59,6 +58,17 @@ function mutate(files, rand) {
       const swapped = [...records];
       [swapped[r], swapped[s]] = [swapped[s], swapped[r]];
       out[name] = swapped.join('');
+    } break;
+    case 9: {
+      // An insider splices a link: PREV-MAC (offset 183) taken from another entry.
+      const ledger = files['LEDGER.DAT'];
+      const entries = Math.floor(ledger.length / WIDTH['LEDGER.DAT']);
+      if (entries > 1) {
+        const target = 1 + pick(entries - 1);
+        const at = target * WIDTH['LEDGER.DAT'] + 183;
+        const donor = ((target + 1 + pick(entries - 1)) % entries) * WIDTH['LEDGER.DAT'] + 183;
+        out['LEDGER.DAT'] = ledger.slice(0, at) + ledger.slice(donor, donor + 64) + ledger.slice(at + 64);
+      }
     } break;
     case 7: {
       const entries = Math.floor(files['LEDGER.DAT'].length / WIDTH['LEDGER.DAT']);
@@ -76,7 +86,8 @@ function mutate(files, rand) {
 }
 
 describe('Seal verifiers agree (LEDGERCK vs Node.js / OpenSSL)', { skip: SKIP_REASON }, () => {
-  const keys = deriveKeys(randomBytes(32));
+  // A fixed key: the files, and so the corpus, are the same on every run.
+  const keys = deriveKeys(Buffer.alloc(32, 0x42));
   let dir;
   let pristine;
 

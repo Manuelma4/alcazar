@@ -5,20 +5,25 @@
 First public version.
 
 * **Rampart** — COBOL security modules (character policies, sanitising,
-  IBAN ISO 13616 / ISO 7064, Luhn, PCI DSS masking, strict amount parsing,
-  calendar dates, currency allowlist, card numbers in free text) and a Fortran 2018 kernel (SHA-256,
+  IBAN ISO 13616 / ISO 7064 with the never-issued check digits refused, Luhn,
+  PCI DSS masking, strict amount parsing, calendar dates, currency allowlist,
+  card numbers in free text) and a Fortran 2018 kernel (SHA-256,
   HMAC-SHA256, constant-time comparison, secure wiping, hex, robust
   statistics, safe JSON) with a C ABI (`alz.h`) and power-on self-tests.
 * **TXNGUARD / LEDGERCK / FRAUDSCAN** — the demo batch core: validation and
-  pseudonymisation in COBOL, an HMAC-chained audit ledger (Seal), Benford,
-  robust z-score, structuring, velocity and entropy analytics in Fortran.
+  pseudonymisation in COBOL with per-currency transfer limits; the Seal, an
+  HMAC-chained audit ledger (format v2) whose every entry also seals the full
+  accepted or rejected record; Benford, robust z-score, structuring, velocity
+  and entropy analytics in Fortran, currency by currency.
 * **Gatehouse** — zero-dependency Node.js gateway: strict CSP and security
   headers, schema validation, rate limiting, sandboxed execution of the
-  legacy programs, double ledger verification (COBOL/Fortran and OpenSSL)
-  plus an external anchor, Node.js permission model.
+  legacy programs with least-privilege sub-keys on stdin (the master key
+  never reaches them), double ledger verification (COBOL/Fortran and
+  OpenSSL, held to identical verdicts by a differential test) plus an
+  external anchor, Node.js permission model.
 * **Watchtower** — static analyzer for COBOL and Fortran with text, JSON and
-  SARIF output.
-* **Lookout** — dashboard with the Siege attack lab, ledger tampering demo
-  and in-browser code scanning.
+  SARIF output, also usable as a GitHub Action.
+* **Lookout** — dashboard with the Siege attack lab (29 attacks), ledger and
+  record tampering demo and in-browser code scanning.
 * Docker image with the core compiled and tested at build time, hardened
   compose file, CI with pinned actions.

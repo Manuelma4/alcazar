@@ -160,12 +160,20 @@ the sub-keys on stdin.
 Nigrini's MAD thresholds for Benford's law assume thousands of amounts. With
 200 amounts, sampling noise alone gives MAD ≈ 0.017 — "nonconforming" for a
 perfectly honest batch. Likewise a per-account z-score computed from five
-similar transfers makes ordinary ones look extreme.
+similar transfers makes ordinary ones look extreme. Mixing currencies is
+worse: 5,000 SEK next to a sender's 50 EUR transfers is a 100× "outlier",
+and a fixed 9,000–10,000 band calls 9,500 SEK (about 830 EUR) structuring
+while 95,000 SEK goes unseen. And the demo's own planted anomaly, a memo of
+28 random base32 characters, measured 3.9 bits per character for one seed —
+under the 4.0-bit threshold it was meant to cross.
 
 *Defence:* below 1,000 amounts FRAUDSCAN decides on the chi-square p-value
 (and says so in `verdictBasis`); robust z-scores use the median and MAD with a
-scale floor, so a transfer has to be ~7.5× off the sender's typical amount.
-The parameters were chosen by simulation, not by eye.
+scale floor, so a transfer has to be ~7.5× off the sender's typical amount,
+and are computed currency by currency; structuring uses each currency's own
+threshold. The parameters were chosen by simulation, not by eye, and the
+sample generator plants anomalies that trigger by construction (28 distinct
+characters: 4.8 bits), checked for 40 seeds and three batch sizes.
 
 ### 13. Tools can turn escapes into the real thing
 

@@ -254,6 +254,19 @@ The Node verifier cuts the files the same way, and
 inserted and deleted, CRs, NULs, records duplicated, dropped and swapped):
 the two verifiers must return the same verdict every time.
 
+### 19. LINE SEQUENTIAL writes a different record than the one you sealed
+
+Writing the 20-byte record `MEMO WITH BLANKS␣␣␣␣` to a LINE SEQUENTIAL file,
+GnuCOBOL 3.2 put 17 bytes on disk: the 16 characters and a line feed, status
+`00`. Every record whose last field can end in blanks (a memo, a card
+number left empty) is shortened on WRITE, so a MAC computed over the record
+in memory is not a MAC of the file — and a verifier has to guess the padding
+back.
+
+*Defence:* the files the Seal covers (`ACCEPTED`, `REJECTED`, `LEDGER`) are
+ORGANIZATION SEQUENTIAL with the line feed as the record's last byte: the
+bytes written are exactly the bytes MACed and the bytes read back (item 18).
+
 ### Not a vulnerability, but you will see it
 
 On Debian 13, every GnuCOBOL program prints *"program compiled against libxml

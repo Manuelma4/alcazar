@@ -50,8 +50,8 @@ real size of the caller's field. Every return code is a `PIC S9(9) COMP-5`.
 
 Copybooks: `ALZTXNIN` / `ALZACCPT` / `ALZREJ` / `ALZLEDG` (record layouts),
 `ALZCAPI` (work areas for the Fortran kernel), `ALZKEYW` + `ALZKEYP` (key
-handling shared by TXNGUARD and LEDGERCK: job id, key on stdin, HKDF-style
-sub-keys, wiping).
+handling shared by TXNGUARD and LEDGERCK: job id, purpose-specific sub-keys
+on stdin, genesis MAC, wiping).
 
 ## Fortran kernel
 

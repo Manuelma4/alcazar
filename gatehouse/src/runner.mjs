@@ -35,7 +35,7 @@ export const RLIMITS_AVAILABLE = PRLIMIT !== null;
 /**
  * @param {string} file     absolute path of the program
  * @param {string[]} args
- * @param {{ cwd: string, stdin?: string, timeoutMs: number, maxOutputBytes: number }} options
+ * @param {{ cwd: string, stdin?: string | Buffer, timeoutMs: number, maxOutputBytes: number }} options
  * @returns {Promise<{ code: number | null, signal: string | null, stdout: string, stderr: string, ms: number, timedOut: boolean }>}
  */
 export function runLegacy(file, args, { cwd, stdin = '', timeoutMs, maxOutputBytes }) {

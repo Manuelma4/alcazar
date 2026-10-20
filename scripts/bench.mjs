@@ -20,7 +20,8 @@ import { validateBatch } from '../gatehouse/src/schema.mjs';
 import { scan } from '../watchtower/src/index.mjs';
 
 const BIN = join(ROOT, 'build', 'bin');
-const KEY = `${'a1'.repeat(32)}\n`;
+// K-ledger and K-token, as Gatehouse sends them (LEDGERCK reads only the first).
+const KEY = `${'a1'.repeat(32)}\n${'b2'.repeat(32)}\n`;
 const work = mkdtempSync(join(tmpdir(), 'alcazar-bench-'));
 const rows = [];
 

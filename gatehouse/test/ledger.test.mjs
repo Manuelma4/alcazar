@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { describe, it } from 'node:test';
-import { deriveKeys, genesisMac, tamperLedger, verifyLedger } from '../src/ledger.mjs';
+import { deriveKeys, genesisMac, keyLines, tamperLedger, verifyLedger } from '../src/ledger.mjs';
 
 const master = Buffer.alloc(32, 0xa1);
 const { ledger: key } = deriveKeys(master);
@@ -27,6 +27,14 @@ describe('Node / OpenSSL ledger verification', () => {
     const keys = deriveKeys(master);
     assert.notDeepEqual(keys.ledger, keys.token);
     assert.equal(keys.ledger.length, 32);
+  });
+
+  it('encodes the sub-keys for stdin without a hex string', () => {
+    const keys = deriveKeys(master);
+    const lines = keyLines(keys.ledger, keys.token);
+    assert.ok(Buffer.isBuffer(lines));
+    assert.equal(lines.toString('latin1'), `${keys.ledger.toString('hex')}\n${keys.token.toString('hex')}\n`);
+    assert.equal(keyLines(Buffer.from([0x00, 0x0f, 0xf0, 0xff])).toString('latin1'), '000ff0ff\n');
   });
 
   it('accepts an intact chain and returns its head', () => {

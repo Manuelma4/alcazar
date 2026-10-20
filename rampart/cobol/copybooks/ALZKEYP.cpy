@@ -9,6 +9,7 @@
       *                         "0123456789" "-"
       *   CLASS ALZ-HEX      IS "0123456789abcdef"
       *
+      * SET ALZ-NEEDS-TOKEN-KEY TO TRUE if the program needs K-token,
       * PERFORM ALZ-PREPARE-KEYS, then test ALZ-KEYS-READY. Every
       * failure is reported on SYSERR and leaves ALZ-KEYS-FAILED set.
       * PERFORM ALZ-WIPE-KEYS before ending.
@@ -24,9 +25,9 @@
            ELSE
                PERFORM ALZ-READ-JOB-ID
                IF ALZ-JOB-LEN > 0
-                   PERFORM ALZ-READ-KEY
+                   PERFORM ALZ-READ-KEYS
                    IF ALZ-OK
-                       PERFORM ALZ-DERIVE-KEYS
+                       PERFORM ALZ-DERIVE-GENESIS
                        IF ALZ-OK
                            SET ALZ-KEYS-READY TO TRUE
                        END-IF
@@ -57,9 +58,34 @@
                MOVE ALZ-JOB-ARG(1:ALZ-JOB-LEN) TO ALZ-JOB-ID
            END-IF.
 
-      * Master key: 64 lower-case hex digits on stdin - never on the
-      * command line (visible in ps) nor in the environment.
-       ALZ-READ-KEY.
+      * Sub-keys on stdin, one line of 64 lower-case hex digits each -
+      * never on the command line (visible in ps) nor in the
+      * environment: K-ledger, then K-token if the program needs it.
+      * Gatehouse derives them, K = HMAC-SHA256(master, label || X"01"),
+      * so a legacy process never holds the master key, and LEDGERCK
+      * cannot compute (or reverse) the pseudonymous tokens.
+       ALZ-READ-KEYS.
+           PERFORM ALZ-READ-KEY-LINE
+           IF ALZ-OK
+               MOVE ALZ-KEY-BIN TO ALZ-LEDGER-KEY
+               IF ALZ-NEEDS-TOKEN-KEY
+                   PERFORM ALZ-READ-KEY-LINE
+                   IF ALZ-OK
+                       MOVE ALZ-KEY-BIN TO ALZ-TOKEN-KEY
+                       PERFORM ALZ-CHECK-SEPARATION
+                   END-IF
+               END-IF
+           END-IF
+           MOVE 32 TO ALZ-KEY-LEN
+           CALL "alz_zeroize" USING ALZ-KEY-BIN ALZ-KEY-LEN
+                          RETURNING ALZ-WIPE-RC
+           IF NOT ALZ-OK
+               DISPLAY ALZ-PROGRAM-NAME ": stdin must carry each key"
+                   " as 64 lower-case hex digits on its own line"
+                   UPON SYSERR
+           END-IF.
+
+       ALZ-READ-KEY-LINE.
            MOVE -1 TO ALZ-RC
            MOVE SPACES TO ALZ-KEY-HEX
            ACCEPT ALZ-KEY-HEX
@@ -68,66 +94,48 @@
                MOVE 64 TO ALZ-HEX-LEN
                MOVE 32 TO ALZ-OUT-CAP
                CALL "alz_hex_decode" USING ALZ-KEY-HEX ALZ-HEX-LEN
-                                           ALZ-MASTER-KEY ALZ-OUT-CAP
+                                           ALZ-KEY-BIN ALZ-OUT-CAP
                                            ALZ-OUT-LEN
                                  RETURNING ALZ-RC
                IF ALZ-OK AND ALZ-OUT-LEN NOT = 32
                    MOVE -1 TO ALZ-RC
                END-IF
            END-IF
-           IF NOT ALZ-OK
-               DISPLAY ALZ-PROGRAM-NAME ": stdin must carry the key"
-                   " as 64 lower-case hex digits" UPON SYSERR
-           END-IF
            MOVE 80 TO ALZ-MSG-LEN
            CALL "alz_zeroize" USING ALZ-KEY-HEX ALZ-MSG-LEN
                           RETURNING ALZ-WIPE-RC.
 
-      * Key separation: one sub-key per purpose,
-      *   K = HMAC-SHA256(master, label || X"01"),
-      * then the master key is wiped. Genesis MAC for this job:
+      * The same key twice means the sender skipped the derivation:
+      * tokens would then be MACs under the ledger key.
+       ALZ-CHECK-SEPARATION.
+           MOVE 32 TO ALZ-MSG-LEN
+           CALL "alz_ct_equal" USING ALZ-LEDGER-KEY ALZ-TOKEN-KEY
+                                     ALZ-MSG-LEN
+                           RETURNING ALZ-RC
+           IF ALZ-OK
+               MOVE -1 TO ALZ-RC
+               DISPLAY ALZ-PROGRAM-NAME ": K-ledger and K-token must"
+                   " differ" UPON SYSERR
+           ELSE
+               MOVE 0 TO ALZ-RC
+           END-IF.
+
+      * Genesis MAC for this job:
       *   HMAC-SHA256(K-ledger, "alcazar/genesis|" || job id).
-       ALZ-DERIVE-KEYS.
+       ALZ-DERIVE-GENESIS.
            MOVE SPACES TO ALZ-KDF-INFO
            MOVE 1 TO ALZ-KDF-LEN
-           STRING "alcazar/ledger/v1" X"01" DELIMITED BY SIZE
+           STRING "alcazar/genesis|" ALZ-JOB-ID(1:ALZ-JOB-LEN)
+               DELIMITED BY SIZE
                INTO ALZ-KDF-INFO WITH POINTER ALZ-KDF-LEN
            SUBTRACT 1 FROM ALZ-KDF-LEN
            MOVE 32 TO ALZ-KEY-LEN
-           CALL "alz_hmac_sha256" USING ALZ-MASTER-KEY ALZ-KEY-LEN
-                                        ALZ-KDF-INFO ALZ-KDF-LEN
-                                        ALZ-LEDGER-KEY
-                              RETURNING ALZ-RC
-           IF ALZ-OK
-               MOVE SPACES TO ALZ-KDF-INFO
-               MOVE 1 TO ALZ-KDF-LEN
-               STRING "alcazar/token/v1" X"01" DELIMITED BY SIZE
-                   INTO ALZ-KDF-INFO WITH POINTER ALZ-KDF-LEN
-               SUBTRACT 1 FROM ALZ-KDF-LEN
-               CALL "alz_hmac_sha256" USING ALZ-MASTER-KEY
-                                            ALZ-KEY-LEN
+           CALL "alz_hmac_sha256_hex" USING ALZ-LEDGER-KEY ALZ-KEY-LEN
                                             ALZ-KDF-INFO ALZ-KDF-LEN
-                                            ALZ-TOKEN-KEY
+                                            ALZ-GENESIS
                                   RETURNING ALZ-RC
-           END-IF
-           IF ALZ-OK
-               MOVE SPACES TO ALZ-KDF-INFO
-               MOVE 1 TO ALZ-KDF-LEN
-               STRING "alcazar/genesis|" ALZ-JOB-ID(1:ALZ-JOB-LEN)
-                   DELIMITED BY SIZE
-                   INTO ALZ-KDF-INFO WITH POINTER ALZ-KDF-LEN
-               SUBTRACT 1 FROM ALZ-KDF-LEN
-               CALL "alz_hmac_sha256_hex" USING ALZ-LEDGER-KEY
-                                                ALZ-KEY-LEN
-                                                ALZ-KDF-INFO
-                                                ALZ-KDF-LEN
-                                                ALZ-GENESIS
-                                      RETURNING ALZ-RC
-           END-IF
-           CALL "alz_zeroize" USING ALZ-MASTER-KEY ALZ-KEY-LEN
-                          RETURNING ALZ-WIPE-RC
            IF NOT ALZ-OK
-               DISPLAY ALZ-PROGRAM-NAME ": key derivation failed"
+               DISPLAY ALZ-PROGRAM-NAME ": genesis MAC failed"
                    UPON SYSERR
            END-IF.
 
@@ -136,6 +144,4 @@
            CALL "alz_zeroize" USING ALZ-LEDGER-KEY ALZ-KEY-LEN
                           RETURNING ALZ-WIPE-RC
            CALL "alz_zeroize" USING ALZ-TOKEN-KEY ALZ-KEY-LEN
-                          RETURNING ALZ-WIPE-RC
-           CALL "alz_zeroize" USING ALZ-MASTER-KEY ALZ-KEY-LEN
                           RETURNING ALZ-WIPE-RC.

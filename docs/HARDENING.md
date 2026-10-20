@@ -138,8 +138,12 @@ A loop that wipes a key just before it goes out of scope is a dead store an
 optimiser may delete.
 
 *Defence:* `zeroize` writes through a `VOLATILE` dummy argument; TXNGUARD and
-LEDGERCK wipe the master key right after deriving the sub-keys, and the
-sub-keys at the end of the run.
+LEDGERCK wipe the hex text of each key as soon as it is decoded, and the
+sub-keys at the end of the run. Gatehouse keeps its copies in `Buffer`s — hex
+encoded byte by byte, never through a JavaScript string, which could not be
+wiped — and overwrites them on shutdown. A legacy program never holds the
+master key at all: Gatehouse derives the sub-keys and sends each program only
+the ones it needs.
 
 ### 11. The environment can rewire a COBOL program
 
@@ -149,7 +153,7 @@ GnuCOBOL maps file names through environment variables (`DD_name`,
 
 *Defence:* static calls (above), and Gatehouse starts every batch program with
 an allow-listed environment (`PATH`, `LC_ALL` — nothing else), no shell, and
-the key on stdin.
+the sub-keys on stdin.
 
 ### 12. Statistics have pitfalls too
 

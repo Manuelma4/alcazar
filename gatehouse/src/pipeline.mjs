@@ -6,7 +6,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError } from './http.mjs';
-import { deriveKeys, genesisMac, tamperLedger, verifyLedger } from './ledger.mjs';
+import { deriveKeys, genesisMac, keyLines, tamperLedger, verifyLedger } from './ledger.mjs';
 import { reasonText } from './messages.mjs';
 import {
   RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSummary, txnInFile,
@@ -20,10 +20,12 @@ export class Pipeline {
    */
   constructor({ config, masterKey }) {
     this.config = config;
-    // Kept as a Buffer, never a string: strings are immutable and cannot be
-    // wiped. The legacy programs read it from stdin.
-    this.keyLine = Buffer.concat([Buffer.from(masterKey.toString('hex'), 'latin1'), Buffer.from('\n')]);
+    // Least privilege: the master key stays here (and is wiped by the
+    // caller); each legacy program reads only the sub-keys it needs from
+    // stdin — TXNGUARD seals and pseudonymises, LEDGERCK only verifies.
     this.keys = deriveKeys(masterKey);
+    this.guardKeys = keyLines(this.keys.ledger, this.keys.token);
+    this.checkKeys = keyLines(this.keys.ledger);
     this.gate = new Gate(config.limits.maxProcesses, config.limits.processQueue);
   }
 
@@ -70,7 +72,7 @@ export class Pipeline {
       detail: { in: transactions.length },
     });
 
-    const guard = await this.legacy('txnguard', [jobId], dir, this.keyLine);
+    const guard = await this.legacy('txnguard', [jobId], dir, this.guardKeys);
     // TXNIN.DAT holds raw card numbers: delete it as soon as TXNGUARD is done.
     await rm(join(dir, 'TXNIN.DAT'), { force: true });
     if (guard.code !== 0 && guard.code !== 4) {
@@ -173,7 +175,7 @@ export class Pipeline {
   async verify(state) {
     const started = performance.now();
     const text = await readFile(join(state.dir, 'LEDGER.DAT'), 'latin1');
-    const check = await this.legacy('ledgerck', [state.jobId], state.dir, this.keyLine);
+    const check = await this.legacy('ledgerck', [state.jobId], state.dir, this.checkKeys);
     if (check.code !== 0 && check.code !== 4) {
       throw new HttpError(502, 'P-LEGACY', 'LEDGERCK failed', { legacyRc: check.code });
     }
@@ -215,7 +217,8 @@ export class Pipeline {
 
   /** Overwrite the key material held by this pipeline (on shutdown). */
   wipe() {
-    this.keyLine.fill(0);
+    this.guardKeys.fill(0);
+    this.checkKeys.fill(0);
     this.keys.ledger.fill(0);
     this.keys.token.fill(0);
   }

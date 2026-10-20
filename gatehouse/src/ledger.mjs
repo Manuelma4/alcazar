@@ -12,6 +12,26 @@ export function deriveKeys(masterKey) {
   return { ledger: derive('alcazar/ledger/v1'), token: derive('alcazar/token/v1') };
 }
 
+const HEX_DIGITS = Buffer.from('0123456789abcdef', 'latin1');
+
+/**
+ * The stdin a legacy program reads its keys from: one line of lower-case
+ * hex per key. Encoded straight into a Buffer — a hex string could never
+ * be wiped.
+ */
+export function keyLines(...keys) {
+  const out = Buffer.alloc(keys.reduce((n, key) => n + key.length * 2 + 1, 0));
+  let at = 0;
+  for (const key of keys) {
+    for (const byte of key) {
+      out[at++] = HEX_DIGITS[byte >> 4];
+      out[at++] = HEX_DIGITS[byte & 15];
+    }
+    out[at++] = 0x0a;
+  }
+  return out;
+}
+
 export function genesisMac(ledgerKey, jobId) {
   return createHmac('sha256', ledgerKey).update(`alcazar/genesis|${jobId}`, 'latin1').digest('hex');
 }

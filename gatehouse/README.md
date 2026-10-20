@@ -16,7 +16,7 @@ npm run start:dev  # plain node, static files re-read on every page request
 |---------|-----------|
 | Input | JSON only (`application/json`), ≤ 512 KiB, ≤ 1,000 transfers, known keys only, printable ASCII only, lengths that fit the fixed-width record. Business rules are left to TXNGUARD, which re-validates everything anyway. |
 | Cross-site use | `Origin` and `Sec-Fetch-Site` must be same-origin for every state-changing request; the `Host` header must be local or allow-listed (DNS rebinding); forms cannot send `application/json`. |
-| Legacy execution | `spawn` with an argv array and `shell: false`; environment reduced to `PATH` and `LC_ALL`; the key on stdin; SIGKILL after the timeout; stdout/stderr capped; `prlimit` CPU / memory / file-size / no-core limits on Linux. |
+| Legacy execution | `spawn` with an argv array and `shell: false`; environment reduced to `PATH` and `LC_ALL`; only the sub-keys each program needs, on stdin; SIGKILL after the timeout; stdout/stderr capped; `prlimit` CPU / memory / file-size / no-core limits on Linux. |
 | Data exposure | `TXNIN.DAT` (raw card numbers) is deleted as soon as TXNGUARD finishes, and job directories left by a crash are removed at start-up; responses only contain what the COBOL layer masked or tokenised. |
 | Legacy output | Parsed strictly as untrusted data (`records.mjs`); anything unexpected is a 502, never a partial answer. |
 | Ledger | Verified by LEDGERCK (COBOL + Fortran HMAC) and by Node/OpenSSL (`ledger.mjs`) — they must agree — and checked against the anchor taken when the job was sealed. |

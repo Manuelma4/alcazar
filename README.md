@@ -94,7 +94,7 @@ ALZ-LEDGER|STATUS=BROKEN|ENTRIES=000001|SEQ=000002|REASON=MAC-MISMATCH
 ```mermaid
 flowchart LR
   B[Lookout<br/>strict CSP + Trusted Types] -->|JSON| G[Gatehouse<br/>schema · limits · no shell]
-  G -->|fixed-length records<br/>key on stdin| T[TXNGUARD<br/>COBOL + Rampart]
+  G -->|fixed-length records<br/>sub-keys on stdin| T[TXNGUARD<br/>COBOL + Rampart]
   T -->|CALL via C ABI| K[(Rampart kernel<br/>SHA-256 · HMAC · CT compare)]
   T -->|pseudonymised| F[FRAUDSCAN<br/>Fortran analytics]
   T -->|every decision| S[Seal<br/>HMAC chain]
@@ -282,9 +282,10 @@ More in the [Watchtower README](watchtower/README.md).
 * **No shell, ever.** Legacy programs are spawned with an argv array, an
   allow-listed environment (two variables), a wall-clock timeout, bounded
   output and — on Linux — `prlimit` CPU, memory, file-size and core limits.
-* **Secrets on stdin.** The 256-bit master key never appears in argv or the
-  environment; COBOL derives purpose-specific sub-keys and wipes the master
-  key immediately.
+* **Least-privilege keys, on stdin.** The 256-bit master key never leaves
+  Gatehouse: each legacy program reads only the purpose-specific sub-keys it
+  needs from stdin (TXNGUARD: ledger + token; LEDGERCK: ledger only) — never
+  argv, never the environment — and wipes them before it exits.
 * **Fail closed.** Every program starts with known-answer self-tests (NIST,
   RFC 4231) and Gatehouse refuses batches if the full pipeline does not match
   OpenSSL bit for bit at start-up.

@@ -34,8 +34,9 @@ flowchart LR
 2. Gatehouse creates a private job directory (`0700`) and writes `TXNIN.DAT`
    (fixed-width, 200 bytes/record).
 3. Gatehouse runs `txnguard <job-id>` with `cwd` = job dir, a minimal environment,
-   no shell, a timeout and resource limits; the master ledger key (hex) is sent
-   on **stdin** (never argv/env).
+   no shell, a timeout and resource limits. The sub-keys it needs, `K_ledger`
+   and `K_token`, are sent on **stdin** as two lines of hex (never argv/env);
+   the master key never reaches a legacy program.
 4. TXNGUARD runs the Fortran crypto power-on self-test, validates every record
    with the Rampart COBOL modules, writes `ACCEPTED.DAT`, `REJECTED.DAT`,
    `LEDGER.DAT`, `SUMMARY.DAT`, and returns a mainframe-style return code
@@ -94,9 +95,11 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED(34)|PA
 * `MAC = HMAC-SHA256(K_ledger, first 181 bytes of the line)` — everything
   before the final `|`, which includes `PREV-MAC`. Hex, lowercase.
 * Genesis `PREV-MAC` of entry 1 = `HMAC-SHA256(K_ledger, "alcazar/genesis|" + JOB-ID)`.
-* Sub-keys are derived from the master key (key separation):
+* Sub-keys are derived from the master key by Gatehouse (key separation):
   `K_ledger = HMAC(K_master, "alcazar/ledger/v1" || 0x01)`,
-  `K_token = HMAC(K_master, "alcazar/token/v1" || 0x01)`.
+  `K_token = HMAC(K_master, "alcazar/token/v1" || 0x01)`. TXNGUARD receives
+  both (and refuses them if they are equal); LEDGERCK receives `K_ledger`
+  only, so the verifier can neither compute nor link account tokens.
 * Account tokens: `hex(HMAC(K_token, IBAN))[0..16]`.
 
 ### SUMMARY — `KEY=VALUE` lines

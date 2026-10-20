@@ -47,7 +47,7 @@ flowchart LR
     D[(TXNIN / ACCEPTED / LEDGER)]
   end
   L -- B1: HTTP JSON --> G
-  G -- B2: argv + stdin key + fixed-width file --> T
+  G -- B2: argv + stdin sub-keys + fixed-width file --> T
   T --> D
   D -- B3: legacy outputs parsed as untrusted --> G
   F --> D
@@ -76,7 +76,7 @@ flowchart LR
 | **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id | `ledger.test.mjs` |
 | **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD, and job directories left by a crash removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` |
 | **I**nformation disclosure: account identity in analytics | B2 | FRAUDSCAN sees only HMAC tokens (`K_token`), never IBANs | `parseAccepted` tests |
-| **I**nformation disclosure: key exposure | B2 | Key on stdin only (not argv, not env), sub-keys per purpose, wiped after use; key file refused if group/world readable | `ALZKEYP.cpy`, `app.mjs` |
+| **I**nformation disclosure: key exposure | B2 | The master key never leaves Gatehouse; each legacy program gets only its sub-keys (LEDGERCK: `K_ledger` only), on stdin (not argv, not env), wiped after use; equal sub-keys refused; key file refused if group/world readable | `review.test.mjs`, `ALZKEYP.cpy`, `app.mjs` |
 | **I**nformation disclosure: timing side channel on MAC checks | B3 | Constant-time comparison in Fortran (`alz_ct_equal`) and Node (`timingSafeEqual`) | `test_crypto.f90` |
 | **D**enial of service: huge or many requests | B1 | 512 KiB body cap, 1,000 transactions per batch, token-bucket rate limit keyed on the trusted proxy's hop, at most 4 legacy processes at once on every path with a bounded queue, batch slots taken only after the body is read, bounded job store with TTL, header/request timeouts, bounded shutdown | `server.test.mjs`, `review.test.mjs`, Siege `flood` |
 | **D**enial of service: a runaway legacy program | B2 | SIGKILL after the timeout, bounded stdout/stderr, prlimit CPU / memory / file size / no core dumps (Linux) | `runner.mjs` |
@@ -89,9 +89,10 @@ flowchart LR
 
 * **TLS is not terminated by Gatehouse.** Put it behind a reverse proxy and set
   `ALCAZAR_HSTS=1`; by default Docker publishes on `127.0.0.1` only.
-* **The master key lives in process memory** (generated per start, or read
-  from a `0600` file). Production should keep it in an HSM/KMS and only hand
-  Gatehouse derived keys.
+* **The master key lives in Gatehouse's memory** (generated per start, or
+  read from a `0600` file) — the legacy programs only ever see sub-keys.
+  Production should keep it in an HSM/KMS and only hand Gatehouse the derived
+  keys.
 * **Truncation detection depends on the anchor**, which lives in Gatehouse's
   memory for the job's lifetime (15 minutes). A durable deployment must store
   the head MAC somewhere the insider cannot write (WORM storage, a separate

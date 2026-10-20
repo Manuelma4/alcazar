@@ -4,13 +4,16 @@
 // leftover card numbers, backslash targets, shutdown, eviction).
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { ROOT } from '../src/config.mjs';
 import { Gate } from '../src/gate.mjs';
 import { HttpError } from '../src/http.mjs';
+import { deriveKeys, keyLines } from '../src/ledger.mjs';
+import { runLegacy } from '../src/runner.mjs';
 import { SKIP_REASON, VALID, postJson, startGatehouse } from './helpers.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -138,5 +141,42 @@ describe('Gatehouse review regressions', { skip: SKIP_REASON }, () => {
     await gh.stop();
     socket.destroy();
     assert.ok(Date.now() - started < 6000, `shutdown took ${Date.now() - started} ms`);
+  });
+});
+
+describe('Least-privilege keys for the legacy programs', { skip: SKIP_REASON }, () => {
+  const keys = deriveKeys(Buffer.alloc(32, 0x5c));
+  const run = async (name, stdin) => {
+    const dir = await mkdtemp(join(tmpdir(), 'alcazar-keys-'));
+    try {
+      await writeFile(join(dir, 'TXNIN.DAT'), '');
+      await writeFile(join(dir, 'LEDGER.DAT'), '');
+      return await runLegacy(join(ROOT, 'build', 'bin', name), ['j-keys'], { cwd: dir, stdin, timeoutMs: 10_000, maxOutputBytes: 65_536 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  };
+
+  it('TXNGUARD runs with K-ledger and K-token', async () => {
+    const result = await run('txnguard', keyLines(keys.ledger, keys.token));
+    assert.equal(result.code, 0, result.stderr);
+  });
+
+  it('TXNGUARD refuses a single key (a master key sent as before)', async () => {
+    const result = await run('txnguard', keyLines(keys.ledger));
+    assert.equal(result.code, 12);
+    assert.match(result.stderr, /64 lower-case hex digits on its own line/);
+  });
+
+  it('TXNGUARD refuses the same key for both purposes', async () => {
+    const result = await run('txnguard', keyLines(keys.ledger, keys.ledger));
+    assert.equal(result.code, 12);
+    assert.match(result.stderr, /K-ledger and K-token must differ/);
+  });
+
+  it('LEDGERCK verifies with K-ledger alone', async () => {
+    const result = await run('ledgerck', keyLines(keys.ledger));
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /^ALZ-LEDGER\|STATUS=OK\|ENTRIES=000000\|/);
   });
 });

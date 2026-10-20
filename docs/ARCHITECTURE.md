@@ -44,8 +44,9 @@ flowchart LR
    `LEDGER.DAT`, `SUMMARY.DAT`, prints the seal on stdout
    (`ALZ-SEAL|ENTRIES=nnnnnn|HEAD=<64 hex>`) and returns a mainframe-style
    return code (0 = all accepted, 4 = some rejected, 8 = input error,
-   12 = key/self-test error, 16 = I/O error). A line longer than a record,
-   or input that ends inside a line, refuses the whole batch (8).
+   12 = key/self-test error, 16 = I/O error). A line that is not exactly one
+   200-byte record, or input that ends inside a line, refuses the whole
+   batch (8).
 5. Gatehouse reads the three sealed files **once**; from here on those bytes
    are what is parsed, scored, verified and shown. The anchor (entry count,
    head MAC) is taken from TXNGUARD's stdout, a pipe only Gatehouse holds,
@@ -171,7 +172,7 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
 | E701 | CHANNEL | unknown channel |
 | E801 | MEMO | character outside the SEPA character set |
 | E802 | MEMO | spreadsheet formula prefix (`+`, `-`, `=`, `@`) |
-| E803 | MEMO | contains a payment card number: valid IBANs (either case, MOD 97 checked) are set aside; digit groups joined by one or two spaces, hyphens, dots or slashes form chains in which groups of 3+ digits link up and the last group may be shorter (so dates and phone numbers never join, and Diners 4-4-4-2 or Visa 4-4-4-1 do); any stretch from a group start to a group end of 13–19 digits with a card network's prefix and issued length (Visa 4: 13/16/19, Mastercard 51–55 and 2221–2720: 16, Amex 34/37: 15, Diners, Discover, JCB, UnionPay, Maestro, Mir) that passes Luhn — so a PAN next to its expiry date or CVV, or glued to a word, is still found |
+| E803 | MEMO | contains a payment card number: valid IBANs (either case, MOD 97 checked) are set aside; digit groups joined by one or two spaces, hyphens, dots or slashes form chains in which groups of 3+ digits link up and the last group may be shorter (so dates and phone numbers never join, and Diners 4-4-4-2 or Visa 4-4-4-1 do); any stretch from a group start to a group end of 16 or 19 digits starting with 2–6, or of 13, 14, 15, 17 or 18 digits with a card network's prefix that issues that length (Visa 4: 13, Amex 34/37: 15, Diners: 14, Discover, JCB, UnionPay, Maestro, Mir, Bancontact...), that passes Luhn — so a PAN next to its expiry date or CVV, or glued to a word, is still found |
 | E901 | RECORD | control or non-ASCII bytes in the record |
 
 ## 4. FRAUDSCAN signals

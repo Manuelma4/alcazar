@@ -32,7 +32,7 @@ module rampart_capi
 
   public :: capi_sha256, capi_sha256_hex, capi_hmac_sha256, capi_hmac_sha256_hex
   public :: capi_ct_equal, capi_hex_decode, capi_hex_encode, capi_zeroize, capi_selftest
-  public :: capi_read_line, capi_expect_eof
+  public :: capi_read_line, capi_expect_eof, capi_discard_input
 
   !> Standard input, read with read(2) in chunks into this buffer: no stdio
   !> or run-time copy, and every line is wiped from it once handed over.
@@ -271,6 +271,18 @@ contains
       rc = ALZ_OK
     end if
   end function capi_expect_eof
+
+  !> int32_t alz_discard_input(void) - wipe whatever standard input this
+  !> module has buffered but not handed over: a program that stops reading
+  !> early (a refused batch) must not leave the rest of it in memory.
+  function capi_discard_input() result(rc) bind(C, name='alz_discard_input')
+    integer(c_int32_t) :: rc
+
+    call zeroize(in_buf)
+    in_pos = 1
+    in_len = 0
+    rc = ALZ_OK
+  end function capi_discard_input
 
   !> Wipe the input buffer and read the next chunk into it. False at the end
   !> of input (rc ALZ_E_EOF when `clean`, i.e. nothing of a line was read

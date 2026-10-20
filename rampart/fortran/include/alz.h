@@ -60,6 +60,8 @@ int32_t alz_zeroize(uint8_t *buf, const int32_t *len);
  * ALZ_OK only if nothing is left on standard input. */
 int32_t alz_read_line(uint8_t *buf, const int32_t *cap, int32_t *len);
 int32_t alz_expect_eof(void);
+/* Wipe what was buffered from standard input but not handed over. */
+int32_t alz_discard_input(void);
 
 /* Power-on self-test: ALZ_OK when every known-answer test passes. */
 int32_t alz_selftest(void);

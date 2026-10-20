@@ -75,6 +75,7 @@
        01  WS-LINE-CAP                 PIC S9(9) COMP-5 VALUE 200.
        01  WS-LINE-LEN                 PIC S9(9) COMP-5.
        01  WS-RECORD-LEN               PIC S9(9) COMP-5 VALUE 200.
+       01  WS-WORK-SIZE                PIC S9(9) COMP-5 VALUE 34.
        COPY ALZLEDG.
        01  WS-MAX-RECORDS              PIC 9(4) VALUE 1000.
       * Single-transfer limits in minor units, per currency:
@@ -225,24 +226,24 @@
                    ADD WS-OFFSET-SECONDS TO WS-NOW-UTC-SECONDS
            END-EVALUATE.
 
-      * One record per line on stdin. A short line keeps the LOW-VALUES
-      * of the pre-fill, which the structural check (E901) rejects. A
-      * line longer than a record, or input that ends inside a line,
-      * means the stream itself is wrong: the whole batch is refused
-      * (8) - the rest of an over-long line must never become a record.
+      * One record per line on stdin, exactly 200 bytes. A line of any
+      * other length, or input that ends inside a line, means the
+      * stream itself is wrong: the whole batch is refused (8) - no
+      * fragment, stray key or rest of an over-long line ever becomes
+      * a sealed record.
        2000-NEXT-RECORD.
            MOVE LOW-VALUES TO TXN-IN-REC
            CALL "alz_read_line" USING TXN-IN-REC WS-LINE-CAP
                                       WS-LINE-LEN
                             RETURNING ALZ-RC
            EVALUATE TRUE
-               WHEN ALZ-OK
+               WHEN ALZ-OK AND WS-LINE-LEN = 200
                    PERFORM 2100-JUDGE-RECORD
                WHEN ALZ-RC = -4
                    SET WS-EOF TO TRUE
-               WHEN ALZ-RC = -3 OR ALZ-RC = -6
-                   DISPLAY "TXNGUARD: input line too long or cut short"
-                       UPON SYSERR
+               WHEN ALZ-OK OR ALZ-RC = -3 OR ALZ-RC = -6
+                   DISPLAY "TXNGUARD: every input line must be one"
+                       " 200-byte record" UPON SYSERR
                    MOVE 8 TO WS-RETURN-CODE
                    SET WS-EOF TO TRUE
                WHEN OTHER
@@ -250,8 +251,11 @@
                    MOVE 16 TO WS-RETURN-CODE
                    SET WS-EOF TO TRUE
            END-EVALUATE
-      *    The record holds a raw card number: wipe it once judged.
+      *    The record holds a raw card number, and WS-WORK copies of
+      *    it and of the IBANs: wipe both once judged.
            CALL "alz_zeroize" USING TXN-IN-REC WS-RECORD-LEN
+                          RETURNING ALZ-WIPE-RC
+           CALL "alz_zeroize" USING WS-WORK WS-WORK-SIZE
                           RETURNING ALZ-WIPE-RC.
 
        2100-JUDGE-RECORD.
@@ -719,6 +723,9 @@
            IF WS-RETURN-CODE < 8
                PERFORM 9400-ANNOUNCE-SEAL
            END-IF
+      *    A refused batch stops early: what is left of it in the input
+      *    buffer (raw card numbers) is wiped too.
+           CALL "alz_discard_input" RETURNING ALZ-WIPE-RC
            PERFORM ALZ-WIPE-KEYS.
 
       * The entry count and head MAC once more, on stdout: whoever can

@@ -487,6 +487,23 @@
            MOVE 1 TO T-EXPECT
            MOVE 5 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
+           MOVE "dankort 5019 1234 5678 9013" TO T-TEXT
+           MOVE "Dankort, 16 digits" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 9 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "bancontact 6703 1234 5678 9012 1" TO T-TEXT
+           MOVE "Bancontact, 17 digits" TO T-NAME
+           MOVE 12 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "borica 2205 1234 5678 9014" TO T-TEXT
+           MOVE "BORICA, 16 digits" TO T-NAME
+           MOVE 8 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "diners 3095 1234 5678 97" TO T-TEXT
+           MOVE "Diners 3095, 14 digits" TO T-NAME
+           MOVE 8 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
            MOVE "Invoice 2025-117 order 88412" TO T-TEXT
            MOVE "ordinary numbers are not cards" TO T-NAME
            MOVE 0 TO T-EXPECT

@@ -160,6 +160,7 @@ const NETWORKS = [
   [1, 4, 4, '1001001'], [2, 51, 55, '0001000'], [4, 2221, 2720, '0001000'], [2, 34, 34, '0010000'], [2, 37, 37, '0010000'],
   [3, 300, 305, '0111111'], [2, 36, 36, '0111111'], [2, 38, 39, '0001111'], [4, 6011, 6011, '0001111'], [3, 644, 649, '0001111'],
   [2, 65, 65, '0001111'], [4, 3528, 3589, '0001111'], [2, 62, 62, '0001111'], [4, 2200, 2204, '0001111'], [2, 60, 60, '0001111'],
+  [4, 3095, 3095, '0111111'], [4, 6703, 6703, '0001111'], [4, 5019, 5019, '0001000'], [4, 2205, 2205, '0001000'],
   [4, 5018, 5018, '1111111'], [4, 5020, 5020, '1111111'], [4, 5038, 5038, '1111111'], [4, 5893, 5893, '1111111'],
   [4, 6304, 6304, '1111111'], [4, 6759, 6759, '1111111'], [4, 6761, 6763, '1111111'],
 ];
@@ -169,8 +170,8 @@ const NETWORKS = [
  * ALZIBAN) are set aside; digit groups joined by one or two spaces,
  * hyphens, dots or slashes form a chain; inside it groups of 3+ digits link
  * up, and the chain's last group may be shorter; any stretch from a group
- * start to a group end of 13-19 digits with a network's prefix and length
- * that passes Luhn is a card number.
+ * start to a group end of 16 or 19 digits starting with 2-6, or of 13-18
+ * digits with a network's prefix and length, that passes Luhn is a card.
  */
 function memoHasPan(memo) {
   const text = memo.padEnd(40, ' ');
@@ -221,7 +222,7 @@ function memoHasPan(memo) {
       joiner = 0;
     }
   }
-  const network = (d) => NETWORKS.some(([n, low, high, lengths]) => {
+  const network = (d) => ((d.length === 16 || d.length === 19) && '23456'.includes(d[0])) || NETWORKS.some(([n, low, high, lengths]) => {
     const prefix = Number(d.slice(0, n));
     return prefix >= low && prefix <= high && lengths[d.length - 13] === '1';
   });

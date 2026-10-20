@@ -26,10 +26,10 @@
       *      4-4-4-2, Visa 4-4-4-1): dates, phone numbers and amounts,
       *      written in groups of two, never join a card number.
       *   4. Every stretch from a group start to a group end that has
-      *      13-19 digits, a card network's prefix with a length that
-      *      network issues (Visa 4: 13/16/19, Mastercard 51-55 and
-      *      2221-2720: 16, Amex 34/37: 15, ...), and a valid Luhn check
-      *      digit is a card number.
+      *      16 or 19 digits starting with 2-6 - or 13, 14, 15, 17 or 18
+      *      digits with a card network's prefix that issues that length
+      *      (Visa 4: 13, Amex 34/37: 15, Diners: 14...) - and a valid
+      *      Luhn check digit is a card number.
       * Known limit: a card number glued to more digits with no
       * separator at all ("41111111111111111234") is one group, and
       * is not found.
@@ -76,6 +76,11 @@
            05  FILLER PIC X(16) VALUE "4220022040001111".
       *    RuPay
            05  FILLER PIC X(16) VALUE "2006000600001111".
+      *    Diners Club (3095), Bancontact, Dankort, BORICA
+           05  FILLER PIC X(16) VALUE "4309530950111111".
+           05  FILLER PIC X(16) VALUE "4670367030001111".
+           05  FILLER PIC X(16) VALUE "4501950190001000".
+           05  FILLER PIC X(16) VALUE "4220522050001000".
       *    Maestro
            05  FILLER PIC X(16) VALUE "4501850181111111".
       *    Maestro
@@ -91,7 +96,7 @@
       *    Maestro
            05  FILLER PIC X(16) VALUE "4676167631111111".
        01  WS-NETWORKS REDEFINES WS-NETWORK-DATA.
-           05  WS-NET                  OCCURS 22 TIMES.
+           05  WS-NET                  OCCURS 26 TIMES.
                10  WS-NET-DIGITS       PIC 9.
                10  WS-NET-LOW          PIC 9(4).
                10  WS-NET-HIGH         PIC 9(4).
@@ -149,6 +154,8 @@
        01  LS-NETWORK-SW               PIC X.
            88  LS-NETWORK-OK           VALUE "Y".
        01  LS-LUHN-RC                  PIC S9(9) COMP-5.
+       01  LS-WIPE-LEN                 PIC S9(9) COMP-5.
+       01  LS-WIPE-RC                  PIC S9(9) COMP-5.
        LINKAGE SECTION.
        01  LK-TEXT                     PIC X ANY LENGTH.
        01  LK-RC                       PIC S9(9) COMP-5.
@@ -165,6 +172,7 @@
            PERFORM 1000-SET-ASIDE-IBANS
            PERFORM 2000-COLLECT-GROUPS
            PERFORM 3000-SCAN-CHAINS
+           PERFORM 9000-WIPE
            GOBACK.
 
       *----------------------------------------------------------------
@@ -362,11 +370,19 @@
                END-IF
            END-IF.
 
-      * A network prefix, and a length that network issues.
+      * 16 and 19 digits are what card networks issue, so any 2-6
+      * prefix will do; for 13, 14, 15, 17 and 18 digits the network
+      * table must know the prefix and the length (SIRET numbers, 14
+      * digits, and IMEIs, 15, are Luhn-valid by design).
        4200-CHECK-NETWORK.
            MOVE "N" TO LS-NETWORK-SW
+           IF LS-WIN-LEN = 16 OR LS-WIN-LEN = 19
+               IF LS-WINDOW(1:1) = "2" OR "3" OR "4" OR "5" OR "6"
+                   SET LS-NETWORK-OK TO TRUE
+               END-IF
+           END-IF
            PERFORM VARYING LS-K FROM 1 BY 1
-                   UNTIL LS-K > 22 OR LS-NETWORK-OK
+                   UNTIL LS-K > 26 OR LS-NETWORK-OK
                MOVE 0 TO LS-PREFIX
                PERFORM VARYING LS-D FROM 1 BY 1
                        UNTIL LS-D > WS-NET-DIGITS(LS-K)
@@ -380,4 +396,18 @@
                    END-IF
                END-IF
            END-PERFORM.
+      * The work areas held the text's digits - a card number, when one
+      * was found: wipe them before the storage is released.
+       9000-WIPE.
+           MOVE 1024 TO LS-WIPE-LEN
+           CALL "alz_zeroize" USING LS-DIGITS LS-WIPE-LEN
+                          RETURNING LS-WIPE-RC
+           MOVE 19 TO LS-WIPE-LEN
+           CALL "alz_zeroize" USING LS-WINDOW LS-WIPE-LEN
+                          RETURNING LS-WIPE-RC
+           MOVE 34 TO LS-WIPE-LEN
+           CALL "alz_zeroize" USING LS-CAND LS-WIPE-LEN
+                          RETURNING LS-WIPE-RC
+           CALL "alz_zeroize" USING LS-IBAN LS-WIPE-LEN
+                          RETURNING LS-WIPE-RC.
        END PROGRAM ALZPANSC.

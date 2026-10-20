@@ -59,10 +59,11 @@ length, the final `READ` returns status `00`, fills only the bytes it read,
 and **leaves the rest of the record area holding the previous record**: a
 3-byte fragment `KLM` came back as `KLMDEFGHIJ`.
 
-*Defence:* TXNGUARD moves `LOW-VALUES` into the record area before every
-`READ`. A fragment then fails the printable-ASCII structure check and is
-rejected with `E901` — the sample batch in the tests ends with exactly such a
-fragment.
+*Defence:* LEDGERCK moves `LOW-VALUES` into the record area before every
+`READ` of a sealed file, so a fragment fails its format check. TXNGUARD no
+longer reads a file at all: its batch arrives on stdin, and any line that is
+not exactly one 200-byte record — a fragment, an empty line, a stray key —
+refuses the whole batch instead of becoming a sealed record.
 
 ### 3. MOVE truncates — silently
 
@@ -281,7 +282,11 @@ wipe.
 *Defence:* the keys are read with `alz_read_line` (Rampart's C ABI): `read(2)`
 into a buffer of the Fortran kernel that is wiped line by line as each line
 is handed over, so the COBOL field is the only copy left; the same scan then
-finds none. `alz_expect_eof` then makes a program
+finds none. The batch comes the same way, and TXNGUARD wipes each record and
+its work field once judged, and the unread rest of a refused batch
+(`alz_discard_input`); ALZPANSC wipes its work areas before returning. A scan
+at `STOP RUN` found two copies of a card number before, seven after a refused
+batch — and none now. `alz_expect_eof` then makes a program
 refuse to run when stdin holds more than its own keys — LEDGERCK handed
 K-token too is refused. Gatehouse decodes the master key file byte by byte
 as well; the hex never becomes a JavaScript string.
@@ -296,11 +301,13 @@ SIRET it saw; one that skipped tokens glued to capital letters, to spare
 IBANs, missed "VISA4111111111111111" and still flagged lower-case IBANs.
 
 *Defence:* ALZPANSC sets aside only IBANs that ALZIBAN confirms (either
-case), and wants a card network's prefix and an issued length (Visa 4:
-13/16/19, Mastercard 51–55 and 2221–2720: 16, Amex 34/37: 15, ...) as well as
-Luhn. Measured on random look-alikes: IBANs, invoices with dates and phone
-numbers 0 %, references 2–5 %, SIRET 1.7 %; every card format still found.
-COBOL and the reference model agree on 100,000 fuzzed memos.
+case). It takes any Luhn-valid 16- or 19-digit number starting with 2–6 —
+the lengths card networks issue, whatever their prefix (Dankort, Bancontact,
+BORICA...) — and, for 13, 14, 15, 17 and 18 digits, wants a network that
+issues that length with that prefix (Visa 4: 13, Amex 34/37: 15, Diners: 14).
+Measured on random look-alikes: IBANs, invoices with dates and phone numbers
+0 %, references 4–8 %, SIRET 1.7 %; every card format tried is found. COBOL
+and the reference model agree on 100,000 fuzzed memos.
 
 ### Not a vulnerability, but you will see it
 

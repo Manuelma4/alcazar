@@ -11,7 +11,7 @@ make the safe way the easy way in legacy languages.
 
 ```bash
 make lib     # build/lib/librampart_cob.a and build/lib/librampart_f.a
-make test    # 161 COBOL checks, 98 Fortran checks
+make test    # 169 COBOL checks, 98 Fortran checks
 ```
 
 ## COBOL modules
@@ -29,7 +29,7 @@ real size of the caller's field. Every return code is a `PIC S9(9) COMP-5`.
 | `ALZMASK` | `mode input output` | PCI DSS masking: `P` BIN + last 4, `L` last 4, `I` IBAN country + last 4. Length preserved. |
 | `ALZAMNT` | `text sign cents rc position` | Strict decimal parser: `[+-]`, 1–13 digits, optional 1–2 decimals. Never `NUMVAL`; overflow is `rc 2`, not truncation; the sign comes back separately. |
 | `ALZDATE` | `timestamp rc` | `YYYYMMDDHHMMSS` with `FUNCTION TEST-DATE-YYYYMMDD`; digits are checked before any numeric field is touched. |
-| `ALZPANSC` | `text rc position` | Finds a payment card number in free text, however it is grouped (spaces, hyphens, dots, slashes) and whatever sits next to it (expiry date, CVV, a word): every 13–19-digit stretch between group boundaries with a card network's prefix and issued length that passes Luhn. Valid IBANs (checked with `ALZIBAN`), dates, phone numbers, SIRET and IMEI numbers are not mistaken for cards. |
+| `ALZPANSC` | `text rc position` | Finds a payment card number in free text, however it is grouped (spaces, hyphens, dots, slashes) and whatever sits next to it (expiry date, CVV, a word): every stretch between group boundaries of 16 or 19 digits starting with 2–6, or of another length a card network issues with that prefix, that passes Luhn. Valid IBANs (checked with `ALZIBAN`), dates, phone numbers, SIRET and IMEI numbers are not mistaken for cards. |
 | `ALZCCY` | `currency rc` | ISO 4217 allowlist of two-decimal currencies (no BGN: Bulgaria adopted the euro in 2026). |
 
 ```cobol

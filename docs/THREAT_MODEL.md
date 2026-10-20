@@ -123,9 +123,10 @@ flowchart LR
   it, glued to a word) but not a number glued to other digits with no
   separator, spelled out in words or deliberately encoded. Measured on random
   look-alikes, valid IBANs, invoice numbers with dates and phone numbers are
-  never flagged; a reference number with a card network's prefix and length
-  sometimes passes Luhn too (2–5 %), and a SIRET that starts like a Diners
-  card (1.7 %) is refused as one. Deliberate exfiltration through the memo is
+  never flagged; a 16- or 19-digit reference that starts with 2–6 passes
+  Luhn one time in ten and is refused like the card it looks like (4–8 % of
+  random references), and so is a SIRET that starts like a Diners card
+  (1.7 %). Deliberate exfiltration through the memo is
   FRAUDSCAN's ENTROPY signal's job.
 * **Watchtower is a heuristic analyzer**, not a sound verifier: it has no
   full data-flow analysis and does not read EBCDIC sources. Absence of

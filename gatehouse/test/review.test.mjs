@@ -179,10 +179,12 @@ describe('Least-privilege keys for the legacy programs', { skip: SKIP_REASON }, 
     assert.equal(record.length, 200);
     const keysThen = (text) => Buffer.concat([keyLines(keys.ledger, keys.token), Buffer.from(text, 'latin1')]);
     assert.equal((await run('txnguard', keysThen(`${record}\n`))).code, 0, 'one valid record');
-    assert.equal((await run('txnguard', keysThen(`${record.slice(0, 100)}\n`))).code, 4, 'a short record is judged (E901)');
+    assert.equal((await run('txnguard', keysThen(`${record.slice(0, 100)}\n`))).code, 8, 'a short line refuses the batch');
+    assert.equal((await run('txnguard', keysThen(`${'0123456789abcdef'.repeat(4)}\n${record}\n`))).code, 8, 'a stray third key line too');
+    assert.equal((await run('txnguard', keysThen(`\n${record}\n`))).code, 8, 'an empty line too');
     const long = await run('txnguard', keysThen(`${record}X\n`));
     assert.equal(long.code, 8, 'an over-long line refuses the batch');
-    assert.match(long.stderr, /too long or cut short/);
+    assert.match(long.stderr, /every input line must be one 200-byte record/);
     assert.equal((await run('txnguard', keysThen(record))).code, 8, 'a record without its line feed refuses the batch');
   });
 
@@ -220,7 +222,8 @@ describe('TXNGUARD finds card numbers however they are typed', { skip: SKIP_REAS
     '4111-1111-1111-1111-1228', 'cvv 737 5105 1051 0510 5100', 'amex 3782 822463 10005', '6011 1111 1111 1117',
     'card4111 1111 1111 1111', '4111  1111 1111 1111', 'Ref 99 / 4111 1111 1111 1111', 'VISA4111111111111111',
     'PAN4111-1111-1111-1111', 'diners 3056 9309 0259 04', 'visa 4222 2222 2222 2', 'REF A12 4111 1111 1111 1111',
-    'BE68 5390 0754 7034 4111 1111 1111 1111', 'jcb 3530 1113 3330 0000',
+    'BE68 5390 0754 7034 4111 1111 1111 1111', 'jcb 3530 1113 3330 0000', 'dankort 5019 1234 5678 9013',
+    'bancontact 6703 1234 5678 9012 1', 'borica 2205 1234 5678 9014', 'diners 3095 1234 5678 97',
   ];
   const ORDINARY = [
     'Invoice 2025-117', 'Inv 5234-567 05.10.2025 qty 12', 'Order 523456 2025-10-12', 'tel 06 12 34 56 78',

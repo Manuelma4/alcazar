@@ -10,10 +10,11 @@ import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { ROOT } from '../src/config.mjs';
+import { ROOT, loadConfig } from '../src/config.mjs';
 import { Gate } from '../src/gate.mjs';
 import { HttpError } from '../src/http.mjs';
 import { deriveKeys, keyLines } from '../src/ledger.mjs';
+import { Pipeline } from '../src/pipeline.mjs';
 import { runLegacy } from '../src/runner.mjs';
 import { SKIP_REASON, VALID, postJson, startGatehouse } from './helpers.mjs';
 
@@ -343,4 +344,49 @@ describe('A verification that cannot complete', { skip: SKIP_REASON }, () => {
       await rm(work, { recursive: true, force: true });
     }
   });
+});
+
+describe('FRAUDSCAN, trusted for its shape only', { skip: SKIP_REASON }, () => {
+  const batch = [
+    { ...VALID, id: 'PAY-1', from: 'FR7630006000011234567890189' },
+    { ...VALID, id: 'PAY-2', from: 'GB29NWBK60161331926819', amount: '310.40' },
+  ];
+  // Each one well-formed JSON that parseRisk accepts, and each one a lie.
+  const LIES = {
+    'scores more transfers than were accepted': (risk) => { risk.n += 5; },
+    'flags a transfer but reports nothing flagged': (risk) => { risk.transactions[0].signals = ['ZSCORE']; },
+    'scores an id that was never sent': (risk) => { risk.transactions[1].id = 'NOT-IN-BATCH'; },
+    'leaves a transfer out': (risk) => { risk.transactions.pop(); },
+    'reports another amount range': (risk) => { risk.amounts.maxCents += 1; },
+  };
+  let work;
+  let pipeline;
+  before(async () => {
+    work = await mkdtemp(join(tmpdir(), 'alcazar-risk-'));
+    pipeline = new Pipeline({ config: loadConfig({ ALCAZAR_WORK_DIR: work }), masterKey: Buffer.alloc(32, 0x2a) });
+  });
+  after(() => rm(work, { recursive: true, force: true }));
+
+  const runLying = (lie) => {
+    const real = pipeline.legacy.bind(pipeline);
+    pipeline.legacy = async (name, args, dir, stdin) => {
+      const result = await real(name, args, dir, stdin);
+      if (name !== 'fraudscan' || !lie) return result;
+      const risk = JSON.parse(result.stdout);
+      lie(risk);
+      return { ...result, stdout: JSON.stringify(risk) };
+    };
+    return pipeline.run(batch, { validationMs: 0 }).finally(() => { pipeline.legacy = real; });
+  };
+
+  it('is accepted when it tells the truth', async () => {
+    const { job } = await runLying(null);
+    assert.equal(job.risk.n, 2);
+  });
+  for (const [name, lie] of Object.entries(LIES)) {
+    it(`is refused when it ${name}`, async () => {
+      await assert.rejects(runLying(lie), (error) => error instanceof HttpError && error.code === 'P-LEGACY' &&
+        /FRAUDSCAN output does not match the accepted records/.test(error.message));
+    });
+  }
 });

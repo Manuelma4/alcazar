@@ -37,6 +37,24 @@ function submittedCents(amount) {
   return m ? String(BigInt(m[1]) * 100n + BigInt((m[2] ?? '').padEnd(2, '0'))) : null;
 }
 
+/**
+ * FRAUDSCAN's report is untrusted for meaning, not just for shape: it must
+ * have scored exactly the accepted records, in order, its counts must add up
+ * and its amount range must be theirs — a report that drops, invents or
+ * silences a transfer is refused.
+ */
+function riskMatches(risk, accepted) {
+  const sum = (values) => values.reduce((total, v) => total + v, 0);
+  // At most 15 digits of cents: exact as numbers.
+  const cents = accepted.map((record) => Number(record.amountCents));
+  return risk.n === accepted.length && risk.transactions.length === accepted.length &&
+    risk.transactions.every((t, i) => t.id === accepted[i].id) &&
+    risk.flagged === risk.transactions.filter((t) => t.signals.length > 0).length &&
+    risk.benford.n === risk.n && sum(risk.benford.counts) === risk.n && sum(risk.amounts.histogram.counts) === risk.n &&
+    risk.amounts.minCents === (cents.length ? Math.min(...cents) : 0) &&
+    risk.amounts.maxCents === (cents.length ? Math.max(...cents) : 0);
+}
+
 export class Pipeline {
   /**
    * @param {{ config: ReturnType<import('./config.mjs').loadConfig>, masterKey: Buffer }} options
@@ -161,6 +179,7 @@ export class Pipeline {
       if (error instanceof RecordError) throw new HttpError(502, 'P-LEGACY', 'FRAUDSCAN produced malformed output');
       throw error;
     }
+    if (!riskMatches(risk, accepted)) throw new HttpError(502, 'P-LEGACY', 'FRAUDSCAN output does not match the accepted records');
     stages.push({
       name: 'fraudscan',
       status: risk.flagged ? 'warn' : 'ok',

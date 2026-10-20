@@ -59,4 +59,4 @@ npm run start:dev  # plain node, static files re-read on every page request
 | `src/jobs.mjs`, `src/ratelimit.mjs`, `src/static.mjs`, `src/watchtower.mjs` | Bounded job store, token bucket, in-memory static files, Watchtower report |
 
 Tests: `npm run test:gatehouse` — unit tests, integration tests against the
-real binaries, and the 26-attack Siege.
+real binaries, and the 28-attack Siege.

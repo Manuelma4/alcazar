@@ -44,6 +44,7 @@
            PERFORM 6000-TEST-DATE
            PERFORM 7000-TEST-CURRENCY
            PERFORM 8000-TEST-SANITIZE
+           PERFORM 8300-TEST-PAN-SCAN
            PERFORM 8500-TEST-KERNEL
            MOVE T-CHECKS TO T-SUMMARY-CHECKS
            MOVE T-FAILURES TO T-SUMMARY-FAILURES
@@ -389,6 +390,45 @@
            MOVE "sanitize separator" TO T-NAME
            MOVE "FR76?X" TO T-WANT
            PERFORM 9100-EXPECT-OUT.
+
+       8300-TEST-PAN-SCAN.
+           MOVE "card 4111 1111 1111 1111 exp 12/28" TO T-TEXT
+           MOVE "PAN with spaces in a memo" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 6 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ref 5555-5555-5555-4444" TO T-TEXT
+           MOVE "PAN with hyphens" TO T-NAME
+           MOVE 5 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "378282246310005" TO T-TEXT
+           MOVE "Amex PAN, 15 digits" TO T-NAME
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "Invoice 2025-117 order 88412" TO T-TEXT
+           MOVE "ordinary numbers are not cards" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111 1111 1111 1112" TO T-TEXT
+           MOVE "Luhn-invalid run is not a card" TO T-NAME
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ref 1111111111111117" TO T-TEXT
+           MOVE "run starting with 1 is not a card" TO T-NAME
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111  1111 1111 1111" TO T-TEXT
+           MOVE "a double space ends the run" TO T-NAME
+           PERFORM 8390-RUN-PAN-SCAN.
+
+       8390-RUN-PAN-SCAN.
+           CALL "ALZPANSC" USING T-TEXT T-RC T-POS
+           PERFORM 9000-EXPECT-RC
+           ADD 1 TO T-CHECKS
+           IF T-POS NOT = T-EXPECT-POS
+               ADD 1 TO T-FAILURES
+               DISPLAY "  FAIL " FUNCTION TRIM(T-NAME)
+                   " position=" T-POS
+           END-IF.
 
       * The Fortran kernel through the C ABI, exactly as TXNGUARD
       * calls it.

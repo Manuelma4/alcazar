@@ -453,6 +453,15 @@
                        MOVE "E802" TO WS-REASON
                        MOVE "MEMO" TO WS-FIELD
                        MOVE "FORMULA-PREFIX" TO WS-DETAIL
+                   ELSE
+      *                A card number typed into the memo would leave
+      *                the core in clear text: refuse the transfer.
+                       CALL "ALZPANSC" USING TI-MEMO ALZ-RC ALZ-POS
+                       IF ALZ-RC = 1
+                           MOVE "E803" TO WS-REASON
+                           MOVE "MEMO" TO WS-FIELD
+                           PERFORM 3990-POSITION-DETAIL
+                       END-IF
                    END-IF
                END-IF
            END-IF.

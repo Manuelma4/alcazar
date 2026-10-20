@@ -174,7 +174,7 @@ export const STRINGS = Object.freeze({
   'overview.explore.title': 'Explore the fortress',
   'overview.explore.transactions': 'Generate, paste or upload a batch; read rejections, risk and Benford.',
   'overview.explore.seal': 'Walk the HMAC chain, then tamper with it and watch it crack.',
-  'overview.explore.siege': '26 real attacks against the live gateway, each with the layer that must stop it.',
+  'overview.explore.siege': '28 real attacks against the live gateway, each with the layer that must stop it.',
   'overview.explore.watchtower': 'Static analysis for COBOL and Fortran, in your browser.',
   'overview.explore.defenses': 'Headers, sandbox, compiler flags — and live checks by this page.',
   'overview.layers.title': 'One colour per layer',

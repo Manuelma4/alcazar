@@ -154,7 +154,7 @@ async function main() {
 
     await view('#/siege');
     await clickText('Launch full siege');
-    await waitFor(`/26\\/26 contained/.test(document.body.innerText)`, 60000);
+    await waitFor(`/28\\/28 contained/.test(document.body.innerText)`, 60000);
     await evaluate('window.scrollTo(0, 0)');
     await shoot('siege');
 

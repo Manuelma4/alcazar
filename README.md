@@ -27,7 +27,7 @@ is still standing — and still in use. Like the code it protects.
 | ![](https://img.shields.io/badge/-%20-D9B45A) | **Seal** | An HMAC-SHA256-chained audit ledger, verified twice (COBOL + Fortran, and OpenSSL) plus an external anchor | COBOL, Fortran |
 | ![](https://img.shields.io/badge/-%20-9B7BFF) | **[Watchtower](watchtower/)** | A static analyzer for the vulnerabilities specific to COBOL and Fortran, with SARIF output for GitHub code scanning | JavaScript |
 | ![](https://img.shields.io/badge/-%20-4C7DFF) | **[Gatehouse](gatehouse/)** | The only door: a hardened gateway that runs the legacy programs without a shell, with an allow-listed environment and resource limits | Node.js, zero dependencies |
-| ![](https://img.shields.io/badge/-%20-E5484D) | **Siege** | 26 attacks, each contained by a named layer — in the dashboard *and* in CI | Shared JavaScript |
+| ![](https://img.shields.io/badge/-%20-E5484D) | **Siege** | 28 attacks, each contained by a named layer — in the dashboard *and* in CI | Shared JavaScript |
 | ![](https://img.shields.io/badge/-%20-8B95AE) | **[Lookout](lookout/)** | The dashboard: watch batches flow through the fortress, tamper with the ledger, launch the Siege, scan code in the browser | HTML, CSS, JS — strict CSP, Trusted Types |
 
 <p align="center">
@@ -36,7 +36,7 @@ is still standing — and still in use. Like the code it protects.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/lookout-siege.png" alt="Siege: 26 of 26 attacks contained, stopped by Gatehouse, COBOL, Fortran and the Seal"><br><sub><b>Siege</b> — 26 real attacks against the live gateway, each contained by the layer that claims it.</sub></td>
+    <td width="50%"><img src="docs/assets/lookout-siege.png" alt="Siege: 28 of 28 attacks contained, stopped by Gatehouse, COBOL, Fortran and the Seal"><br><sub><b>Siege</b> — 28 real attacks against the live gateway, each contained by the layer that claims it.</sub></td>
     <td width="50%"><img src="docs/assets/lookout-seal-chain.png" alt="Seal: the HMAC chain broken at entry 5 after an insider edited the amount, with the record shown byte for byte"><br><sub><b>Seal</b> — edit one byte of the ledger and the chain cracks exactly there.</sub></td>
   </tr>
   <tr>
@@ -138,28 +138,30 @@ defence the tests do not prove.
 | 2 | High-order truncation | TXNGUARD (COBOL) | `E402` | [CWE-197](https://cwe.mitre.org/data/definitions/197.html) |
 | 3 | Fractional-cent “salami” amount | TXNGUARD (COBOL) | `E401` | [CWE-682](https://cwe.mitre.org/data/definitions/682.html) |
 | 4 | Forged IBAN check digits | TXNGUARD (COBOL) | `E302` | [CWE-354](https://cwe.mitre.org/data/definitions/354.html) |
-| 5 | Invalid card number | TXNGUARD (COBOL) | `E602` | [CWE-354](https://cwe.mitre.org/data/definitions/354.html) |
-| 6 | Unlisted currency | TXNGUARD (COBOL) | `E501` | [CWE-20](https://cwe.mitre.org/data/definitions/20.html) |
-| 7 | Impossible date (30 February) | TXNGUARD (COBOL) | `E201` | [CWE-20](https://cwe.mitre.org/data/definitions/20.html) |
-| 8 | Replayed transaction id | TXNGUARD (COBOL) | `E102` | [CWE-294](https://cwe.mitre.org/data/definitions/294.html) |
-| 9 | Self-transfer loop | TXNGUARD (COBOL) | `E305` | [CWE-840](https://cwe.mitre.org/data/definitions/840.html) |
-| 10 | Spreadsheet formula injection | TXNGUARD (COBOL) | `E802` | [CWE-1236](https://cwe.mitre.org/data/definitions/1236.html) |
-| 11 | Stored XSS in the memo | TXNGUARD (COBOL) | `E801` | [CWE-79](https://cwe.mitre.org/data/definitions/79.html) |
-| 12 | SQL injection payload | TXNGUARD (COBOL) | `E801` | [CWE-89](https://cwe.mitre.org/data/definitions/89.html) |
-| 13 | Shell metacharacters in the id | TXNGUARD (COBOL) | `E101` | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) |
-| 14 | Record injection (CR/LF) | Gatehouse | `P-CHARSET` | [CWE-93](https://cwe.mitre.org/data/definitions/93.html) |
-| 15 | Bidirectional text (Trojan Source) | Gatehouse | `P-CHARSET` | [CWE-451](https://cwe.mitre.org/data/definitions/451.html) |
-| 16 | Prototype pollution | Gatehouse | `P-SCHEMA` | [CWE-1321](https://cwe.mitre.org/data/definitions/1321.html) |
-| 17 | Cross-site form post | Gatehouse | `P-MEDIA` | [CWE-352](https://cwe.mitre.org/data/definitions/352.html) |
-| 18 | Path traversal | Gatehouse | `P-NOTFOUND` | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) |
-| 19 | Oversized batch | Gatehouse | `P-LIMIT` | [CWE-770](https://cwe.mitre.org/data/definitions/770.html) |
-| 20 | Structuring (smurfing) | FRAUDSCAN (Fortran) | `STRUCTURING` signal | AML typology |
-| 21 | Card-testing velocity | FRAUDSCAN (Fortran) | `VELOCITY` signal | AML typology |
-| 22 | Account-takeover outlier | FRAUDSCAN (Fortran) | `ZSCORE` signal | AML typology |
-| 23 | Data exfiltration via memo | FRAUDSCAN (Fortran) | `ENTROPY` signal | [CWE-200](https://cwe.mitre.org/data/definitions/200.html) |
-| 24 | Insider edits the ledger | Seal | `MAC-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
-| 25 | Deleted audit entry | Seal | `SEQ-GAP` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
-| 26 | Truncated ledger | Seal | `HEAD-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
+| 5 | IBAN alias (check digits 99) | TXNGUARD (COBOL) | `E302` | [CWE-1289](https://cwe.mitre.org/data/definitions/1289.html) |
+| 6 | Invalid card number | TXNGUARD (COBOL) | `E602` | [CWE-354](https://cwe.mitre.org/data/definitions/354.html) |
+| 7 | Unlisted currency | TXNGUARD (COBOL) | `E501` | [CWE-20](https://cwe.mitre.org/data/definitions/20.html) |
+| 8 | Impossible date (30 February) | TXNGUARD (COBOL) | `E201` | [CWE-20](https://cwe.mitre.org/data/definitions/20.html) |
+| 9 | Replayed transaction id | TXNGUARD (COBOL) | `E102` | [CWE-294](https://cwe.mitre.org/data/definitions/294.html) |
+| 10 | Self-transfer loop | TXNGUARD (COBOL) | `E305` | [CWE-840](https://cwe.mitre.org/data/definitions/840.html) |
+| 11 | Spreadsheet formula injection | TXNGUARD (COBOL) | `E802` | [CWE-1236](https://cwe.mitre.org/data/definitions/1236.html) |
+| 12 | Card number in the memo | TXNGUARD (COBOL) | `E803` | [CWE-312](https://cwe.mitre.org/data/definitions/312.html) |
+| 13 | Stored XSS in the memo | TXNGUARD (COBOL) | `E801` | [CWE-79](https://cwe.mitre.org/data/definitions/79.html) |
+| 14 | SQL injection payload | TXNGUARD (COBOL) | `E801` | [CWE-89](https://cwe.mitre.org/data/definitions/89.html) |
+| 15 | Shell metacharacters in the id | TXNGUARD (COBOL) | `E101` | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) |
+| 16 | Record injection (CR/LF) | Gatehouse | `P-CHARSET` | [CWE-93](https://cwe.mitre.org/data/definitions/93.html) |
+| 17 | Bidirectional text (Trojan Source) | Gatehouse | `P-CHARSET` | [CWE-451](https://cwe.mitre.org/data/definitions/451.html) |
+| 18 | Prototype pollution | Gatehouse | `P-SCHEMA` | [CWE-1321](https://cwe.mitre.org/data/definitions/1321.html) |
+| 19 | Cross-site form post | Gatehouse | `P-MEDIA` | [CWE-352](https://cwe.mitre.org/data/definitions/352.html) |
+| 20 | Path traversal | Gatehouse | `P-NOTFOUND` | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) |
+| 21 | Oversized batch | Gatehouse | `P-LIMIT` | [CWE-770](https://cwe.mitre.org/data/definitions/770.html) |
+| 22 | Structuring (smurfing) | FRAUDSCAN (Fortran) | `STRUCTURING` signal | AML typology |
+| 23 | Card-testing velocity | FRAUDSCAN (Fortran) | `VELOCITY` signal | AML typology |
+| 24 | Account-takeover outlier | FRAUDSCAN (Fortran) | `ZSCORE` signal | AML typology |
+| 25 | Data exfiltration via memo | FRAUDSCAN (Fortran) | `ENTROPY` signal | [CWE-200](https://cwe.mitre.org/data/definitions/200.html) |
+| 26 | Insider edits the ledger | Seal | `MAC-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
+| 27 | Deleted audit entry | Seal | `SEQ-GAP` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
+| 28 | Truncated ledger | Seal | `HEAD-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
 
 ## Watchtower
 

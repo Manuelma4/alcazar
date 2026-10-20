@@ -21,6 +21,7 @@ export const REASONS = Object.freeze({
   E701: 'Unknown channel',
   E801: 'Memo contains characters outside the SEPA character set',
   E802: 'Memo starts with a spreadsheet formula character',
+  E803: 'Memo contains a payment card number',
   E901: 'Record contains control or non-ASCII bytes',
 });
 

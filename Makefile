@@ -69,7 +69,7 @@ F_MODULES := rampart_bytes rampart_sha256 rampart_ct rampart_hmac rampart_kat ra
 F_OBJS    := $(F_MODULES:%=$(OBJ)/%.o)
 RAMPART_F := $(LIB)/librampart_f.a
 
-COB_MODULES := ALZTEXT ALZSANIT ALZIBAN ALZLUHN ALZMASK ALZAMNT ALZDATE ALZCCY
+COB_MODULES := ALZTEXT ALZSANIT ALZIBAN ALZLUHN ALZMASK ALZAMNT ALZDATE ALZCCY ALZPANSC
 COB_OBJS    := $(COB_MODULES:%=$(OBJ)/cobol/%.o)
 RAMPART_COB := $(LIB)/librampart_cob.a
 COPYBOOKS   := $(wildcard rampart/cobol/copybooks/*.cpy)

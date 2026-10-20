@@ -144,8 +144,32 @@ function expectedCode(t, seen, nowUtcSeconds) {
   if (memo !== '') {
     if ([...memo].some((c) => !SEPA.has(c))) return 'E801';
     if ('+-'.includes(memo.trimStart()[0])) return 'E802';
+    if (memoHasPan(memo)) return 'E803';
   }
   return 'A000';
+}
+
+/** ALZPANSC: 13-19 digits (single space/hyphen separators), 2-6 first, Luhn. */
+function memoHasPan(memo) {
+  const field = memo.padEnd(40, ' ');
+  let run = '';
+  const endRun = () => {
+    const found = run.length >= 13 && run.length <= 19 && '23456'.includes(run[0]) && luhnValid(run);
+    run = '';
+    return found;
+  };
+  for (let i = 0; i < field.length; i += 1) {
+    const ch = field[i];
+    if (ch >= '0' && ch <= '9') {
+      run += ch;
+    } else if ((ch === ' ' || ch === '-') && run.length > 0) {
+      const next = field[i + 1] ?? ' ';
+      if (!(next >= '0' && next <= '9') && endRun()) return true;
+    } else if (endRun()) {
+      return true;
+    }
+  }
+  return endRun();
 }
 
 function maskIban(iban) {
@@ -257,6 +281,8 @@ function generator(seed, { chaos = false } = {}) {
         () => '',
         () => '          ',
         () => `${t.memo}  `.slice(0, 40),
+        () => pick(['card 4111 1111 1111 1111', 'ref 5555-5555-5555-4444 ok', '378282246310005', 'Invoice 4111111111111112',
+          'ref 1111111111111117', '4111  1111 1111 1111', `pay ${luhnComplete(`4${digits(14)}`)}`, `x ${digits(19)} y`]),
       ])();
     },
   };

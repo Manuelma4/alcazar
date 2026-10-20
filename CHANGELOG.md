@@ -6,7 +6,7 @@ First public version.
 
 * **Rampart** — COBOL security modules (character policies, sanitising,
   IBAN ISO 13616 / ISO 7064, Luhn, PCI DSS masking, strict amount parsing,
-  calendar dates, currency allowlist) and a Fortran 2018 kernel (SHA-256,
+  calendar dates, currency allowlist, card numbers in free text) and a Fortran 2018 kernel (SHA-256,
   HMAC-SHA256, constant-time comparison, secure wiping, hex, robust
   statistics, safe JSON) with a C ABI (`alz.h`) and power-on self-tests.
 * **TXNGUARD / LEDGERCK / FRAUDSCAN** — the demo batch core: validation and

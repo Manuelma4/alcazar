@@ -126,6 +126,15 @@ export const SCENARIOS = Object.freeze([
     expected: { layer: 'cobol', id: 'LAB-0001', code: 'E302' },
   },
   {
+    id: 'iban-alias',
+    category: 'validation',
+    cwe: 'CWE-1289',
+    title: 'IBAN alias (check digits 99)',
+    summary: 'FR99… and FR02… name the same account and both pass MOD 97-10, but only 02–98 are ever issued: an alias would dodge the same-account and per-sender checks.',
+    request: { kind: 'batch', transactions: [txn({ from: 'FR9930006000011234567890163', to: 'FR0230006000011234567890163' })] },
+    expected: { layer: 'cobol', id: 'LAB-0001', code: 'E302' },
+  },
+  {
     id: 'pan-luhn',
     category: 'validation',
     cwe: 'CWE-354',
@@ -178,6 +187,15 @@ export const SCENARIOS = Object.freeze([
     summary: 'A memo starting with “-” would execute as a formula when an analyst opens the export in Excel.',
     request: { kind: 'batch', transactions: [txn({ memo: '-2+3+cmd' })] },
     expected: { layer: 'cobol', id: 'LAB-0001', code: 'E802' },
+  },
+  {
+    id: 'pan-in-memo',
+    category: 'injection',
+    cwe: 'CWE-312',
+    title: 'Card number in the memo',
+    summary: 'A full card number typed into free text would leave the core in clear text; ALZPANSC finds it and the transfer is refused.',
+    request: { kind: 'batch', transactions: [txn({ memo: 'card 4111 1111 1111 1111 exp 12/28' })] },
+    expected: { layer: 'cobol', id: 'LAB-0001', code: 'E803' },
   },
   {
     id: 'xss-memo',

@@ -126,6 +126,7 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED(34)|PA
 | E701 | CHANNEL | unknown channel |
 | E801 | MEMO | character outside the SEPA character set |
 | E802 | MEMO | spreadsheet formula prefix (`+`, `-`, `=`, `@`) |
+| E803 | MEMO | contains a payment card number (13–19 digits, optional single spaces or hyphens, starting with 2–6, Luhn-valid) |
 | E901 | RECORD | control or non-ASCII bytes in the record |
 
 ## 4. FRAUDSCAN signals

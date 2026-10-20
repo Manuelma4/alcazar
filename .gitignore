@@ -17,6 +17,7 @@
 
 # Secrets — never commit keys
 *.key
+*.token
 .env
 .env.*
 

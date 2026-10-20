@@ -53,7 +53,9 @@ is still standing — and still in use. Like the code it protects.
 docker compose up --build
 ```
 
-Then open <http://localhost:8080/>. The image build compiles the COBOL and
+Then open the sign-in link Gatehouse prints,
+`http://localhost:8080/#signin=…`: the API answers the operator only, and
+this run's token is in that link. The image build compiles the COBOL and
 Fortran core **and runs its test suites**: an image cannot be built from code
 that fails them.
 
@@ -63,7 +65,7 @@ that fails them.
 brew install gnucobol gcc        # Debian/Ubuntu: sudo apt install gnucobol3 gfortran make
 make && make test                # warnings are errors; 267 COBOL/Fortran checks
 npm test                         # Gatehouse, Siege, Watchtower and Lookout tests
-npm start                        # Gatehouse under the Node.js permission model
+npm start                        # Gatehouse under the Node.js permission model; prints the sign-in link
 ```
 
 Node.js ≥ 22.13 is required (24 recommended). There is no `npm install`:
@@ -95,9 +97,18 @@ cobol-fortran  BROKEN at entry 2: MAC-MISMATCH (1 verified before it)
 verdict        BROKEN
 ```
 
-An auditor checks a sealed job the same way, outside Gatehouse and with
-`K_ledger` alone — no master key, no token key:
-`node scripts/verify-ledger.mjs <job-dir> <job-id> --ledger-key-file K_LEDGER.key --entries N --head HEX`.
+An auditor checks a sealed job the same way, outside Gatehouse, with
+`K_ledger` and Gatehouse's public key — no master key, no token key, nothing
+that can seal. Gatehouse signs every job's anchor (Ed25519), and with
+`ALCAZAR_EVIDENCE_DIR` keeps each sealed job read-only after it expires:
+
+```bash
+node scripts/audit-keys.mjs --master-key-file master.key --out audit/   # K_LEDGER.key + ANCHOR.pub
+node scripts/verify-ledger.mjs evidence/<job-id> <job-id> --ledger-key-file audit/K_LEDGER.key \
+     --anchor evidence/<job-id>/ANCHOR.json --anchor-key "$(cat audit/ANCHOR.pub)"
+```
+
+Without an anchor the verdict is UNANCHORED (exit 3), never INTACT.
 
 ## How a transfer is judged
 
@@ -303,6 +314,14 @@ More in the [Watchtower README](watchtower/README.md).
   Gatehouse: each legacy program reads only the purpose-specific sub-keys it
   needs from stdin (TXNGUARD: ledger + token; LEDGERCK: ledger only) — never
   argv, never the environment — and wipes them before it exits.
+* **The operator only.** Every API call but the health check needs the
+  operator token — as a bearer token from scripts, or traded by Lookout for
+  an HttpOnly, SameSite=Strict session cookie. No token configured? One is
+  generated per run and printed as a sign-in link.
+* **Evidence an auditor can check but not forge.** Every job's anchor is
+  signed with an Ed25519 key that never leaves Gatehouse; auditors get
+  `K_ledger` and the public key, and the sealed files can be kept read-only
+  after the job expires.
 * **Fail closed.** Every program starts with known-answer self-tests (NIST,
   RFC 4231) and Gatehouse refuses batches if the full pipeline does not match
   OpenSSL bit for bit at start-up.
@@ -312,7 +331,9 @@ More in the [Watchtower README](watchtower/README.md).
   everything, Gatehouse re-parses the legacy outputs as untrusted data.
 * **Least privilege at run time.** Non-root container, read-only root file
   system, all capabilities dropped, `no-new-privileges`, the Node.js
-  permission model (read the app, write only the job directory).
+  permission model for Gatehouse's own file access (read the app and its
+  two secret files, write only the job and evidence directories) — the
+  legacy programs it starts are not confined by it (see the threat model).
 
 Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
 [threat model](docs/THREAT_MODEL.md) ·
@@ -323,7 +344,7 @@ Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
 ## Lessons from the trenches
 
 Building this surfaced real, measurable traps — each now has a defence and a
-test ([all 22](docs/HARDENING.md)):
+test ([all 27](docs/HARDENING.md)):
 
 * GnuCOBOL **splits an over-long LINE SEQUENTIAL line into extra records**,
   **trims the trailing blanks of every record it writes** (so a MAC of the
@@ -343,6 +364,10 @@ test ([all 22](docs/HARDENING.md)):
 * Under Node's permission model, **`spawn()` writes into the `env` object you
   pass**, paths are compared byte for byte (NFC vs NFD on macOS), and a grant
   for a directory that does not exist yet covers nothing inside it.
+* **A key that verifies can also seal**: an auditor holding `K_ledger` could
+  forge a ledger that checks out, so Gatehouse signs every anchor with a key
+  auditors never get. And **a token the dashboard cannot send is an optional
+  token**: the API was open until Lookout could sign in.
 
 ## Repository layout
 

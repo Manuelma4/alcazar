@@ -324,6 +324,65 @@ that one file and nothing beside it, and hands Gatehouse the resolved path.
 Gatehouse refuses a key file inside the job directory. `compose.yaml` shows
 the key as a read-only Docker secret.
 
+### 23. A token the dashboard cannot send is an optional token
+
+Gatehouse accepted a bearer token, `ALCAZAR_API_TOKEN`, and Lookout, its
+only client, had no way to send one. Setting it broke the dashboard, so in
+practice the API was open to anything that could reach the port: any local
+process, or the network behind a `docker run -p`. The `Origin` and
+`Sec-Fetch-Site` checks stop browsers, not scripts.
+
+*Defence:* every API call but `/api/health` needs the operator. Lookout
+trades the token for an HttpOnly, SameSite=Strict session cookie, so no
+script in the page ever holds it. A run without a configured token
+generates one and prints it once, as a sign-in link carried in the URL
+fragment, which browsers never send to a server. `ALCAZAR_AUTH=none` is
+refused off loopback, and demo mode is off unless asked for.
+
+### 24. A key that verifies can also seal
+
+`K_ledger` both computes and checks every MAC of the chain. Handing it to an
+auditor, as the audit tool invited, also handed over the power to seal a
+complete, valid ledger for any job id, including one whose head matches what
+the auditor computes.
+
+*Defence:* Gatehouse signs each anchor — job id, entry count, head, sealing
+time — with an Ed25519 key derived from the master key. Auditors get the
+public key (`scripts/audit-keys.mjs`), which verifies and cannot sign. The
+audit tool checks the signature with a key the auditor brings, never with
+one a document names.
+
+### 25. "Intact" needs something to be intact against
+
+`scripts/verify-ledger.mjs` answered INTACT, exit 0, when no anchor was
+given — even for an empty directory, since no entries make a valid chain. An
+audit pipeline that checks exit codes would have passed a deleted job, or
+another job's complete files under its name.
+
+*Defence:* without an anchor the verdict is UNANCHORED (exit 3), an empty
+ledger is BROKEN, and a signed anchor names its job.
+
+### 26. A report can be well-formed and still lie
+
+Gatehouse checked FRAUDSCAN's JSON against its schema only. A report that
+scored ids nobody sent, left a transfer out, or said `flagged: 0` next to a
+flagged transfer passed, and the dashboard showed it as the verdict.
+
+*Defence:* the report must have scored exactly the accepted records, in
+order, with counts that add up and their amount range.
+
+### 27. Evidence that expires is not evidence
+
+The Seal was described as evidence, yet the only copy lived in the job
+store: a 15-minute cache of 40 jobs, emptied by a restart, whose oldest job
+any client could evict by sending 40 small batches.
+
+*Defence:* with `ALCAZAR_EVIDENCE_DIR`, each sealed job's verified bytes and
+signed anchor are written once, read-only, outside the job directory, and
+outlive the job and the process. Only operators can submit batches now.
+Write-once storage under that directory (WORM, object lock) is the
+deployment's part.
+
 ### Not a vulnerability, but you will see it
 
 On Debian 13, every GnuCOBOL program prints *"program compiled against libxml

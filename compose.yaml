@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# docker compose up --build   ->   http://localhost:8080/
+# docker compose up --build   ->   open the sign-in link it prints
+#                                  (http://localhost:8080/#signin=…)
 services:
   alcazar:
     build: .
@@ -8,12 +9,16 @@ services:
       # Published on the loopback interface only.
       - "127.0.0.1:8080:8080"
     environment:
+      # The showcase: the Siege lab's tamper endpoint, for the operator only.
       ALCAZAR_DEMO: "1"
-      # A lasting master key (otherwise a fresh one per start): uncomment
-      # this line, `secrets` below and the top-level `secrets` block.
+      # A lasting master key and operator token (otherwise fresh ones per
+      # start, the token printed as a sign-in link): uncomment these lines,
+      # `secrets` below and the top-level `secrets` block.
       # ALCAZAR_KEY_FILE: /run/secrets/alcazar_master_key
+      # ALCAZAR_API_TOKEN_FILE: /run/secrets/alcazar_operator_token
     # secrets:
     #   - alcazar_master_key
+    #   - alcazar_operator_token
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
@@ -26,9 +31,13 @@ services:
     cpus: 1.0
     restart: unless-stopped
 
-# The key file: 64 lower-case hex digits that only the container's user
-# (uid 10001) may read, mounted read-only and outside the job directory:
-#   (umask 077 && openssl rand -hex 32 > master.key) && sudo chown 10001 master.key
+# The secret files, readable by the container's user (uid 10001) only and
+# mounted read-only, outside the job directory: the master key is 64
+# lower-case hex digits, the operator token 32 printable characters or more.
+#   (umask 077 && openssl rand -hex 32 > master.key && openssl rand -base64 33 | tr -d '\n' > operator.token)
+#   sudo chown 10001 master.key operator.token
 # secrets:
 #   alcazar_master_key:
 #     file: ./master.key
+#   alcazar_operator_token:
+#     file: ./operator.token

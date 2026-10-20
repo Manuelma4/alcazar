@@ -35,9 +35,18 @@ core, script execution in the dashboard, a way to run commands or read files
 through Gatehouse, or a Watchtower crash or hang on crafted source code.
 
 Out of scope: the residual risks listed in the threat model (for example the
-demo-only tamper endpoint, or missing TLS when Gatehouse is exposed without a
-proxy), denial of service by sheer traffic volume, and findings that need a
+demo-only tamper endpoint, the legacy programs running unconfined as
+Gatehouse's user, or missing TLS when Gatehouse is exposed without a proxy),
+denial of service by sheer traffic volume, and findings that need a
 compromised host.
+
+## Deploying it
+
+Run `node scripts/start-hardened.mjs` (demo mode off) — or the image — with
+`ALCAZAR_KEY_FILE` and `ALCAZAR_API_TOKEN_FILE` on a read-only secret mount
+and `ALCAZAR_EVIDENCE_DIR` on write-once storage, behind a TLS proxy with
+`ALCAZAR_HSTS=1`. The threat model's residual risks say what that still
+leaves to the deployment.
 
 ## Safe harbour
 

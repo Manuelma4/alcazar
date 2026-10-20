@@ -13,7 +13,7 @@
   },
   "scripts": {
     "start": "node scripts/start-hardened.mjs --demo",
-    "start:dev": "ALCAZAR_STATIC_RELOAD=1 node gatehouse/src/server.mjs",
+    "start:dev": "ALCAZAR_STATIC_RELOAD=1 ALCAZAR_DEMO=1 node gatehouse/src/server.mjs",
     "test": "node --test",
     "test:watchtower": "node --test 'watchtower/test/*.test.mjs'",
     "test:gatehouse": "node --test 'gatehouse/test/*.test.mjs'",

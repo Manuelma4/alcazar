@@ -13,4 +13,5 @@ gatehouse/test
 **/*.mod
 **/*.dSYM
 *.key
+*.token
 .env*

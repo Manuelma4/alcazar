@@ -30,8 +30,9 @@ flowchart LR
 
 ## 1. Batch job lifecycle
 
-1. `POST /api/batch` — Gatehouse validates the JSON structurally (types, lengths,
-   printable ASCII only, no unknown keys, ≤ 1000 transactions).
+1. `POST /api/batch`, as the operator (§5) — Gatehouse validates the JSON
+   structurally (types, lengths, printable ASCII only, no unknown keys,
+   ≤ 1000 transactions).
 2. Gatehouse creates a private job directory (`0700`) for the outputs.
 3. Gatehouse runs `txnguard <job-id>` with `cwd` = job dir, a minimal environment,
    no shell, a timeout and resource limits. Everything it needs comes on
@@ -55,12 +56,18 @@ flowchart LR
    its transfer field by field, account tokens recomputed with `K_token` —
    so an input or output file edited while the job runs fails the job.
 6. Gatehouse pipes those `ACCEPTED` bytes into `fraudscan - -` and reads the
-   risk report back from its stdout: no file sits in between.
+   risk report back from its stdout: no file sits in between. The report must
+   have scored exactly the accepted records, in order, with counts that add
+   up and their amount range — well-formed is not enough.
 7. Gatehouse runs `ledgerck` (COBOL verifier) on the job directory **and**
    verifies the bytes it holds with Node's OpenSSL HMAC — the chain and every
    `ACCEPTED` / `REJECTED` record it seals; the two must agree, so a file
    changed between the two reads can only ever produce "broken".
-8. The job (masked data only) is kept in memory for 15 minutes (max 40 jobs).
+8. Gatehouse signs the anchor — job id, entry count, head MAC, sealing time —
+   with Ed25519 (§2). With `ALCAZAR_EVIDENCE_DIR` set, the verified bytes of
+   `LEDGER.DAT`, `ACCEPTED.DAT`, `REJECTED.DAT` and the signed `ANCHOR.json`
+   are written to `<evidence>/<job-id>/`, each once and read-only.
+9. The job (masked data only) is kept in memory for 15 minutes (max 40 jobs).
 
 ## 2. Record layouts (fixed width, ASCII)
 
@@ -144,10 +151,19 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
   both (and refuses them if they are equal); LEDGERCK receives `K_ledger`
   only, so the verifier can neither compute nor link account tokens.
 * Account tokens: `hex(HMAC(K_token, IBAN))[0..16]`.
+* The anchor-signing key is an Ed25519 key whose seed is
+  `HMAC(K_master, "alcazar/anchor/v1" || 0x01)`; it never leaves Gatehouse.
+  The signed bytes are the lines `alcazar.anchor/v1`, `job=<id>`,
+  `entries=<n>`, `head=<64 hex>`, `sealedAt=<ISO 8601, ms, Z>`, each ended by
+  a line feed. Its public key is in `/api/health`;
+  `scripts/audit-keys.mjs` derives it, with `K_ledger`, from the master key
+  for an auditor.
 
 ### SUMMARY — `KEY=VALUE` lines
 `ALZ-SUMMARY=1`, `JOB`, `RECORDS`, `ACCEPTED`, `REJECTED`, `TOTAL-<CCY>` (cents),
-`LEDGER-ENTRIES`, `LEDGER-HEAD`, `SELFTEST=PASS|FAIL`, `RC`.
+`LEDGER-ENTRIES`, `LEDGER-HEAD`, `SELFTEST=PASS|FAIL`, `RC`. Nothing seals
+it: Gatehouse only cross-checks it (with TXNGUARD's stdout and the totals of
+the verified records), and auditors use the signed anchor instead.
 
 ## 3. Reason codes (TXNGUARD)
 
@@ -210,6 +226,12 @@ the chi-square p-value decides: `acceptable` (p ≥ 0.05), `marginal`
 All responses are JSON (`application/json; charset=utf-8`) except static files.
 `POST` bodies must be `application/json`, ≤ 512 KiB, same-origin.
 
+The page and `/api/health` are public; every other endpoint answers the
+operator only — `401 P-AUTH` with `WWW-Authenticate: Bearer` otherwise.
+Scripts send the operator token as `Authorization: Bearer <token>`; Lookout
+sends the session cookie it got by signing in (`/api/session`). With
+`ALCAZAR_AUTH=none`, accepted on a loopback address only, nothing is asked.
+
 ```ts
 type Layer = 'gatehouse' | 'cobol' | 'fortran' | 'seal';
 
@@ -220,8 +242,17 @@ interface Health {
   demo: boolean;                         // tamper endpoints enabled
   runtime: { node: string; cobol: string; fortran: string };
   selftest: { status: 'pass' | 'fail'; checks: { name: string; status: 'pass' | 'fail'; detail?: string }[] };
+  keySource: 'file' | 'generated';       // where the master key came from
+  auth: 'token' | 'none';
+  anchorKey: { algorithm: 'Ed25519'; publicKey: string; keyId: string };   // base64url, 32 bytes; 16 hex
   limits: { maxTransactions: number; maxBodyBytes: number; jobTimeoutMs: number; jobTtlMs: number; maxJobs: number };
 }
+
+// GET    /api/session                → 200 Session (signed in) | 401 P-AUTH
+// POST   /api/session { token }      → 200 Session + Set-Cookie: alz_session=…; HttpOnly; SameSite=Strict; Max-Age=28800
+//                                      (`__Host-alz_session`, Secure, over TLS) | 401 P-AUTH
+// DELETE /api/session                → 200 { auth, via: null }, the cookie cleared and the session ended
+interface Session { auth: 'token' | 'none'; via: 'session' | 'bearer' | 'none'; expiresAt?: string }
 
 // GET /api/sample?size=200&seed=42   (size 1..1000)
 interface Sample { seed: number; transactions: TransactionInput[] }
@@ -244,7 +275,8 @@ interface ApiError {
 }
 // Gatehouse error codes: P-METHOD 405, P-MEDIA 415, P-ORIGIN 403, P-SIZE 413, P-JSON 400,
 // P-SCHEMA 400, P-LENGTH 400, P-CHARSET 400, P-LIMIT 400, P-RATE 429, P-BUSY 503,
-// P-AUTH 401, P-NOTFOUND 404, P-TIMEOUT 504, P-LEGACY 502, P-DEMO 403
+// P-AUTH 401, P-NOTFOUND 404 (414 for an over-long path), P-HOST 421, P-TIMEOUT 504,
+// P-LEGACY 502, P-DEMO 403, P-EVIDENCE 503, P-UNAVAILABLE 503, P-INTERNAL 500
 
 // POST /api/batch  { transactions: TransactionInput[] }  → 200 Job
 // GET  /api/jobs/:job                                     → 200 Job
@@ -333,8 +365,18 @@ interface Ledger {
   algorithm: 'HMAC-SHA256';
   genesis: string;
   head: string;
+  anchor: Anchor;
   entries: LedgerEntry[];
   verification: Verification;
+}
+
+// GET /api/jobs/:job/anchor → 200 Anchor, as a download (`<job>.anchor.json`)
+interface Anchor {
+  schema: 'alcazar.anchor/v1';
+  job: string; entries: number; head: string;   // what TXNGUARD reported when it sealed the job
+  sealedAt: string;            // ISO 8601
+  keyId: string;               // 16 hex: SHA-256 of the public key
+  signature: string;           // Ed25519, base64url, over the lines described in §2
 }
 
 // POST /api/jobs/:job/verify                         → 200 Verification
@@ -351,6 +393,7 @@ interface Posture {
   headers: Record<string, string>;       // the security headers Gatehouse sends
   sandbox: { shell: false; minimalEnv: true; secretsOnStdin: true; verifiedBytes: true; outputMatchesInput: true;
              timeoutMs: number; maxOutputBytes: number; rlimits: boolean; permissionModel: boolean };
+  evidence: { signedAnchors: true; exported: boolean };   // exported: ALCAZAR_EVIDENCE_DIR is set
   build: { cobol: { compiler: string; flags: string[] }; fortran: { compiler: string; flags: string[] } };
   dependencies: { runtime: number; dev: number };   // npm packages — both 0
 }

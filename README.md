@@ -24,9 +24,9 @@ is still standing — and still in use. Like the code it protects.
 | | Part | What it is | Built with |
 |-|------|------------|-----------|
 | ![](https://img.shields.io/badge/-%20-22B8A7) | **[Rampart](rampart/)** | Security libraries: character policies, IBAN and card validation, card numbers found in free text, PCI DSS masking, strict amount parsing — and a Fortran kernel with SHA-256, HMAC, constant-time comparison and robust statistics behind a C ABI | COBOL, Fortran 2018 |
-| ![](https://img.shields.io/badge/-%20-D9B45A) | **Seal** | An HMAC-SHA256-chained audit ledger that also seals every decision record, verified twice (COBOL + Fortran, and OpenSSL) plus an external anchor | COBOL, Fortran |
+| ![](https://img.shields.io/badge/-%20-D9B45A) | **Seal** | An HMAC-SHA256-chained audit ledger that also seals every decision record, verified twice (COBOL + Fortran, and OpenSSL) plus an Ed25519-signed anchor | COBOL, Fortran |
 | ![](https://img.shields.io/badge/-%20-9B7BFF) | **[Watchtower](watchtower/)** | A static analyzer for the vulnerabilities specific to COBOL and Fortran, with SARIF output for GitHub code scanning | JavaScript |
-| ![](https://img.shields.io/badge/-%20-4C7DFF) | **[Gatehouse](gatehouse/)** | The only door: a hardened gateway that runs the legacy programs without a shell, with an allow-listed environment and resource limits | Node.js, zero dependencies |
+| ![](https://img.shields.io/badge/-%20-4C7DFF) | **[Gatehouse](gatehouse/)** | The only door: a hardened gateway that answers the operator only and runs the legacy programs without a shell, with an allow-listed environment and resource limits | Node.js, zero dependencies |
 | ![](https://img.shields.io/badge/-%20-E5484D) | **Siege** | 29 attacks, each contained by a named layer — in the dashboard *and* in CI | Shared JavaScript |
 | ![](https://img.shields.io/badge/-%20-8B95AE) | **[Lookout](lookout/)** | The dashboard: watch batches flow through the fortress, tamper with the ledger, launch the Siege, scan code in the browser | HTML, CSS, JS — strict CSP, Trusted Types |
 

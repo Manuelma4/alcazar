@@ -517,7 +517,6 @@ export const STRINGS = Object.freeze({
   'siege.announce.start': 'Siege started: {n} attacks, one after another.',
   'siege.announce.contained': '{title}: contained by {by}.',
   'siege.announce.unexpected': '{title}: stopped by {by}, not by the expected layer.',
-  'siege.announce.breach': '{title}: not contained.',
   'siege.announce.done': 'Siege finished: {contained} of {total} contained, {expected} by the expected layer.',
   'siege.payload.request': 'Request',
   'siege.payload.then': 'then',

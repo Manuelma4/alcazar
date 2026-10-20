@@ -177,7 +177,8 @@ function loaderCard(cleanups) {
         setLoaded({ transactions: sample.transactions, source: { kind: 'sample', seed: sample.seed, size: n }, warnings: [] });
         sampleStatus.set('ok', t('tx.loaded', { n: formatInt(sample.transactions.length), source: t('tx.source.label.sample', { seed: sample.seed }) }));
       } catch (error) {
-        sampleStatus.set('error', t('batch.failed', { code: error.code ?? '' }));
+        // The alert banner announces the failure; the status line just clears.
+        sampleStatus.set(null, '');
         mount(errorSlot, errorBanner(error));
       } finally {
         setBusy(go, false);

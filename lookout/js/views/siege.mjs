@@ -294,7 +294,8 @@ function requestLines(scenario, { full = false } = {}) {
 }
 
 function codeWithEscapes(text) {
-  return h('pre', { class: 'codeblock', tabindex: '0' }, splitInvisible(text).map((p) => (p.escaped && p.text !== '\\n' ? h('span', { class: 'esc' }, p.text) : p.text === '\\n' ? '\n' : p.text)));
+  // Focusable (it scrolls) and so named: a reader announces the group, not 187 KiB of JSON.
+  return h('pre', { class: 'codeblock', tabindex: '0', role: 'group', 'aria-label': t('siege.card.payload') }, splitInvisible(text).map((p) => (p.escaped && p.text !== '\\n' ? h('span', { class: 'esc' }, p.text) : p.text === '\\n' ? '\n' : p.text)));
 }
 
 function payloadDisclosure(scenario) {

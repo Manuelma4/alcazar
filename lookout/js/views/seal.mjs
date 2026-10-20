@@ -17,7 +17,7 @@ import { recordView } from '../recordview.mjs';
 import {
   banner, button, card, chip, copyButton, emptyState, errorBanner, preserveFocus, segmented, setBusy, statusLine, viewHeader,
 } from '../ui.mjs';
-import { toast } from '../live.mjs';
+import { announce, toast } from '../live.mjs';
 
 const WINDOW = 40;
 const VERIFIERS = ['cobol-fortran', 'node-openssl', 'anchor'];
@@ -60,7 +60,7 @@ export function render({ param } = {}) {
       const demo = button({ label: t('common.runDemo'), icon: 'play', variant: 'primary', focusKey: 'seal-demo', onClick: () => demoAction(demo) });
       if (store.get('batchBusy')) setBusy(demo, true);
       preserveFocus(body, () => mount(body,
-        ui.notice?.error ? errorBanner(ui.notice.error) : null,
+        ui.notice?.error ? noticeBanner() : null,
         card({ body: emptyState({ icon: 'seal', title: t('seal.none.title'), body: t('seal.none.body'), action: demo }) })));
       return;
     }
@@ -98,7 +98,7 @@ function sections(job, demoAction) {
   if (selIndex < ui.start || selIndex >= ui.start + WINDOW) ui.start = Math.max(0, Math.min(Math.max(0, entries.length - WINDOW), selIndex - 4));
 
   const out = [];
-  if (ui.notice?.error && !ui.notice.refresh) out.push(errorBanner(ui.notice.error));
+  if (ui.notice?.error && !ui.notice.refresh) out.push(noticeBanner());
   out.push(h('div', { class: 'grid grid-2-1 seal-top' }, chainCard(job, stale), tamperCard(job, demoAction)));
   const lastTamper = store.get('lastTamper');
   if (lastTamper) out.push(diffCard(lastTamper));
@@ -106,6 +106,20 @@ function sections(job, demoAction) {
   if (entries.length) out.push(entriesCard(job, states, ghosts, selIndex));
   if (entries[selIndex]) out.push(inspectorCard(entries[selIndex], states[selIndex], lastTamper));
   return out;
+}
+
+/**
+ * The error banner of the current notice, built once: every redraw re-inserts
+ * the same node, and only its first insertion is an alert, so a screen
+ * reader hears the failure once, not on every tile click.
+ */
+function noticeBanner() {
+  if (!ui.notice.banner) {
+    ui.notice.banner = errorBanner(ui.notice.error);
+  } else {
+    ui.notice.banner.removeAttribute('role');
+  }
+  return ui.notice.banner;
 }
 
 // ---------- chain summary + verifiers ----------
@@ -386,6 +400,10 @@ function entriesCard(job, states, ghosts, selIndex) {
     ui.start = Math.max(0, Math.min(Math.max(0, entries.length - 1), ui.start + delta * WINDOW));
     ui.selectedSeq = entries[ui.start]?.seq ?? null;
     store.emit('sealSelection');
+    // Focus stays on the arrow: say what the page now shows.
+    announce(t('seal.chain.sub', {
+      from: formatInt(Math.min(entries.length, ui.start + 1)), to: formatInt(Math.min(entries.length, ui.start + WINDOW)), total: formatInt(entries.length),
+    }));
   };
   const prev = button({ label: '', icon: 'chevron-left', size: 'sm', focusKey: 'seal-prev', attrs: { 'aria-label': t('seal.page.prev'), 'data-focus-fallback': 'seal-next' }, disabled: ui.start === 0, onClick: () => page(-1) });
   const next = button({ label: '', icon: 'chevron-right', size: 'sm', focusKey: 'seal-next', attrs: { 'aria-label': t('seal.page.next'), 'data-focus-fallback': 'seal-prev' }, disabled: end >= entries.length, onClick: () => page(1) });

@@ -34,7 +34,7 @@ export function recordView(record, layout, { separator = '', marks = [], changed
     h('tbody', null, segs.filter((s) => !s.separator).map((s) => h('tr', { class: isChanged(s.start, s.start + s.length) ? 'is-changed' : undefined },
       // A changed field says so in words, not only in red (1.4.1).
       h('th', { scope: 'row', class: 'mono' }, s.name,
-        isChanged(s.start, s.start + s.length) ? h('span', { class: 'rec-changed-tag' }, t('rec.changed')) : null),
+        isChanged(s.start, s.start + s.length) ? [' ', h('span', { class: 'rec-changed-tag' }, t('rec.changed'))] : null),
       h('td', { class: 'num mono' }, `${s.start + 1}\u{2013}${s.start + s.length}`),
       h('td', { class: 'mono break' }, s.text.trim() || '\u{2014}')))));
 

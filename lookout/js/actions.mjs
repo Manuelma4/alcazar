@@ -223,11 +223,10 @@ async function drain() {
     try {
       const outcome = await launchScenario(scenario);
       setScenario(scenario.id, { state: 'done', outcome, at: Date.now() });
-      if (!store.get('siegeRun')?.running) {
+      // A breach is spoken by the card's role=alert verdict, not twice.
+      if (!store.get('siegeRun')?.running && outcome.contained) {
         const by = [outcome.layer ? t(`layer.${outcome.layer}`) : null, outcome.code].filter(Boolean).join(' ');
-        announce(outcome.contained
-          ? t(outcome.asExpected ? 'siege.announce.contained' : 'siege.announce.unexpected', { title: scenario.title, by })
-          : t('siege.announce.breach', { title: scenario.title }));
+        announce(t(outcome.asExpected ? 'siege.announce.contained' : 'siege.announce.unexpected', { title: scenario.title, by }));
       }
       resolve(outcome);
     } catch (error) {

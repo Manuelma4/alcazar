@@ -147,7 +147,7 @@ test-cobol: $(BIN)/test_rampart_cob
 
 check: all test
 	$(NODE) --test
-	$(NODE) watchtower/bin/watchtower.mjs scan rampart apps --fail-on low
+	$(NODE) watchtower/bin/watchtower.mjs scan rampart apps --fail-on info
 
 # Build manifest consumed by Gatehouse's /api/posture endpoint.
 manifest: | $(BUILD)

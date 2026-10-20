@@ -41,7 +41,7 @@ jobs:
       - name: Node.js tests (Gatehouse, Siege, Watchtower, Lookout)
         run: node --test
       - name: Watchtower self-scan (no finding of any severity allowed)
-        run: node watchtower/bin/watchtower.mjs scan rampart apps --fail-on low
+        run: node watchtower/bin/watchtower.mjs scan rampart apps --fail-on info
       - name: Watchtower must still catch every rule in the vulnerable examples
         run: |
           if node watchtower/bin/watchtower.mjs scan examples/vulnerable --fail-on low > /dev/null; then
@@ -101,7 +101,7 @@ jobs:
         uses: ./watchtower
         with:
           paths: rampart apps
-          fail-on: low
+          fail-on: info
       - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         if: always()
         with:

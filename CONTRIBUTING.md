@@ -31,8 +31,9 @@ npm run start:dev   # Gatehouse on http://localhost:8080 with live static reload
   everything Gatehouse already checked, and Gatehouse parses legacy output as
   untrusted data.
 * **Watchtower stays clean.** `node watchtower/bin/watchtower.mjs scan rampart
-  apps --fail-on low` must report nothing. A suppression needs a written
-  justification (`*> watchtower-ignore ALZ-COB-006 -- why it is safe`).
+  apps --fail-on info` must report nothing, at any severity. A suppression
+  needs a written justification
+  (`*> watchtower-ignore ALZ-COB-006 -- why it is safe`).
 * **No bidirectional or invisible characters** anywhere
   (`npm run check:unicode`); write `\u{202E}` escapes in JavaScript instead.
 

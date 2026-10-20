@@ -20,7 +20,7 @@ characters...) and reports them as a terminal report, JSON, or SARIF 2.1.0 for G
 ```sh
 node watchtower/bin/watchtower.mjs scan examples/vulnerable      # intentionally vulnerable samples
 node watchtower/bin/watchtower.mjs scan examples/hardened --fail-on info
-node watchtower/bin/watchtower.mjs scan rampart apps --fail-on low   # what CI runs
+node watchtower/bin/watchtower.mjs scan rampart apps --fail-on info   # what CI runs
 node watchtower/bin/watchtower.mjs rules
 ```
 

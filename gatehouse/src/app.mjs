@@ -2,9 +2,9 @@
 // Gatehouse: the only door into the legacy batch core.
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { STATUS_CODES, createServer } from 'node:http';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { ROOT, VERSION } from './config.mjs';
 import {
   HttpError, checkHost, checkSameOrigin, readJsonBody, securityHeaders, sendError, sendJson,
@@ -34,7 +34,7 @@ const STATIC_MOUNTS = [
 export async function createApp(config, { log = defaultLog } = {}) {
   await mkdir(config.workDir, { recursive: true, mode: 0o700 });
   await reapOrphans(config.workDir, log);
-  const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile);
+  const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile, config.workDir);
   const pipeline = new Pipeline({ config, masterKey });
   masterKey.fill(0);
 
@@ -389,13 +389,18 @@ function compilerName(line, pattern, label) {
 
 /**
  * The 256-bit master key: from a file readable only by its owner (like an
- * SSH private key), or generated per process when none is configured.
+ * SSH private key), or generated per process when none is configured. Never
+ * from inside the job directory, the insider's territory.
  */
-async function loadMasterKey(file) {
+async function loadMasterKey(file, workDir) {
   if (!file) return { key: randomBytes(32), source: 'generated' };
   const info = await stat(file);
   if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) {
     throw new Error(`${file} must not be accessible by group or others (chmod 600)`);
+  }
+  const [real, work] = await Promise.all([realpath(file), realpath(workDir)]);
+  if (real.startsWith(work + sep)) {
+    throw new Error(`${file} is inside the job directory (ALCAZAR_WORK_DIR): keep the master key elsewhere, e.g. on a read-only secret mount`);
   }
   // Bytes from start to finish: a hex string could never be wiped.
   const raw = await readFile(file);

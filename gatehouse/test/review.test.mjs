@@ -3,6 +3,7 @@
 // Gatehouse (process fan-out, slot hoarding, X-Forwarded-For spoofing,
 // leftover card numbers, backslash targets, shutdown, eviction).
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
@@ -271,7 +272,55 @@ describe('Master key file', { skip: SKIP_REASON }, () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('reaches the hardened launcher from a secret mount outside the repository, and never from the job directory', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'alcazar-secret-'));
+    const secrets = join(dir, 'secrets');
+    const work = join(dir, 'work');
+    try {
+      await mkdir(secrets, { mode: 0o700 });
+      await writeFile(join(secrets, 'master.key'), `${'5c'.repeat(32)}\n`, { mode: 0o600 });
+      const run = startHardened({ ALCAZAR_KEY_FILE: join(secrets, 'master.key'), ALCAZAR_WORK_DIR: work });
+      try {
+        const health = await (await fetch(`${await run.ready}api/health`)).json();
+        assert.equal(health.keySource, 'file');
+        assert.equal(health.selftest.status, 'pass');
+      } finally {
+        run.child.kill('SIGTERM');
+        await run.closed;
+      }
+      // A key file that is not there stops the launcher before anything listens.
+      await assert.rejects(startHardened({ ALCAZAR_KEY_FILE: join(secrets, 'absent.key'), ALCAZAR_WORK_DIR: work }).ready, /ALCAZAR_KEY_FILE/);
+      // The job directory is the insider's territory.
+      await writeFile(join(work, 'master.key'), `${'5c'.repeat(32)}\n`, { mode: 0o600 });
+      await assert.rejects(startHardened({ ALCAZAR_KEY_FILE: join(work, 'master.key'), ALCAZAR_WORK_DIR: work }).ready,
+        /"Gatehouse cannot start".*inside the job directory/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
+
+/** `npm start`: the launcher that runs Gatehouse under the permission model. */
+function startHardened(env) {
+  const child = spawn(process.execPath, [join(ROOT, 'scripts', 'start-hardened.mjs')], {
+    env: { ...process.env, ALCAZAR_HOST: '127.0.0.1', ALCAZAR_PORT: '0', ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  const closed = new Promise((resolve) => child.on('close', resolve));
+  const ready = new Promise((resolve, reject) => {
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+      const line = stdout.split('\n').find((l) => l.includes('"Gatehouse listening"'));
+      if (line) resolve(JSON.parse(line).url);
+    });
+    closed.then((code) => reject(new Error(`the launcher exited with ${code}: ${stderr}`)));
+  });
+  return { child, ready, closed };
+}
 
 describe('A verification that cannot complete', { skip: SKIP_REASON }, () => {
   it('leaves the job "not verified", never its last "valid"', async () => {

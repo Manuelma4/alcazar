@@ -9,6 +9,11 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       ALCAZAR_DEMO: "1"
+      # A lasting master key (otherwise a fresh one per start): uncomment
+      # this line, `secrets` below and the top-level `secrets` block.
+      # ALCAZAR_KEY_FILE: /run/secrets/alcazar_master_key
+    # secrets:
+    #   - alcazar_master_key
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
@@ -20,3 +25,10 @@ services:
     mem_limit: 512m
     cpus: 1.0
     restart: unless-stopped
+
+# The key file: 64 lower-case hex digits that only the container's user
+# (uid 10001) may read, mounted read-only and outside the job directory:
+#   (umask 077 && openssl rand -hex 32 > master.key) && sudo chown 10001 master.key
+# secrets:
+#   alcazar_master_key:
+#     file: ./master.key

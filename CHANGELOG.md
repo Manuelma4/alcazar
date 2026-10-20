@@ -30,4 +30,5 @@ First public version.
 * **Lookout** — dashboard with the Siege attack lab (29 attacks), ledger and
   record tampering demo and in-browser code scanning.
 * Docker image with the core compiled and tested at build time, hardened
-  compose file, CI with pinned actions.
+  compose file (the master key as a read-only secret), CI with pinned
+  actions.

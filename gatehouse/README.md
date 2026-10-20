@@ -33,7 +33,7 @@ npm run start:dev  # plain node, static files re-read on every page request
 | `ALCAZAR_PORT` | `8080` | Port. |
 | `ALCAZAR_BIN_DIR` | `build/bin` | Where the legacy programs are. |
 | `ALCAZAR_WORK_DIR` | `var/jobs` | Job directories (`0700`). Use a tmpfs in production. |
-| `ALCAZAR_KEY_FILE` | — | The master key: 64 hex digits, mode `0600` or stricter. Without it a fresh key is generated per process. It stays in Gatehouse; the legacy programs only get sub-keys. |
+| `ALCAZAR_KEY_FILE` | — | The master key: 64 lower-case hex digits, mode `0600` or stricter, never inside the job directory (refused). Without it a fresh key is generated per process. It stays in Gatehouse; the legacy programs only get sub-keys. `npm start` lets Gatehouse read this one file wherever it is: a read-only secret mount such as `/run/secrets` is best (see `compose.yaml`). |
 | `ALCAZAR_API_TOKEN` | — | Require `Authorization: Bearer …` on the API (except `/api/health`). |
 | `ALCAZAR_DEMO` | `1` | Enables the tamper endpoint (ledger and record edits) used by the Siege lab. **Set to `0` in production.** |
 | `ALCAZAR_ALLOWED_HOSTS` | — | Extra host names accepted in the `Host` header. |

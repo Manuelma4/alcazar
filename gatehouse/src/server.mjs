@@ -8,20 +8,27 @@
 import { createApp } from './app.mjs';
 import { loadConfig } from './config.mjs';
 
-const config = loadConfig();
-const app = await createApp(config);
+const logLine = (stream, fields) => stream.write(`${JSON.stringify({ time: new Date().toISOString(), ...fields })}\n`);
+
+let config;
+let app;
+try {
+  config = loadConfig();
+  app = await createApp(config);
+} catch (error) {
+  // A configuration or key-file error: one log line, not a stack trace.
+  logLine(process.stderr, { level: 'error', message: 'Gatehouse cannot start', error: error.message });
+  process.exit(1);
+}
 const address = await app.listen();
 const health = app.health();
-process.stdout.write(
-  `${JSON.stringify({
-    time: new Date().toISOString(),
-    level: 'info',
-    message: 'Gatehouse listening',
-    url: `http://${address.address.includes(':') ? `[${address.address}]` : address.address}:${address.port}/`,
-    selftest: health.selftest.status,
-    demo: config.demo,
-  })}\n`,
-);
+logLine(process.stdout, {
+  level: 'info',
+  message: 'Gatehouse listening',
+  url: `http://${address.address.includes(':') ? `[${address.address}]` : address.address}:${address.port}/`,
+  selftest: health.selftest.status,
+  demo: config.demo,
+});
 
 let closing = false;
 for (const signal of ['SIGINT', 'SIGTERM']) {

@@ -309,6 +309,21 @@ Measured on random look-alikes: IBANs, invoices with dates and phone numbers
 0 %, references 4–8 %, SIRET 1.7 %; every card format tried is found. COBOL
 and the reference model agree on 100,000 fuzzed memos.
 
+### 22. A sandbox also fences off the one secret it needs
+
+`npm start` and the Docker image ran Gatehouse with read access to the
+repository and the job directory only, so a master key kept anywhere else —
+a secret mount such as `/run/secrets`, an operator's `0600` file — was
+denied, and Gatehouse stopped with `ERR_ACCESS_DENIED` before it listened.
+That left two choices: no key file (a fresh key per start, so an auditor can
+never be handed K_ledger for yesterday's ledgers) or a key in the job
+directory, the insider's territory.
+
+*Defence:* the launcher resolves `ALCAZAR_KEY_FILE`, grants read access to
+that one file and nothing beside it, and hands Gatehouse the resolved path.
+Gatehouse refuses a key file inside the job directory. `compose.yaml` shows
+the key as a read-only Docker secret.
+
 ### Not a vulnerability, but you will see it
 
 On Debian 13, every GnuCOBOL program prints *"program compiled against libxml

@@ -146,10 +146,12 @@ async function main() {
     await waitFor(`/changed since it was last verified/.test(document.body.innerText)`);
     await clickText('Verify now');
     await waitFor(`/Chain broken at entry 5/.test(document.body.innerText)`);
+    // The toasts would cover the record: let them go first.
+    await waitFor(`!document.querySelector('.toast')`, 10000);
     await evaluate('window.scrollTo(0, 0)');
     await shoot('seal');
     await scrollTo('Entries 1–40 of');
-    await evaluate('window.scrollBy(0, -40)');
+    await evaluate('window.scrollBy(0, -12)');
     await shoot('seal-chain');
 
     await view('#/siege');

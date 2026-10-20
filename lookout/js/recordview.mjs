@@ -38,10 +38,24 @@ export function recordView(record, layout, { separator = '', marks = [], changed
       h('td', { class: 'num mono' }, `${s.start + 1}\u{2013}${s.start + s.length}`),
       h('td', { class: 'mono break' }, s.text.trim() || '\u{2014}')))));
 
+  const legendWrap = h('div', { class: 'table-wrap rec-legend-wrap' }, legend);
+  // A changed field is the point of the view: bring its row into the
+  // legend's scroll window (the page itself does not move).
+  if (changed.length && typeof ResizeObserver === 'function') {
+    // Once the legend has a layout (it is built detached, then mounted).
+    const observer = new ResizeObserver(() => {
+      const row = legend.querySelector('tbody tr.is-changed');
+      if (!row || !legendWrap.clientHeight) return;
+      observer.disconnect();
+      const offset = row.getBoundingClientRect().top - legendWrap.getBoundingClientRect().top + legendWrap.scrollTop;
+      legendWrap.scrollTop = Math.max(0, offset - legendWrap.clientHeight / 3);
+    });
+    observer.observe(legendWrap);
+  }
   return h('div', { class: 'rec' },
     h('div', { class: 'rec-scroll', tabindex: '0', role: 'group', 'aria-label': caption ?? t('rec.label', { n: record.length }) },
       h('div', { class: 'rec-ruler', 'aria-hidden': 'true' }, ruler(record.length)),
       line,
       markers),
-    h('div', { class: 'table-wrap rec-legend-wrap' }, legend));
+    legendWrap);
 }

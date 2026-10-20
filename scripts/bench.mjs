@@ -57,7 +57,7 @@ const batch = validateBatch({ transactions }, 1000);
 const input = Buffer.concat([Buffer.from(KEY, 'latin1'), txnInLines(batch)]);
 const guard = [];
 for (let i = 0; i < 30; i += 1) guard.push(time(() => run(join(BIN, 'txnguard'), ['j-bench'], work, input)));
-report('TXNGUARD — validate, tokenise, mask and seal 1,000 records (COBOL + Fortran HMAC)', guard, 'records', 1000);
+report('TXNGUARD — read 1,000 records from stdin, validate, tokenise, mask and seal them (COBOL + Fortran HMAC)', guard, 'records', 1000);
 
 // The same program without GnuCOBOL's run-time checks (-debug), to price them.
 const unchecked = join(work, 'txnguard-nodebug');

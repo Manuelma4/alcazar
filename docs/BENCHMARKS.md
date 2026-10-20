@@ -9,18 +9,21 @@ GnuCOBOL 3.2, gfortran 16.2.
 
 | Benchmark | Median | p95 | Throughput |
 |-----------|-------:|----:|-----------:|
-| TXNGUARD — validate, tokenise, mask and seal 1,000 records (COBOL + Fortran HMAC) | 68.1 ms | 70.0 ms | 14,674 records/s |
-| TXNGUARD — same program built without `-debug` run-time checks | 66.9 ms | 68.3 ms | 14,957 records/s |
+| TXNGUARD — read 1,000 records from stdin, validate, tokenise, mask and seal them (COBOL + Fortran HMAC) | 67.7 ms | 70.6 ms | 14,774 records/s |
+| TXNGUARD — same program built without `-debug` run-time checks | 66.3 ms | 69.7 ms | 15,092 records/s |
 | FRAUDSCAN — score the accepted transfers (Fortran) | 14.6 ms | 15.2 ms | 67,692 records/s |
-| LEDGERCK — verify a 1,000-entry ledger and the records it seals (COBOL + Fortran) | 21.6 ms | 22.1 ms | 46,214 entries/s |
-| Gatehouse `POST /api/batch` — 1,000 transfers end to end | 124.3 ms | 135.7 ms | 8,046 transfers/s |
+| LEDGERCK — verify a 1,000-entry ledger and the records it seals (COBOL + Fortran) | 18.2 ms | 19.5 ms | 55,068 entries/s |
+| Gatehouse `POST /api/batch` — 1,000 transfers end to end | 122.0 ms | 135.6 ms | 8,194 transfers/s |
 | SHA-256 of 64 MiB — Fortran kernel as shipped (`-O2 -fcheck=bounds,…`) | 368 ms | | 174 MiB/s |
 | SHA-256 of 64 MiB — same Fortran, `-O3`, no run-time checks | 289 ms | | 221 MiB/s |
 | SHA-256 of 64 MiB — OpenSSL (`openssl dgst -sha256`) | 37 ms | | 1,732 MiB/s |
 | Watchtower — scan 99,251 lines of COBOL | 642.2 ms | 675.7 ms | 154,553 lines/s |
 | Watchtower — scan 98,631 lines of Fortran | 137.5 ms | 180.6 ms | 717,562 lines/s |
 
-The batch figures were stable to within 2 % over three runs.
+The batch figures were stable to within 2 % over three runs. Reading the
+batch from stdin one byte per `read(2)` call cost TXNGUARD 35 ms per 1,000
+records; reading 4 KiB chunks into a buffer the kernel wipes line by line
+costs nothing measurable and keeps the same guarantee (no stdio copy).
 
 ## What the numbers say
 

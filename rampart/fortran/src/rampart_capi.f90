@@ -34,6 +34,12 @@ module rampart_capi
   public :: capi_ct_equal, capi_hex_decode, capi_hex_encode, capi_zeroize, capi_selftest
   public :: capi_read_line, capi_expect_eof
 
+  !> Standard input, read with read(2) in chunks into this buffer: no stdio
+  !> or run-time copy, and every line is wiped from it once handed over.
+  integer, parameter :: IN_CHUNK = 4096
+  integer(c_int8_t), target :: in_buf(IN_CHUNK) = 0_c_int8_t
+  integer :: in_pos = 1, in_len = 0
+
   interface
     !> POSIX read(2). ssize_t has the width of ptrdiff_t on every POSIX ABI.
     function posix_read(fd, buf, count) result(got) bind(C, name='read')
@@ -197,68 +203,97 @@ contains
   end function capi_zeroize
 
   !> int32_t alz_read_line(uint8_t *buf, const int32_t *cap, int32_t *len)
-  !> One line from standard input, read with read(2) one byte at a time: no
-  !> stdio or language run-time buffer ever holds it, so the caller's buffer
-  !> is the only copy in the process and wiping it wipes the line. The line
-  !> feed is consumed, not stored. ALZ_OK; ALZ_E_EOF at the end of input
-  !> (nothing read); ALZ_E_TRUNCATED when input ends inside a line, before
-  !> its line feed; ALZ_E_CAPACITY when the line is longer than cap (the rest
-  !> of it stays unread); ALZ_E_IO when read fails. In each of these cases
-  !> the bytes read are wiped and len is 0.
+  !> One line from standard input. Bytes come from read(2), in chunks, into
+  !> a buffer of this module - never stdio's or the language run time's -
+  !> and each line is wiped from that buffer as soon as it is handed over,
+  !> so the caller's buffer is the only copy in the process. The line feed
+  !> is consumed, not stored. ALZ_OK; ALZ_E_EOF at the end of input (nothing
+  !> read); ALZ_E_TRUNCATED when input ends inside a line, before its line
+  !> feed; ALZ_E_CAPACITY when the line is longer than cap (the rest of it
+  !> stays unread); ALZ_E_IO when read fails. In each of these cases the
+  !> bytes read are wiped and len is 0.
   function capi_read_line(buf, cap, out_len) result(rc) bind(C, name='alz_read_line')
     integer(c_int8_t), intent(inout) :: buf(*)
     integer(c_int32_t), intent(in) :: cap
     integer(c_int32_t), intent(out) :: out_len
     integer(c_int32_t) :: rc
-    integer(c_int8_t), target :: byte(1)
-    integer(c_ptrdiff_t) :: got
+    integer(c_int8_t) :: byte
+    integer :: first
 
     out_len = 0
     rc = ALZ_E_LENGTH
     if (.not. valid_length(cap)) return
+    first = in_pos
     do
-      got = posix_read(0_c_int, c_loc(byte), 1_c_size_t)
-      if (got /= 1_c_ptrdiff_t) then
-        rc = ALZ_E_IO
-        if (got == 0_c_ptrdiff_t) rc = merge(ALZ_E_EOF, ALZ_E_TRUNCATED, out_len == 0)
-        exit
+      if (in_pos > in_len) then
+        if (.not. refill_input(rc, out_len == 0)) exit
+        first = 1
       end if
-      if (byte(1) == 10_c_int8_t) then
+      byte = in_buf(in_pos)
+      in_pos = in_pos + 1
+      if (byte == 10_c_int8_t) then
         rc = ALZ_OK
         exit
       end if
       if (out_len == cap) then
+        in_pos = in_pos - 1
         rc = ALZ_E_CAPACITY
         exit
       end if
       out_len = out_len + 1
-      buf(out_len) = byte(1)
+      buf(out_len) = byte
     end do
-    call zeroize(byte)
+    if (in_pos > first) call zeroize(in_buf(first:in_pos - 1))
+    byte = 0_c_int8_t
     if (rc /= ALZ_OK) then
       call zeroize(buf(1:out_len))
       out_len = 0
     end if
   end function capi_read_line
 
-  !> int32_t alz_expect_eof(void) — ALZ_OK when standard input has nothing
+  !> int32_t alz_expect_eof(void) - ALZ_OK when standard input has nothing
   !> left: a program given more than it needs (a key it must not hold)
-  !> refuses to run. The byte read, if any, is wiped.
+  !> refuses to run. Whatever was left is wiped.
   function capi_expect_eof() result(rc) bind(C, name='alz_expect_eof')
     integer(c_int32_t) :: rc
-    integer(c_int8_t), target :: byte(1)
+
+    if (in_pos <= in_len) then
+      rc = ALZ_E_CAPACITY
+      call zeroize(in_buf)
+      in_pos = 1
+      in_len = 0
+    else if (refill_input(rc, .true.)) then
+      rc = ALZ_E_CAPACITY
+      call zeroize(in_buf)
+      in_pos = 1
+      in_len = 0
+    else if (rc == ALZ_E_EOF) then
+      rc = ALZ_OK
+    end if
+  end function capi_expect_eof
+
+  !> Wipe the input buffer and read the next chunk into it. False at the end
+  !> of input (rc ALZ_E_EOF when `clean`, i.e. nothing of a line was read
+  !> yet, else ALZ_E_TRUNCATED) or on a read error (rc ALZ_E_IO).
+  logical function refill_input(rc, clean)
+    integer(c_int32_t), intent(out) :: rc
+    logical, intent(in) :: clean
     integer(c_ptrdiff_t) :: got
 
-    got = posix_read(0_c_int, c_loc(byte), 1_c_size_t)
-    if (got == 0_c_ptrdiff_t) then
+    call zeroize(in_buf)
+    in_pos = 1
+    in_len = 0
+    got = posix_read(0_c_int, c_loc(in_buf), int(IN_CHUNK, c_size_t))
+    refill_input = got > 0_c_ptrdiff_t
+    if (refill_input) then
+      in_len = int(got)
       rc = ALZ_OK
-    else if (got > 0_c_ptrdiff_t) then
-      rc = ALZ_E_CAPACITY
+    else if (got == 0_c_ptrdiff_t) then
+      rc = merge(ALZ_E_EOF, ALZ_E_TRUNCATED, clean)
     else
       rc = ALZ_E_IO
     end if
-    call zeroize(byte)
-  end function capi_expect_eof
+  end function refill_input
 
   !> int32_t alz_selftest(void) — ALZ_OK when every known-answer test passes.
   function capi_selftest() result(rc) bind(C, name='alz_selftest')

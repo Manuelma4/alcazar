@@ -279,8 +279,9 @@ buffer and in the COBOL run time's line buffer, which no program can reach to
 wipe.
 
 *Defence:* the keys are read with `alz_read_line` (Rampart's C ABI): `read(2)`
-one byte at a time straight into the COBOL field, so the field is the only
-copy; the same scan then finds none. `alz_expect_eof` then makes a program
+into a buffer of the Fortran kernel that is wiped line by line as each line
+is handed over, so the COBOL field is the only copy left; the same scan then
+finds none. `alz_expect_eof` then makes a program
 refuse to run when stdin holds more than its own keys — LEDGERCK handed
 K-token too is refused. Gatehouse decodes the master key file byte by byte
 as well; the hex never becomes a JavaScript string.

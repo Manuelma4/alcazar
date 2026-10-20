@@ -59,7 +59,7 @@ function build(scenarios, cleanups) {
   // Run state lives in the store (siegeRun), so leaving and coming back
   // mid-siege shows the same progress, Stop button and result.
   const progressBar = h('span');
-  const progress = h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(scenarios.length), 'aria-valuenow': '0', 'aria-label': t('siege.launchAll') }, progressBar);
+  const progress = h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(scenarios.length), 'aria-valuenow': '0', 'aria-label': t('siege.progress.label') }, progressBar);
   const progressText = h('p', { class: 'small text-2' });
   const launchAll = button({ label: t('siege.launchAll'), icon: 'siege', variant: 'primary', focusKey: 'siege-all', onClick: () => launchSiege(visibleScenarios()) });
   const stop = button({ label: t('siege.stop'), icon: 'stop', variant: 'ghost', focusKey: 'siege-stop', onClick: () => stopSiege() });
@@ -140,6 +140,8 @@ function build(scenarios, cleanups) {
       stop.hidden = false;
     } else {
       setBusy(launchAll, false);
+      // Stop hides itself when the run ends: focus must not fall to <body>.
+      if (stop.contains(document.activeElement)) launchAll.focus({ preventScroll: true });
       stop.hidden = true;
       if (run?.finishedAt) renderResult(runList(run), run);
     }
@@ -179,8 +181,14 @@ function scenarioCard(scenario) {
   const ex = scenario.expected;
   const layer = LAYERS[ex.layer] ? ex.layer : 'gatehouse';
   const outcomeSlot = h('div', { class: 'siege-outcome' });
-  const launchBtn = button({ label: t('siege.card.launch'), icon: 'play', size: 'sm', focusKey: `siege-${scenario.id}`, onClick: () => launch(scenario) });
   const titleId = `siege-${scenario.id}`;
+  // 29 buttons say "Launch": each is described by its attack's title.
+  const launchBtn = button({ label: t('siege.card.launch'), icon: 'play', size: 'sm', focusKey: `siege-${scenario.id}`, onClick: () => launch(scenario), attrs: { 'aria-describedby': titleId } });
+  // Busy, not disabled: a disabled button drops the keyboard focus it holds.
+  const setLaunchable = (yes) => {
+    if (yes) launchBtn.removeAttribute('aria-disabled');
+    else launchBtn.setAttribute('aria-disabled', 'true');
+  };
   const el = h('article', { class: ['siege-card', `layer-${layer}`], 'aria-labelledby': titleId },
     h('div', { class: 'siege-card-top' },
       h('span', { class: 'eyebrow' }, t.has(`siege.cat.${scenario.category}`) ? t(`siege.cat.${scenario.category}`) : scenario.category),
@@ -202,17 +210,17 @@ function scenarioCard(scenario) {
     el.classList.remove('is-running', 'is-ok', 'is-unexpected', 'is-breach', 'is-error', 'is-queued');
     if (!state || state.state === 'idle') {
       mount(outcomeSlot);
-      launchBtn.disabled = false;
+      setLaunchable(true);
       launchBtn.querySelector('span').textContent = t('siege.card.launch');
       return;
     }
     if (state.state === 'queued' || state.state === 'running') {
       el.classList.add(state.state === 'queued' ? 'is-queued' : 'is-running');
-      launchBtn.disabled = true;
+      setLaunchable(false);
       mount(outcomeSlot, h('p', { class: 'siege-status is-busy' }, icon(state.state === 'queued' ? 'clock' : 'spinner', { size: 16 }), t(state.state === 'queued' ? 'siege.card.queued' : 'siege.card.running')));
       return;
     }
-    launchBtn.disabled = false;
+    setLaunchable(true);
     launchBtn.querySelector('span').textContent = t('siege.card.relaunch');
     if (state.state === 'error') {
       el.classList.add('is-error');
@@ -307,7 +315,10 @@ function payloadDisclosure(scenario) {
         size: 'sm',
         variant: 'ghost',
         onClick: () => {
-          more.replaceWith(codeWithEscapes(requestLines(scenario, { full: true })));
+          // The button replaces itself: focus moves to what replaced it.
+          const full = codeWithEscapes(requestLines(scenario, { full: true }));
+          more.replaceWith(full);
+          full.focus();
         },
       });
       children.push(more);

@@ -76,8 +76,8 @@ async function submit(transactions, source) {
     }));
     return job;
   } catch (error) {
+    // The views show failures in a role=alert banner: announced once, there.
     store.patch({ batchBusy: false, batchError: error });
-    announce(t('batch.failed', { code: error.code ?? '' }));
     return null;
   }
 }
@@ -96,7 +96,6 @@ export async function runDemo() {
     sample = await api.sample(200, 42);
   } catch (error) {
     store.patch({ batchBusy: false, batchError: error });
-    announce(t('batch.failed', { code: error.code ?? '' }));
     return null;
   }
   return submit(sample.transactions, { kind: 'sample', size: 200, seed: sample.seed });
@@ -255,10 +254,12 @@ export async function launchSiege(scenarios) {
   cancelled = false;
   const run = { running: true, done: 0, total: scenarios.length, ids: scenarios.map((s) => s.id), startedAt: Date.now(), finishedAt: null, current: null };
   store.set('siegeRun', run);
+  // Announced at the start and at the end only: one sentence per attack
+  // would flood the screen reader's queue (the progress bar has the rest).
+  announce(t('siege.announce.start', { n: run.total }));
   for (const scenario of scenarios) {
     if (cancelled) break;
     store.set('siegeRun', { ...store.get('siegeRun'), current: scenario.id });
-    announce(t('siege.announce.step', { i: run.done + 1, n: run.total, title: scenario.title }));
     await launch(scenario);
     run.done += 1;
     store.set('siegeRun', { ...store.get('siegeRun'), done: run.done });

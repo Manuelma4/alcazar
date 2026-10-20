@@ -138,5 +138,5 @@ export function histogramChart(data, { label }) {
     h('li', null, h('span', { class: 'legend-median' }), t('tx.hist.median')));
 
   const stop = responsive(wrap, draw);
-  return { el: h('div', null, legend, wrap), destroy: stop, bins };
+  return { el: h('div', null, legend, wrap), destroy: () => { stop(); tip.off(); }, bins };
 }

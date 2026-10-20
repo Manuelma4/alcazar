@@ -148,7 +148,7 @@ async function main() {
     await waitFor(`/Chain broken at entry 5/.test(document.body.innerText)`);
     await evaluate('window.scrollTo(0, 0)');
     await shoot('seal');
-    await scrollTo('1–40 of');
+    await scrollTo('Entries 1–40 of');
     await evaluate('window.scrollBy(0, -40)');
     await shoot('seal-chain');
 

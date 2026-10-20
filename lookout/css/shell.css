@@ -187,7 +187,9 @@
   .nav-short { display: block; font-size: .6875rem; font-weight: 650; }
   .nav-link[aria-current="page"]::before { left: -8px; }
   .sidebar-foot { padding: 12px 8px 16px; justify-items: center; }
-  .sidebar-foot .foot-meta, .sidebar-foot .health-mini-text { display: none; }
+  .sidebar-foot .foot-meta { display: none; }
+  /* Hidden from sight only: the health state stays in words for screen readers. */
+  .sidebar-foot .health-mini-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .topbar { padding: 10px 24px; }
   .main { padding: 28px 24px 44px; }
   .site-foot { padding: 18px 24px 24px; }

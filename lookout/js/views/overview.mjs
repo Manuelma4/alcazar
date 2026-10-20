@@ -17,7 +17,8 @@ export function render() {
   const cleanups = [];
 
   // ---------- hero ----------
-  const status = statusLine();
+  // runDemo announces its progress; failures arrive as an alert banner.
+  const status = statusLine({ live: false });
   const errorSlot = h('div');
   const demoBtn = button({ label: t('overview.cta.demo'), icon: 'play', variant: 'primary', onClick: onDemo });
   async function onDemo() {

@@ -350,7 +350,13 @@ function scannerCard(scanner, cleanups) {
   }
   openExampleHook = (path) => {
     loadSample(path);
-    document.getElementById('wt-editor-card')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    const target = document.getElementById('wt-editor-card');
+    if (!target) return;
+    // Move focus with the page, so the next Tab starts in the scanner.
+    const heading = target.querySelector('h2, h3');
+    if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    (heading ?? target).focus({ preventScroll: true });
+    target.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
   };
   cleanups.push(() => { openExampleHook = null; });
 

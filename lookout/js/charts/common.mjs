@@ -28,10 +28,17 @@ export function responsive(host, draw) {
   };
 }
 
-/** Tooltip living inside `host` (which must be position: relative). */
+/**
+ * Tooltip living inside `host` (which must be position: relative). Escape
+ * dismisses it without moving the pointer or the focus (1.4.13).
+ */
 export function createTooltip(host) {
   const tip = h('div', { class: 'chart-tip', role: 'presentation', 'aria-hidden': 'true' });
   host.append(tip);
+  const onKey = (event) => {
+    if (event.key === 'Escape') tip.classList.remove('is-on');
+  };
+  document.addEventListener('keydown', onKey);
   return {
     show(content, x, y) {
       tip.replaceChildren(...[].concat(content));
@@ -46,6 +53,10 @@ export function createTooltip(host) {
     },
     hide() {
       tip.classList.remove('is-on');
+    },
+    /** Remove the Escape listener (the chart's destroy calls it). */
+    off() {
+      document.removeEventListener('keydown', onKey);
     },
   };
 }

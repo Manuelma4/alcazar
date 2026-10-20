@@ -206,7 +206,7 @@ function liveCard(headers) {
       columns: [
         { key: 'name', label: t('col.name'), render: (r) => h('span', { class: 'mono strong nowrap' }, r.name) },
         { key: 'value', label: t('col.value'), render: (r) => h('span', { class: 'mono' }, r.value) },
-        { key: 'info', label: '', render: (r) => h('span', { class: 'small text-2' }, r.info) },
+        { key: 'info', label: t('col.meaning'), render: (r) => h('span', { class: 'small text-2' }, r.info) },
       ],
       rows: [...csp].map(([name, value]) => ({ name, value: value.join(' '), info: t.has(`dir.${name}`) ? t(`dir.${name}`) : '' })),
       stack: true,
@@ -270,7 +270,7 @@ function headersCard(headers, live) {
       columns: [
         { key: 'name', label: t('col.name'), render: (r) => h('span', { class: 'mono strong' }, r.name) },
         { key: 'value', label: t('col.value'), render: (r) => h('span', { class: 'mono small break' }, r.value) },
-        { key: 'info', label: '', render: (r) => h('span', { class: 'small text-2' }, r.info) },
+        { key: 'info', label: t('col.meaning'), render: (r) => h('span', { class: 'small text-2' }, r.info) },
         {
           key: 'live',
           label: t('def.headers.live'),

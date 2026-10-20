@@ -74,5 +74,5 @@ export function benfordChart(benford, { label }) {
     h('li', null, h('span', { class: 'legend-line' }), t('tx.benford.expected')));
 
   const stop = responsive(wrap, draw);
-  return { el: h('div', null, legend, wrap), destroy: stop };
+  return { el: h('div', null, legend, wrap), destroy: () => { stop(); tip.off(); } };
 }

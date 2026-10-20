@@ -21,8 +21,13 @@ export function announce(message) {
   }, 40);
 }
 
-/** A short visual confirmation (also announced through the toast live region). */
-export function toast(message, { tone = 'ok', ms = 3200 } = {}) {
+/**
+ * A short visual confirmation. The toast area is not a live region: the
+ * message is announced once through the announcer, unless `silent` says the
+ * action that produced it already announced it.
+ */
+export function toast(message, { tone = 'ok', ms = 3200, silent = false } = {}) {
+  if (!silent) announce(message);
   if (!toasts) return;
   const el = h('div', { class: ['toast', `tone-${tone}`] },
     icon(tone === 'danger' ? 'alert' : tone === 'info' ? 'info' : 'check-circle', { size: 18 }),

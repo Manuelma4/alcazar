@@ -121,7 +121,7 @@ function chainCard(job, stale) {
       ui.notice = null;
       toast(result.valid
         ? t('seal.announce.valid', { entries: formatInt(result.entries), n: result.verifiedBy.length })
-        : t('seal.announce.broken', { reason: result.reason ?? '', seq: result.brokenAt ?? '' }), { tone: result.valid ? 'ok' : 'danger' });
+        : t('seal.announce.broken', { reason: result.reason ?? '', seq: result.brokenAt ?? '' }), { tone: result.valid ? 'ok' : 'danger', silent: true });
     } catch (error) {
       ui.notice = { error };
       store.emit('sealSelection');
@@ -223,7 +223,7 @@ function tamperCard(job, demoAction) {
       }
       if (!result) return;
       ui.selectedSeq = seq;
-      toast(t('seal.tamper.done', { seq, mode: t(`seal.mode.${ui.mode}`).toLowerCase() }));
+      toast(t('seal.tamper.done', { seq, mode: t(`seal.mode.${ui.mode}`).toLowerCase() }), { silent: true });
       ui.notice = result.refreshError ? { error: result.refreshError, refresh: true } : null;
       store.emit('sealSelection');
     } catch (error) {
@@ -235,6 +235,7 @@ function tamperCard(job, demoAction) {
   const modes = segmented({
     name: 'tamper-mode',
     legend: t('seal.tamper.mode'),
+    describedBy: 'tamper-desc',
     value: ui.mode,
     options: MODES.map((m) => ({ value: m, label: t(`seal.mode.${m}`), icon: MODE_ICONS[m] })),
     onChange: (m) => {
@@ -308,7 +309,7 @@ function mapCard(job, states, ghosts, breakIndex, selIndex) {
       width: '100%',
       class: 'ledger-map-svg',
       role: 'img',
-      'aria-label': t('seal.map.label', { total: formatInt(entries.length) }),
+      'aria-label': mapSummary(job, states, breakIndex),
     });
     cells.forEach((c, k) => {
       const x = (k % cols) * (cell + gap);
@@ -336,6 +337,16 @@ function mapCard(job, states, ghosts, breakIndex, selIndex) {
     ? button({ label: t('seal.jump.broken'), icon: 'link-broken', size: 'sm', variant: 'danger', focusKey: 'seal-jump', onClick: () => select(target.seq) })
     : null;
   return card({ title: t('seal.chain.title'), sub: t('seal.map.hint'), actions: jump, className: 'map-card', body: [host, legend] });
+}
+
+/** What the map shows, in words: its cells are a mouse shortcut only. */
+function mapSummary(job, states, breakIndex) {
+  const total = formatInt(job.ledger.entries.length);
+  if (breakIndex !== null) {
+    const entry = job.ledger.entries[Math.min(breakIndex, job.ledger.entries.length - 1)];
+    return t('seal.map.summary.broken', { total, seq: entry?.seq ?? breakIndex + 1 });
+  }
+  return states.every((s) => s === 'verified') ? t('seal.map.summary.ok', { total }) : t('seal.map.summary.unknown', { total });
 }
 
 function select(seq) {
@@ -376,8 +387,8 @@ function entriesCard(job, states, ghosts, selIndex) {
     ui.selectedSeq = entries[ui.start]?.seq ?? null;
     store.emit('sealSelection');
   };
-  const prev = button({ label: '', icon: 'chevron-left', size: 'sm', focusKey: 'seal-prev', attrs: { 'aria-label': t('seal.page.prev') }, disabled: ui.start === 0, onClick: () => page(-1) });
-  const next = button({ label: '', icon: 'chevron-right', size: 'sm', focusKey: 'seal-next', attrs: { 'aria-label': t('seal.page.next') }, disabled: end >= entries.length, onClick: () => page(1) });
+  const prev = button({ label: '', icon: 'chevron-left', size: 'sm', focusKey: 'seal-prev', attrs: { 'aria-label': t('seal.page.prev'), 'data-focus-fallback': 'seal-next' }, disabled: ui.start === 0, onClick: () => page(-1) });
+  const next = button({ label: '', icon: 'chevron-right', size: 'sm', focusKey: 'seal-next', attrs: { 'aria-label': t('seal.page.next'), 'data-focus-fallback': 'seal-prev' }, disabled: end >= entries.length, onClick: () => page(1) });
   const chain = h('ol', { class: 'chain', 'aria-label': t('seal.chain.title') }, items);
   // keep the selected tile in view inside the scroller (without moving the page)
   requestAnimationFrame(() => {
@@ -401,7 +412,7 @@ function entryTile(entry, state, selected) {
       type: 'button',
       class: 'tile-btn',
       dataset: { focusKey: `tile-${entry.seq}` },
-      'aria-pressed': selected ? 'true' : 'false',
+      'aria-current': selected ? 'true' : undefined,
       on: { click: () => select(entry.seq) },
     },
     h('span', { class: 'sr-only' }, `${t('seal.tile.inspect')} `),

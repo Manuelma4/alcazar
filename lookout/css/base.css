@@ -28,6 +28,8 @@
   --text-2: #B6BFD4;
   --muted: #8B95AE;
   --faint: #5D6782;
+  /* Borders of fields and controls: >= 3:1 against every surface (1.4.11). */
+  --field-line: #6B7590;
 
   /* gold leaf (structure, headings, focus) */
   --gold: #E2BF63;
@@ -89,7 +91,7 @@
     --bg: #F6F1E7; --bg-2: #EFE8DA; --surface: #FFFCF5; --surface-2: #FBF6EC; --surface-3: #F3ECDE; --surface-sunk: #F4EEE2;
     --overlay: rgba(40, 32, 18, .38);
     --line: rgba(58, 42, 12, .1); --line-2: rgba(58, 42, 12, .16); --line-3: rgba(58, 42, 12, .28);
-    --text: #1B2236; --text-2: #3A4359; --muted: #5B6478; --faint: #8C93A3;
+    --text: #1B2236; --text-2: #3A4359; --muted: #5B6478; --faint: #8C93A3; --field-line: #80889A;
     --gold: #AF8D1E; --gold-bright: #D9B54A; --gold-ink: #7A5C14; --gold-display: #8F6F18; --gold-wash: rgba(175, 141, 30, .11); --gold-line: rgba(122, 92, 20, .32);
     --on-gold: #1B1406; --focus: #1A4CC4;
     --gatehouse: #1A4CC4;  --gatehouse-ink: #1A4CC4;  --gatehouse-wash: rgba(26, 76, 196, .09);
@@ -118,7 +120,7 @@
   --bg: #F6F1E7; --bg-2: #EFE8DA; --surface: #FFFCF5; --surface-2: #FBF6EC; --surface-3: #F3ECDE; --surface-sunk: #F4EEE2;
   --overlay: rgba(40, 32, 18, .38);
   --line: rgba(58, 42, 12, .1); --line-2: rgba(58, 42, 12, .16); --line-3: rgba(58, 42, 12, .28);
-  --text: #1B2236; --text-2: #3A4359; --muted: #5B6478; --faint: #8C93A3;
+  --text: #1B2236; --text-2: #3A4359; --muted: #5B6478; --faint: #8C93A3; --field-line: #80889A;
   --gold: #AF8D1E; --gold-bright: #D9B54A; --gold-ink: #7A5C14; --gold-display: #8F6F18; --gold-wash: rgba(175, 141, 30, .11); --gold-line: rgba(122, 92, 20, .32);
   --on-gold: #1B1406; --focus: #1A4CC4;
   --gatehouse: #1A4CC4;  --gatehouse-ink: #1A4CC4;  --gatehouse-wash: rgba(26, 76, 196, .09);
@@ -149,6 +151,10 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   scroll-padding-top: calc(var(--topbar-h) + 16px);
+}
+/* The bottom tab bar must not cover what has focus (2.4.11). */
+@media (max-width: 719px) {
+  html { scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px); }
 }
 body {
   margin: 0;

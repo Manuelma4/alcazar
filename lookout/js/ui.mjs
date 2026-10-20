@@ -124,7 +124,11 @@ export function preserveFocus(root, render) {
   const key = inside ? active.dataset?.focusKey ?? (active.id ? `#${active.id}` : null) : null;
   render();
   if (!key) return;
-  const next = key.startsWith('#') ? root.querySelector(`#${CSS.escape(key.slice(1))}`) : root.querySelector(`[data-focus-key="${CSS.escape(key)}"]`);
+  const find = (k) => (k.startsWith('#') ? root.querySelector(`#${CSS.escape(k.slice(1))}`) : root.querySelector(`[data-focus-key="${CSS.escape(k)}"]`));
+  let next = find(key);
+  // A control that is disabled now hands focus to its declared fallback
+  // (data-focus-fallback) rather than dropping it to <body>.
+  if (next?.disabled && next.dataset.focusFallback) next = find(next.dataset.focusFallback);
   if (next && !next.disabled) next.focus({ preventScroll: true });
 }
 
@@ -174,9 +178,9 @@ export function kpi({ label, value, sub, layer, icon: iconName, empty = false, t
  * Segmented control on native radio inputs (arrow keys, form semantics and
  * screen-reader support for free).
  */
-export function segmented({ name, legend, options, value, onChange, iconOnly = false, className }) {
+export function segmented({ name, legend, options, value, onChange, iconOnly = false, className, describedBy }) {
   const groupName = `${name}-${uid('seg')}`;
-  return h('fieldset', { class: ['seg', iconOnly && 'icon-only', className] },
+  return h('fieldset', { class: ['seg', iconOnly && 'icon-only', className], 'aria-describedby': describedBy },
     h('legend', null, legend),
     options.map((opt) => h('label', { class: 'seg-opt', title: iconOnly ? opt.label : opt.title },
       h('input', {
@@ -300,11 +304,15 @@ export function escapedText(value, { className } = {}) {
     : p.text)));
 }
 
-/** A live status line (role=status) for long operations. */
-export function statusLine() {
+/**
+ * A status line for long operations: a live region (role=status), or just
+ * visual (`live: false`) when the action behind it announces its own
+ * progress — one owner per event, never two announcements.
+ */
+export function statusLine({ live = true } = {}) {
   const iconSlot = h('span', { class: 'status-icon' });
   const textSlot = h('span', null);
-  const el = h('p', { class: 'status-line', role: 'status', 'aria-live': 'polite' }, iconSlot, textSlot);
+  const el = h('p', { class: 'status-line', role: live ? 'status' : undefined, 'aria-live': live ? 'polite' : undefined }, iconSlot, textSlot);
   return {
     el,
     set(state, message) {

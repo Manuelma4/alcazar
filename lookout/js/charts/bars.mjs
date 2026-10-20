@@ -74,5 +74,5 @@ export function reasonBars(rows, { label, total, markClass = 'mark-cobol' }) {
   };
 
   const stop = responsive(wrap, draw);
-  return { el: wrap, destroy: stop };
+  return { el: wrap, destroy: () => { stop(); tip.off(); } };
 }

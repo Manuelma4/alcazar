@@ -63,10 +63,21 @@ export function render() {
 function loaderCard(cleanups) {
   const panel = h('div', { class: 'loader-panel' });
   const loadedSlot = h('div', { class: 'stack' });
-  const status = statusLine();
+  // runBatch announces sending / done; failures arrive as an alert banner.
+  const status = statusLine({ live: false });
   const errorSlot = h('div');
   const runBtn = button({ label: t('tx.run'), icon: 'play', variant: 'primary', onClick: onRun });
-  const clearBtn = button({ label: t('tx.clear'), icon: 'x', variant: 'ghost', size: 'sm', onClick: () => setLoaded(null) });
+  const clearBtn = button({
+    label: t('tx.clear'),
+    icon: 'x',
+    variant: 'ghost',
+    size: 'sm',
+    onClick: () => {
+      setLoaded(null);
+      // Clear hides itself: hand focus to the chosen source instead.
+      panel.closest('section')?.querySelector('input[type=radio]:checked')?.focus();
+    },
+  });
 
   function setLoaded(value) {
     ui.loaded = value;
@@ -129,7 +140,13 @@ function loaderCard(cleanups) {
         verdict: job.ledger.verification.valid ? t('batch.sealOk') : t('batch.sealBad'),
       }));
       ui.page = 0;
-      document.getElementById('tx-results-title')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      // The results are below: move focus there, not just the page.
+      const results = document.getElementById('tx-results-title');
+      if (results) {
+        if (!results.hasAttribute('tabindex')) results.setAttribute('tabindex', '-1');
+        results.focus({ preventScroll: true });
+        results.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      }
     } else {
       status.set('error', t('batch.failed', { code: store.get('batchError')?.code ?? '' }));
       const error = store.get('batchError');

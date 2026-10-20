@@ -7,7 +7,7 @@ import { t } from './strings.mjs';
 import { ROUTES, parseHash, href } from './router.mjs';
 import { store } from './store.mjs';
 import { readPref, writePref } from './prefs.mjs';
-import { initLive, announce } from './live.mjs';
+import { initLive } from './live.mjs';
 import { loadHealth, restoreJob } from './actions.mjs';
 import { formatCountdown, shortHash, formatInt } from './format.mjs';
 import { segmented, iconButton } from './ui.mjs';
@@ -115,17 +115,21 @@ function renderHealthMini() {
   const health = store.get('health');
   const error = store.get('healthError');
   let tone = 'tone-muted';
+  let glyph = 'clock';
   let label = t('health.checking');
   if (error) {
     tone = 'tone-danger';
+    glyph = 'alert';
     label = t('health.unreachable');
   } else if (health) {
     const ok = health.status === 'ok' && health.selftest.status === 'pass';
     tone = ok ? 'tone-ok' : 'tone-warn';
+    glyph = ok ? 'check' : 'alert';
     label = ok ? t('health.ok', { version: health.version }) : t('health.degraded');
   }
+  // A shape, not only a colour, for when the text is visually hidden.
   mount(healthMini,
-    h('span', { class: ['dot', tone], 'aria-hidden': 'true' }),
+    h('span', { class: ['job-seal', tone], 'aria-hidden': 'true' }, icon(glyph, { size: 13 })),
     h('span', { class: 'health-mini-text' }, label));
   healthMini.setAttribute('title', label);
 }
@@ -151,13 +155,18 @@ function renderJobChip() {
   };
   tick();
   ttlTimer = setInterval(tick, 1000);
+  // The seal's state as a shape and in words, not only as a colour (1.4.1).
+  const v = job.ledger.verification;
+  const seal = v.stale ? 'stale' : v.valid ? 'valid' : v.reason === null ? 'unverified' : 'broken';
+  const sealTone = { stale: 'tone-warn', valid: 'tone-ok', unverified: 'tone-warn', broken: 'tone-danger' }[seal];
+  const sealIcon = { stale: 'clock', valid: 'check', unverified: 'alert', broken: 'link-broken' }[seal];
   mount(jobSlot, h('a', {
     class: 'job-chip',
     href: href('transactions'),
-    title: t('job.title', { id: job.job }),
+    title: `${t('job.title', { id: job.job })} \u{00B7} ${t(`job.seal.${seal}`)}`,
   },
-  h('span', { class: ['dot', job.ledger.verification.stale ? 'tone-warn' : job.ledger.verification.valid ? 'tone-ok' : 'tone-danger'], 'aria-hidden': 'true' }),
-  h('span', { class: 'sr-only' }, t('job.sr')),
+  h('span', { class: ['job-seal', sealTone], 'aria-hidden': 'true' }, icon(sealIcon, { size: 13 })),
+  h('span', { class: 'sr-only' }, `${t('job.sr')}, ${t(`job.seal.${seal}`)}: `),
   h('span', { class: 'hash' }, shortHash(job.job, 6, 4)),
   h('span', { class: 'job-count' }, t('job.count', { n: formatInt(job.summary.received) })),
   ttl));
@@ -213,8 +222,8 @@ async function navigate() {
   mount(main, view.el);
   if (!firstRender) {
     window.scrollTo({ top: 0, behavior: 'instant' });
+    // Focus on the view's h1 is the announcement: no second one.
     main.querySelector('#view-title')?.focus({ preventScroll: true });
-    announce(t('nav.announce', { view: name }));
   }
   firstRender = false;
 }

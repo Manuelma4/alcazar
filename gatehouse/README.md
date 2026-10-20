@@ -19,7 +19,7 @@ npm run start:dev  # plain node, static files re-read on every page request
 | Legacy execution | `spawn` with an argv array and `shell: false`; environment reduced to `PATH` and `LC_ALL`; only the sub-keys each program needs, on stdin; SIGKILL after the timeout; stdout/stderr capped; `prlimit` CPU / memory / file-size / no-core limits on Linux. |
 | Data exposure | `TXNIN.DAT` (raw card numbers) is deleted as soon as TXNGUARD finishes, and job directories left by a crash are removed at start-up; responses only contain what the COBOL layer masked or tokenised. |
 | Legacy output | Parsed strictly as untrusted data (`records.mjs`); anything unexpected is a 502, never a partial answer. |
-| Ledger | Verified by LEDGERCK (COBOL + Fortran HMAC) and by Node/OpenSSL (`ledger.mjs`) — they must agree — and checked against the anchor taken when the job was sealed. |
+| Ledger | Every entry seals its ACCEPTED or REJECTED record too (format v2). Verified by LEDGERCK (COBOL + Fortran HMAC) and by Node/OpenSSL (`ledger.mjs`) — they must agree, and a differential test holds them to identical verdicts on hundreds of corrupted files — and checked against the anchor taken when the job was sealed. |
 | Static files | Loaded once into an in-memory map; a URL is never turned into a file path. |
 | Headers | Strict CSP with Trusted Types, COOP/COEP/CORP, `nosniff`, `DENY` framing, `no-referrer`, a restrictive Permissions-Policy, optional HSTS — on every response, errors included. |
 | Abuse | Token-bucket rate limit per client, at most 4 legacy processes at once on every path (batch, verify, tamper) with a bounded queue, 2 concurrent batches taken only after the body is read, a bounded job store (40 jobs, 15-minute TTL, jobs in use never evicted), header and request timeouts, bounded shutdown. |
@@ -33,9 +33,9 @@ npm run start:dev  # plain node, static files re-read on every page request
 | `ALCAZAR_PORT` | `8080` | Port. |
 | `ALCAZAR_BIN_DIR` | `build/bin` | Where the legacy programs are. |
 | `ALCAZAR_WORK_DIR` | `var/jobs` | Job directories (`0700`). Use a tmpfs in production. |
-| `ALCAZAR_KEY_FILE` | — | 64 hex digits, mode `0600` or stricter. Without it a fresh key is generated per process. |
+| `ALCAZAR_KEY_FILE` | — | The master key: 64 hex digits, mode `0600` or stricter. Without it a fresh key is generated per process. It stays in Gatehouse; the legacy programs only get sub-keys. |
 | `ALCAZAR_API_TOKEN` | — | Require `Authorization: Bearer …` on the API (except `/api/health`). |
-| `ALCAZAR_DEMO` | `1` | Enables the ledger tamper endpoint used by the Siege lab. **Set to `0` in production.** |
+| `ALCAZAR_DEMO` | `1` | Enables the tamper endpoint (ledger and record edits) used by the Siege lab. **Set to `0` in production.** |
 | `ALCAZAR_ALLOWED_HOSTS` | — | Extra host names accepted in the `Host` header. |
 | `ALCAZAR_TRUST_PROXY` | `0` | Number of trusted reverse proxies that append to `X-Forwarded-For`; the client is that many entries from the right (entries further left are client-controlled and ignored). |
 | `ALCAZAR_HSTS` | `0` | Send `Strict-Transport-Security` (when served over TLS). |

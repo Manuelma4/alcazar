@@ -405,6 +405,7 @@ export async function runScenario(scenario, { fetch: fetchImpl = globalThis.fetc
       body: request.body,
     });
     const body = await readJson(res);
+    refuseSetup(body);
     if (body?.error?.layer === 'gatehouse') {
       return finish({ layer: 'gatehouse', code: body.error.code, status: res.status, detail: body.error.message });
     }
@@ -413,6 +414,7 @@ export async function runScenario(scenario, { fetch: fetchImpl = globalThis.fetc
 
   const res = await postJson(fetchImpl, `${base}/api/batch`, { transactions: request.transactions });
   const job = await readJson(res);
+  refuseSetup(job);
   if (!res.ok) {
     if (job?.error?.layer === 'gatehouse') {
       return finish({ layer: 'gatehouse', code: job.error.code, status: res.status, detail: job.error.message });
@@ -425,10 +427,12 @@ export async function runScenario(scenario, { fetch: fetchImpl = globalThis.fetc
       { seq: request.seq, mode: request.mode });
     if (!tampered.ok) {
       const err = await readJson(tampered);
+      refuseSetup(err);
       return finish({ status: tampered.status, detail: err?.error?.message ?? `HTTP ${tampered.status}` });
     }
     const verify = await postJson(fetchImpl, `${base}/api/jobs/${encodeURIComponent(job.job)}/verify`, {});
     const verification = await readJson(verify);
+    refuseSetup(verification);
     if (verification && verification.valid === false) {
       return finish({
         layer: 'seal',
@@ -466,6 +470,16 @@ function matches(expected, outcome) {
   if (expected.code !== undefined && outcome.code !== expected.code) return false;
   if (expected.brokenAt !== undefined && outcome.brokenAt !== expected.brokenAt) return false;
   return true;
+}
+
+/**
+ * Not signed in, or demo mode off: the lab cannot run, which says nothing
+ * about the defences — an error, never an outcome.
+ */
+function refuseSetup(body) {
+  const code = body?.error?.code;
+  if (code === 'P-AUTH') throw new Error('Sign in to Gatehouse first: the Siege attacks as the operator');
+  if (code === 'P-DEMO') throw new Error('Tampering attacks need demo mode (ALCAZAR_DEMO=1)');
 }
 
 function postJson(fetchImpl, url, payload) {

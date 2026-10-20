@@ -14,6 +14,12 @@ export const SEVERITIES = Object.freeze(['critical', 'high', 'medium', 'low', 'i
 export const TAMPER_MODES = Object.freeze(['amount', 'record', 'delete', 'truncate']);
 export const TAMPER_FILES = Object.freeze(['LEDGER.DAT', 'ACCEPTED.DAT', 'REJECTED.DAT']);
 
+/**
+ * Fires `required` when Gatehouse answers 401 P-AUTH: the operator must sign
+ * in (again) — the session ended, or Gatehouse restarted.
+ */
+export const authEvents = new EventTarget();
+
 export class ApiError extends Error {
   constructor({ status = 0, code = 'NETWORK', message = '', field = null, index = null, retryAfter = null, layer = null } = {}) {
     super(message || code);
@@ -67,6 +73,7 @@ export function normalizeHealth(d) {
       })),
     },
     keySource: d.keySource === undefined ? null : str(d.keySource),
+    auth: oneOf(d.auth, ['token', 'none'], 'token'),
     limits: {
       maxTransactions: num(lim.maxTransactions, 1000),
       maxBodyBytes: num(lim.maxBodyBytes, 524288),
@@ -321,6 +328,14 @@ export function normalizeExamples(d) {
   });
 }
 
+export function normalizeSession(d) {
+  return {
+    auth: oneOf(d.auth, ['token', 'none'], 'token'),
+    via: oneOf(d.via, ['session', 'bearer', 'none'], null),
+    expiresAt: d.expiresAt === undefined ? null : str(d.expiresAt),
+  };
+}
+
 // ---------- transport ----------
 async function request(method, path, body) {
   const init = {
@@ -349,6 +364,8 @@ async function request(method, path, body) {
   }
   if (!res.ok) {
     const e = obj(obj(data).error);
+    // A refused sign-in is the sign-in form's to report, not a new prompt.
+    if (res.status === 401 && !(method === 'POST' && path === '/api/session')) authEvents.dispatchEvent(new Event('required'));
     throw new ApiError({
       status: res.status,
       code: str(e.code) || `HTTP ${res.status}`,
@@ -369,6 +386,9 @@ const jobPath = (id) => `/api/jobs/${encodeURIComponent(id)}`;
 
 export const api = {
   health: async () => normalizeHealth(await request('GET', '/api/health')),
+  session: async () => normalizeSession(await request('GET', '/api/session')),
+  signIn: async (token) => normalizeSession(await request('POST', '/api/session', { token })),
+  signOut: async () => normalizeSession(await request('DELETE', '/api/session')),
   sample: async (size, seed) => normalizeSample(await request('GET', `/api/sample?size=${encodeURIComponent(size)}&seed=${encodeURIComponent(seed)}`)),
   batch: async (transactions) => normalizeJob(await request('POST', '/api/batch', { transactions })),
   job: async (id) => normalizeJob(await request('GET', jobPath(id))),
@@ -412,6 +432,7 @@ async function labFetch(url, init = {}) {
   let res = null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     res = await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
+    if (res.status === 401) authEvents.dispatchEvent(new Event('required'));
     if (res.status !== 429 && res.status !== 503) return res;
     const body = await res.clone().json().catch(() => null);
     const code = obj(obj(body).error).code;

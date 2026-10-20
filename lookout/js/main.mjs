@@ -7,8 +7,10 @@ import { t } from './strings.mjs';
 import { ROUTES, parseHash, href } from './router.mjs';
 import { store } from './store.mjs';
 import { readPref, writePref } from './prefs.mjs';
-import { initLive } from './live.mjs';
-import { loadHealth, restoreJob } from './actions.mjs';
+import { initLive, toast } from './live.mjs';
+import { forgetJob, loadHealth, restoreJob } from './actions.mjs';
+import { api, authEvents } from './api.mjs';
+import { renderSignIn } from './signin.mjs';
 import { formatCountdown, shortHash, formatInt } from './format.mjs';
 import { segmented, iconButton } from './ui.mjs';
 
@@ -52,6 +54,7 @@ const navLinks = new Map();
 const crumbView = h('strong', null, '');
 const healthMini = h('span', { class: 'health-mini' });
 const jobSlot = h('div', { class: 'job-slot', css: { 'min-width': '0' } });
+const signOutSlot = h('span', { class: 'signout-slot' });
 
 function buildShell() {
   const nav = h('nav', { class: 'nav', 'aria-label': t('nav.label') },
@@ -103,6 +106,7 @@ function buildShell() {
     h('p', { class: 'crumbs' }, h('span', null, t('brand.name')), h('span', { class: 'sep', 'aria-hidden': 'true' }, '/'), crumbView),
     h('span', { class: 'spacer' }),
     jobSlot,
+    signOutSlot,
     cycle);
 
   mount(foot,
@@ -172,12 +176,110 @@ function renderJobChip() {
   ttl));
 }
 
+// ---------- operator ----------
+// Gatehouse answers the operator only. Until it accepts this browser — a
+// session cookie, or no authentication on a loopback address — the sign-in
+// screen stands in for every view.
+let session = null;
+let signInNeeded = false;
+let linkRefused = false;
+
+function renderSignOut() {
+  if (session?.via !== 'session') {
+    mount(signOutSlot);
+    return;
+  }
+  const signOut = iconButton({ label: t('signout.label'), icon: 'log-out', onClick: () => leave() });
+  signOut.setAttribute('title', t('signout.label'));
+  mount(signOutSlot, signOut);
+}
+
+async function leave() {
+  try {
+    await api.signOut();
+  } catch {
+    // Signed out here either way: the cookie dies with Gatehouse's session.
+  }
+  forgetJob();
+  session = null;
+  requireSignIn();
+  toast(t('signout.done'));
+}
+
+function requireSignIn() {
+  if (signInNeeded) return;
+  signInNeeded = true;
+  renderSignOut();
+  navigate();
+}
+
+function signedIn(next) {
+  session = next;
+  signInNeeded = false;
+  linkRefused = false;
+  renderSignOut();
+  navigate();
+  loadHealth();
+  restoreJob();
+}
+
+/**
+ * A sign-in link (#signin=TOKEN, printed by Gatehouse), opened in a new tab
+ * or in this one: the token leaves the address bar and this history entry
+ * before anything else runs, and goes to Gatehouse once, in a POST body.
+ * @returns {string | null}
+ */
+function takeSignInLink() {
+  const link = /^#signin=([\x21-\x7e]{1,1600})$/.exec(location.hash);
+  if (!link) return null;
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
+  try {
+    return decodeURIComponent(link[1]);
+  } catch {
+    return '';
+  }
+}
+
+function showSignIn() {
+  navToken += 1;
+  try {
+    current?.cleanup?.();
+  } catch (error) {
+    console.error(error);
+  }
+  current = null;
+  for (const link of navLinks.values()) link.removeAttribute('aria-current');
+  crumbView.textContent = t('signin.crumb');
+  document.title = t('doc.title', { view: t('signin.title') });
+  document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close());
+  const view = renderSignIn({ linkRefused, onSignedIn: signedIn });
+  mount(main, view.el);
+  view.focus();
+}
+
 // ---------- routing ----------
 let current = null;
 let navToken = 0;
 let firstRender = true;
 
 async function navigate() {
+  const linkToken = takeSignInLink();
+  if (linkToken !== null) {
+    try {
+      signedIn(await api.signIn(linkToken));
+      toast(t('signin.done'));
+    } catch {
+      linkRefused = true;
+      signInNeeded = true;
+      renderSignOut();
+      showSignIn();
+    }
+    return;
+  }
+  if (signInNeeded) {
+    showSignIn();
+    return;
+  }
   // In-page anchors (#main for the skip link) are not routes.
   if (current && /^#[A-Za-z][\w-]*$/.test(location.hash) && document.getElementById(location.hash.slice(1))) return;
   const parsed = parseHash();
@@ -242,7 +344,31 @@ store.on(['health', 'healthError'], renderHealthMini);
 store.on('job', renderJobChip);
 renderHealthMini();
 renderJobChip();
-window.addEventListener('hashchange', navigate);
-navigate();
+authEvents.addEventListener('required', requireSignIn);
 loadHealth();
-restoreJob();
+
+async function boot() {
+  const linkToken = takeSignInLink();
+  if (linkToken !== null) {
+    try {
+      session = await api.signIn(linkToken);
+    } catch {
+      linkRefused = true;
+    }
+  }
+  if (!session) {
+    try {
+      session = await api.session();
+    } catch {
+      // 401 asks for the sign-in screen (authEvents); a Gatehouse that cannot
+      // be reached leaves every view to say so.
+    }
+  }
+  window.addEventListener('hashchange', navigate);
+  if (linkRefused) requireSignIn();
+  if (signInNeeded) return;
+  renderSignOut();
+  navigate();
+  if (session) restoreJob();
+}
+boot();

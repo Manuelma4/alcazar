@@ -19,9 +19,13 @@ export function loadConfig(env = process.env) {
     binDir: resolve(env.ALCAZAR_BIN_DIR ?? join(ROOT, 'build', 'bin')),
     workDir: resolve(env.ALCAZAR_WORK_DIR ?? join(ROOT, 'var', 'jobs')),
     keyFile: env.ALCAZAR_KEY_FILE ? resolve(env.ALCAZAR_KEY_FILE) : null,
+    // Every API call but /api/health needs the operator: `token` (generated
+    // per run unless one is configured) or, on a loopback address only, `none`.
+    auth: oneOf(env.ALCAZAR_AUTH ?? 'token', ['token', 'none'], 'ALCAZAR_AUTH'),
     apiToken: env.ALCAZAR_API_TOKEN || null,
+    apiTokenFile: env.ALCAZAR_API_TOKEN_FILE ? resolve(env.ALCAZAR_API_TOKEN_FILE) : null,
     // Demo mode enables the ledger tamper endpoint used by the Siege lab.
-    demo: (env.ALCAZAR_DEMO ?? '1') === '1',
+    demo: (env.ALCAZAR_DEMO ?? '0') === '1',
     hsts: env.ALCAZAR_HSTS === '1',
     staticReload: env.ALCAZAR_STATIC_RELOAD === '1',
     // Number of trusted reverse proxies in front of Gatehouse (0 = none).
@@ -55,4 +59,9 @@ function integer(text, min, max, name) {
   const value = Number(text);
   if (value < min || value > max) throw new Error(`${name} must be between ${min} and ${max}`);
   return value;
+}
+
+function oneOf(text, allowed, name) {
+  if (!allowed.includes(text)) throw new Error(`${name} must be one of: ${allowed.join(', ')}`);
+  return text;
 }

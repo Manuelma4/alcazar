@@ -164,9 +164,10 @@ describe('Gatehouse limits', { skip: SKIP_REASON }, () => {
   });
 
   it('refuses tampering outside demo mode and enforces the API token', async () => {
-    const gh = await startGatehouse({ ALCAZAR_DEMO: '0', ALCAZAR_API_TOKEN: 's3cret-token' });
+    const token = 's3cret-token-for-the-gatehouse-tests';
+    const gh = await startGatehouse({ ALCAZAR_DEMO: '0', ALCAZAR_API_TOKEN: token });
     try {
-      const auth = { authorization: 'Bearer s3cret-token' };
+      const auth = { authorization: `Bearer ${token}` };
       assert.equal((await postJson(gh.base, '/api/batch', { transactions: [VALID] })).status, 401);
       assert.equal((await postJson(gh.base, '/api/batch', { transactions: [VALID] }, { authorization: 'Bearer wrong' })).status, 401);
       const job = await (await postJson(gh.base, '/api/batch', { transactions: [VALID] }, auth)).json();

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Gatehouse: the only door into the legacy batch core.
 
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { STATUS_CODES, createServer } from 'node:http';
 import { join, sep } from 'node:path';
+import {
+  Sessions, loadOperatorToken, readCookie, sessionCookie, sessionCookieName, tokenMatches,
+} from './auth.mjs';
 import { ROOT, VERSION } from './config.mjs';
 import {
   HttpError, checkHost, checkSameOrigin, readJsonBody, securityHeaders, sendError, sendJson,
@@ -32,6 +35,7 @@ const STATIC_MOUNTS = [
  * @param {ReturnType<import('./config.mjs').loadConfig>} config
  */
 export async function createApp(config, { log = defaultLog } = {}) {
+  const operator = await loadOperatorToken(config);
   await mkdir(config.workDir, { recursive: true, mode: 0o700 });
   await reapOrphans(config.workDir, log);
   const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile, config.workDir);
@@ -52,7 +56,9 @@ export async function createApp(config, { log = defaultLog } = {}) {
   if (selftest.status !== 'pass') log('error', 'self-test failed: batch endpoints are disabled', { checks: selftest.checks });
 
   const headers = securityHeaders({ hsts: config.hsts });
-  const apiTokenDigest = config.apiToken ? sha256(config.apiToken) : null;
+  const sessions = new Sessions();
+  // Over TLS (HSTS on) the session cookie is __Host- prefixed and Secure.
+  const cookieName = sessionCookieName(config.hsts);
   let running = 0;
 
   const health = () => ({
@@ -66,6 +72,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
     },
     selftest,
     keySource,
+    auth: config.auth,
     limits: {
       maxTransactions: config.limits.maxTransactions,
       maxBodyBytes: config.limits.maxBodyBytes,
@@ -102,13 +109,47 @@ export async function createApp(config, { log = defaultLog } = {}) {
     }
   }
 
+  /** Who is calling: the operator's bearer token, a Lookout session, or nobody (401). */
   function authorize(req) {
-    if (!apiTokenDigest) return;
-    const match = /^Bearer ([\x21-\x7e]{1,512})$/.exec(req.headers.authorization ?? '');
-    // Compare digests so the comparison is constant-time and length-blind.
-    if (!match || !timingSafeEqual(sha256(match[1]), apiTokenDigest)) {
-      throw new HttpError(401, 'P-AUTH', 'Missing or invalid bearer token');
+    if (!operator.digest) return 'none';
+    const header = req.headers.authorization;
+    if (header !== undefined) {
+      const match = /^Bearer ([\x21-\x7e]{1,512})$/.exec(header);
+      if (match && tokenMatches(match[1], operator.digest)) return 'bearer';
+      throw new HttpError(401, 'P-AUTH', 'Invalid bearer token');
     }
+    if (sessions.valid(readCookie(req.headers.cookie, cookieName))) return 'session';
+    throw new HttpError(401, 'P-AUTH', 'Sign in first: the API needs the operator token or a Lookout session');
+  }
+
+  /** GET: am I signed in? POST {token}: sign in (a session cookie). DELETE: sign out. */
+  async function sessionEndpoint(req, res) {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      sendJson(res, 200, { auth: config.auth, via: authorize(req) });
+      return;
+    }
+    if (req.method === 'DELETE') {
+      checkSameOrigin(req);
+      sessions.revoke(readCookie(req.headers.cookie, cookieName));
+      sendJson(res, 200, { auth: config.auth, via: null }, { 'set-cookie': sessionCookie(cookieName, '', 0, config.hsts) });
+      return;
+    }
+    if (req.method !== 'POST') throw methodNotAllowed('GET, POST, DELETE');
+    checkSameOrigin(req);
+    const { value } = await readJsonBody(req, 1024);
+    if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 ||
+        typeof value.token !== 'string') {
+      throw new HttpError(400, 'P-SCHEMA', 'Sign-in takes {"token": "…"}', { field: 'token' });
+    }
+    if (!operator.digest) {
+      sendJson(res, 200, { auth: config.auth, via: 'none' });
+      return;
+    }
+    if (!tokenMatches(value.token, operator.digest)) throw new HttpError(401, 'P-AUTH', 'That operator token is not valid');
+    const session = sessions.create();
+    sendJson(res, 200, { auth: config.auth, via: 'session', expiresAt: new Date(session.expires).toISOString() }, {
+      'set-cookie': sessionCookie(cookieName, session.id, Math.floor(sessions.ttlMs / 1000), config.hsts),
+    });
   }
 
   async function postBatch(req, res) {
@@ -212,6 +253,10 @@ export async function createApp(config, { log = defaultLog } = {}) {
       sendJson(res, 200, health());
       return;
     }
+    if (path === '/api/session') {
+      await sessionEndpoint(req, res);
+      return;
+    }
     authorize(req);
 
     if (path === '/api/batch') {
@@ -307,6 +352,8 @@ export async function createApp(config, { log = defaultLog } = {}) {
   return {
     server,
     health,
+    // A generated operator token, for the one sign-in link printed at start.
+    signIn: operator.signIn,
     listen: () => new Promise((resolve) => server.listen(config.port, config.host, () => resolve(server.address()))),
     async close() {
       // Stop accepting, drop idle keep-alive sockets now, and give requests
@@ -317,6 +364,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
       await closed;
       clearTimeout(deadline);
       await jobs.close();
+      sessions.clear();
       pipeline.wipe();
     },
   };
@@ -376,10 +424,6 @@ function boundedInt(text, fallback, min, max, name) {
     throw new HttpError(400, 'P-SCHEMA', `"${name}" must be an integer between ${min} and ${max}`, { field: name });
   }
   return Number(text);
-}
-
-function sha256(text) {
-  return createHash('sha256').update(text, 'utf8').digest();
 }
 
 function compilerName(line, pattern, label) {

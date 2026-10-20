@@ -79,7 +79,9 @@ for (let i = 0; i < 30; i += 1) check.push(time(() => run(join(BIN, 'ledgerck'),
 report('LEDGERCK — verify a 1,000-entry ledger and the records it seals (COBOL + Fortran)', check, 'entries', 1000);
 
 // 2. Gatehouse end to end (HTTP, validation, all programs, double verification).
-const config = loadConfig({ ALCAZAR_PORT: '0', ALCAZAR_WORK_DIR: join(work, 'jobs'), ALCAZAR_RATE_CAPACITY: '100000', ALCAZAR_RATE_REFILL: '100000' });
+const config = loadConfig({
+  ALCAZAR_PORT: '0', ALCAZAR_AUTH: 'none', ALCAZAR_WORK_DIR: join(work, 'jobs'), ALCAZAR_RATE_CAPACITY: '100000', ALCAZAR_RATE_REFILL: '100000',
+});
 const app = await createApp(config, { log: () => {} });
 const { port } = await app.listen();
 const body = JSON.stringify({ transactions });

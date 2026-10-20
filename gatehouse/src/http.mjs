@@ -69,6 +69,7 @@ export function sendError(res, error) {
   const headers = error.status === 429 ? { 'retry-after': String(error.extra.retryAfter ?? 1) } : {};
   if (error.status === 413) headers.connection = 'close';
   if (error.status === 405 && error.extra.allow) headers.allow = error.extra.allow;
+  if (error.status === 401) headers['www-authenticate'] = 'Bearer realm="Gatehouse"';
   const { retryAfter, ...extra } = error.extra;
   sendJson(res, error.status, {
     error: { layer: 'gatehouse', code: error.code, status: error.status, message: error.message, ...extra },

@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Start Gatehouse under the Node.js permission model: read access to the
 // repository, write access to the job directory only, and permission to
-// spawn the legacy programs. A master key file (ALCAZAR_KEY_FILE) is the one
-// file outside both that Gatehouse may read — keep it out of the job
-// directory, ideally on a read-only secret mount such as /run/secrets.
+// spawn the legacy programs. The master key and operator token files
+// (ALCAZAR_KEY_FILE, ALCAZAR_API_TOKEN_FILE) are the only files outside both
+// that Gatehouse may read — keep them out of the job directory, ideally on a
+// read-only secret mount such as /run/secrets.
+//
+//   node scripts/start-hardened.mjs          production defaults (demo off)
+//   node scripts/start-hardened.mjs --demo   the showcase: demo mode on,
+//                                            unless ALCAZAR_DEMO says otherwise
 //
 // The allowed paths are computed the way Node itself spells them. The
 // permission model compares paths exactly, and on macOS a directory name
@@ -32,18 +37,20 @@ const flags = [
 if (process.platform === 'linux') flags.push('--allow-fs-read=/usr/bin/prlimit');
 
 const env = { ...process.env, ALCAZAR_WORK_DIR: work };
-if (process.env.ALCAZAR_KEY_FILE) {
+if (process.argv.includes('--demo')) env.ALCAZAR_DEMO ??= '1';
+for (const name of ['ALCAZAR_KEY_FILE', 'ALCAZAR_API_TOKEN_FILE']) {
+  if (!process.env[name]) continue;
   // Gatehouse gets the resolved path, so it reads exactly the file the grant
   // names (a Kubernetes secret, for one, is a chain of symbolic links).
-  let keyFile;
+  let file;
   try {
-    keyFile = realpathSync(process.env.ALCAZAR_KEY_FILE);
+    file = realpathSync(process.env[name]);
   } catch (error) {
-    console.error(`start-hardened: ALCAZAR_KEY_FILE: ${error.message}`);
+    console.error(`start-hardened: ${name}: ${error.message}`);
     process.exit(1);
   }
-  flags.push(`--allow-fs-read=${keyFile}`);
-  env.ALCAZAR_KEY_FILE = keyFile;
+  flags.push(`--allow-fs-read=${file}`);
+  env[name] = file;
 }
 
 const child = spawn(process.execPath, [...flags, join(root, 'gatehouse', 'src', 'server.mjs')], { stdio: 'inherit', env });

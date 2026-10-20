@@ -795,3 +795,12 @@ a.explore-card:hover .explore-arrow { transform: translateX(3px); color: var(--l
   .data.is-stacked .cell-sub { max-width: none; white-space: normal; }
 }
 .dropzone:has(input:focus-visible) label.btn { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+/* ---------- sign-in ---------- */
+.signin-form .input { max-width: 52ch; }
+.field-error { display: flex; align-items: center; gap: 8px; margin: 0; font-size: .8125rem; color: var(--danger-ink); }
+.field-error svg { flex: none; }
+.signin-help { margin: 0; padding: 0; list-style: none; }
+.signin-help-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; color: var(--text-2); font-size: .875rem; line-height: 1.55; overflow-wrap: anywhere; }
+.signin-help-item svg { flex: none; margin-top: 2px; color: var(--gold-ink); }
+.signout-slot { display: contents; }

@@ -12,7 +12,7 @@
     "watchtower": "./watchtower/bin/watchtower.mjs"
   },
   "scripts": {
-    "start": "node scripts/start-hardened.mjs",
+    "start": "node scripts/start-hardened.mjs --demo",
     "start:dev": "ALCAZAR_STATIC_RELOAD=1 node gatehouse/src/server.mjs",
     "test": "node --test",
     "test:watchtower": "node --test 'watchtower/test/*.test.mjs'",

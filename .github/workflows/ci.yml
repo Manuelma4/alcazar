@@ -61,11 +61,15 @@ jobs:
           node-version: 24
       - name: Build (the core is compiled and tested inside the image build)
         run: docker build --tag alcazar:ci .
-      - name: Run hardened, as in compose.yaml
+      - name: Run hardened, as in compose.yaml (demo mode on), with a throw-away operator token
         run: |
+          token="$(openssl rand -hex 24)"
+          echo "::add-mask::$token"
+          echo "ALCAZAR_SIEGE_TOKEN=$token" >> "$GITHUB_ENV"
           docker run --detach --name alcazar \
             --read-only --tmpfs /tmp:size=64m,mode=1777,noexec,nosuid,nodev \
             --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 128 --memory 512m \
+            --env ALCAZAR_DEMO=1 --env ALCAZAR_API_TOKEN="$token" \
             --publish 127.0.0.1:8080:8080 alcazar:ci
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8080/api/health > health.json; then break; fi

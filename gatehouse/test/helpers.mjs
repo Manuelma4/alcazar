@@ -18,7 +18,10 @@ export const SKIP_REASON = BINARIES_BUILT ? false : 'legacy binaries not built (
  */
 export async function startGatehouse(env = {}, options = {}) {
   const workDir = options.workDir ?? (await mkdtemp(join(tmpdir(), 'alcazar-test-')));
-  const config = loadConfig({ ALCAZAR_PORT: '0', ALCAZAR_WORK_DIR: workDir, ...env });
+  // Tests run the showcase on a loopback address: demo mode on, and no
+  // operator token unless the test brings one (auth.test.mjs covers sign-in).
+  const token = env.ALCAZAR_API_TOKEN || env.ALCAZAR_API_TOKEN_FILE;
+  const config = loadConfig({ ALCAZAR_PORT: '0', ALCAZAR_WORK_DIR: workDir, ALCAZAR_AUTH: token ? 'token' : 'none', ALCAZAR_DEMO: '1', ...env });
   const app = await createApp(config, { log: () => {} });
   const address = await app.listen();
   const base = `http://127.0.0.1:${address.port}`;

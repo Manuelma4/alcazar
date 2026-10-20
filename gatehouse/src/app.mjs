@@ -36,7 +36,7 @@ const STATIC_MOUNTS = [
  */
 export async function createApp(config, { log = defaultLog } = {}) {
   const operator = await loadOperatorToken(config);
-  await mkdir(config.workDir, { recursive: true, mode: 0o700 });
+  await prepareWorkDir(config.workDir);
   await reapOrphans(config.workDir, log);
   const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile, config.workDir);
   if (config.evidenceDir) await prepareEvidenceDir(config.evidenceDir, config.workDir);
@@ -330,7 +330,9 @@ export async function createApp(config, { log = defaultLog } = {}) {
     } finally {
       log('info', 'request', {
         method: req.method,
-        path: (req.url ?? '').split('?')[0].slice(0, 120),
+        // A job id is a capability: logs keep four hex digits, enough to
+        // follow one job, not to reach it.
+        path: (req.url ?? '').split('?')[0].slice(0, 120).replace(/j-([0-9a-f]{4})[0-9a-f]{20}/g, 'j-$1…'),
         status: res.statusCode,
         ms: Math.round(performance.now() - started),
       });
@@ -461,6 +463,20 @@ async function loadMasterKey(file, workDir) {
     return { key, source: 'file' };
   } finally {
     raw.fill(0);
+  }
+}
+
+/**
+ * The work directory must be Gatehouse's alone — this user's, mode 0700 —
+ * since leftover job directories in it are deleted at start-up: pointed at
+ * a shared directory such as /tmp, that would delete other software's.
+ */
+async function prepareWorkDir(workDir) {
+  await mkdir(workDir, { recursive: true, mode: 0o700 });
+  const info = await stat(workDir);
+  const owner = typeof process.getuid === 'function' ? process.getuid() : info.uid;
+  if (process.platform !== 'win32' && ((info.mode & 0o077) !== 0 || info.uid !== owner)) {
+    throw new Error(`ALCAZAR_WORK_DIR (${workDir}) must be a private directory: owned by this user, mode 0700`);
   }
 }
 

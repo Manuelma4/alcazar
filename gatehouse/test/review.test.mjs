@@ -104,6 +104,18 @@ describe('Gatehouse review regressions', { skip: SKIP_REASON }, () => {
     }
   });
 
+  it('owns its work directory: private, or Gatehouse does not start', async () => {
+    const shared = await mkdtemp(join(tmpdir(), 'alcazar-shared-'));
+    try {
+      await chmod(shared, 0o777);
+      await mkdir(join(shared, 'job-of-another-program'));
+      await assert.rejects(startGatehouse({}, { workDir: shared }), /must be a private directory/);
+      assert.equal(existsSync(join(shared, 'job-of-another-program')), true, 'nothing deleted');
+    } finally {
+      await rm(shared, { recursive: true, force: true });
+    }
+  });
+
   it('removes job directories (and raw card numbers) left by a crash', async () => {
     const workDir = await mkdtemp(join(tmpdir(), 'alcazar-orphan-'));
     const orphan = join(workDir, 'job-crashed');

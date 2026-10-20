@@ -117,6 +117,22 @@ describe('Operator authentication', { skip: SKIP_REASON }, () => {
   });
 });
 
+describe('Logs', { skip: SKIP_REASON }, () => {
+  it('never hold a whole job id: it is the key to the job', async () => {
+    const lines = [];
+    const gh = await startGatehouse({}, { log: (level, message, fields) => lines.push(JSON.stringify({ level, message, ...fields })) });
+    try {
+      const job = await (await postJson(gh.base, '/api/batch', { transactions: [VALID] })).json();
+      await (await fetch(`${gh.base}/api/jobs/${job.job}`)).arrayBuffer();
+      const log = lines.join('\n');
+      assert.ok(!log.includes(job.job), log);
+      assert.ok(log.includes(`"path":"/api/jobs/${job.job.slice(0, 6)}…"`), log);
+    } finally {
+      await gh.stop();
+    }
+  });
+});
+
 describe('Operator token configuration', { skip: SKIP_REASON }, () => {
   let dir;
   before(async () => {

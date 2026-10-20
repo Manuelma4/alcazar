@@ -1,0 +1,44 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Command-line demo of the batch core: validate and seal a sample batch,
+# verify the ledger, tamper with it, verify again, and score the accepted
+# transfers. Run with `make demo`.
+set -eu
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+bin="$root/build/bin"
+dir="$root/var/demo"
+rm -rf "$dir"
+mkdir -p "$dir"
+chmod 700 "$dir"
+cp "$root/examples/batch/TXNIN.DAT" "$dir/"
+cd "$dir"
+
+# A fresh 256-bit key, passed on stdin only.
+key=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
+job=demo-$(date +%s)
+run() { env -i PATH=/usr/bin:/bin "$@"; }
+
+echo "== TXNGUARD (COBOL) =========================================="
+rc=0
+printf '%s\n' "$key" | run "$bin/txnguard" "$job" || rc=$?
+echo "return code $rc (0 all accepted, 4 some rejected)"
+sed -n 's/^/  /p' SUMMARY.DAT
+echo
+echo "Rejected records:"
+sed -n 's/^/  /p' REJECTED.DAT
+rm -f TXNIN.DAT
+
+echo
+echo "== LEDGERCK (COBOL + Fortran HMAC) ==========================="
+printf '%s\n' "$key" | run "$bin/ledgerck" "$job" || true
+echo
+echo "Tampering with the amount of entry 2..."
+awk 'NR == 2 { $0 = substr($0, 1, 42) "000000099999999" substr($0, 58) } { print }' \
+  LEDGER.DAT > LEDGER.TMP && mv LEDGER.TMP LEDGER.DAT
+printf '%s\n' "$key" | run "$bin/ledgerck" "$job" || true
+
+echo
+echo "== FRAUDSCAN (Fortran) ======================================="
+run "$bin/fraudscan" ACCEPTED.DAT RISK.JSON
+echo "risk report written to var/demo/RISK.JSON"

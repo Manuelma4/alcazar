@@ -1,0 +1,628 @@
+      * SPDX-License-Identifier: Apache-2.0
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TXNGUARD.
+      *================================================================
+      * TXNGUARD - validate a batch of transfers, pseudonymise the
+      *            accounts and seal every decision in the HMAC-chained
+      *            audit ledger (Seal).
+      *
+      *   stdin  the 256-bit master key, 64 lower-case hex digits
+      *   args   the job id: 1-32 characters from a-z 0-9 -
+      *
+      *   in     TXNIN.DAT     fixed-length 200-byte records
+      *   out    ACCEPTED.DAT  normalised, pseudonymised transfers
+      *          REJECTED.DAT  one line per rejected record
+      *          LEDGER.DAT    one HMAC-sealed line per record
+      *          SUMMARY.DAT   KEY=VALUE run summary
+      *
+      *   Return codes   0 all accepted      4 some rejected
+      *                  8 input error      12 key or self-test error
+      *                 16 I/O error
+      *
+      * Defence in depth: Gatehouse checks the structure of every
+      * field first, and this program re-validates everything anyway -
+      * it never trusts the front end.
+      *================================================================
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       SPECIAL-NAMES.
+           CLASS ALZ-JOB-CHAR IS "abcdefghijklmnopqrstuvwxyz"
+                                 "0123456789" "-"
+           CLASS ALZ-HEX      IS "0123456789abcdef".
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+      *    Untrusted input is fixed-length SEQUENTIAL, not LINE
+      *    SEQUENTIAL: GnuCOBOL splits an over-long line into extra
+      *    records, which would let one field inject a whole record.
+           SELECT TXN-IN   ASSIGN TO "TXNIN.DAT"
+                           ORGANIZATION IS SEQUENTIAL
+                           FILE STATUS IS WS-FS-IN.
+           SELECT TXN-OK   ASSIGN TO "ACCEPTED.DAT"
+                           ORGANIZATION IS LINE SEQUENTIAL
+                           FILE STATUS IS WS-FS-OK.
+           SELECT TXN-REJ  ASSIGN TO "REJECTED.DAT"
+                           ORGANIZATION IS LINE SEQUENTIAL
+                           FILE STATUS IS WS-FS-REJ.
+           SELECT LEDGER   ASSIGN TO "LEDGER.DAT"
+                           ORGANIZATION IS LINE SEQUENTIAL
+                           FILE STATUS IS WS-FS-LEDGER.
+           SELECT SUMMARY  ASSIGN TO "SUMMARY.DAT"
+                           ORGANIZATION IS LINE SEQUENTIAL
+                           FILE STATUS IS WS-FS-SUMMARY.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  TXN-IN.
+       COPY ALZTXNIN.
+       FD  TXN-OK.
+       COPY ALZACCPT.
+       FD  TXN-REJ.
+       COPY ALZREJ.
+       FD  LEDGER.
+       01  LEDGER-RECORD               PIC X(246).
+       FD  SUMMARY.
+       01  SUMMARY-RECORD              PIC X(80).
+
+       WORKING-STORAGE SECTION.
+       COPY ALZCAPI.
+       COPY ALZKEYW.
+       COPY ALZLEDG.
+       01  WS-MAX-RECORDS              PIC 9(4) VALUE 1000.
+      * Single-transfer limit: 1,000,000.00 in minor units.
+       01  WS-LIMIT-CENTS              PIC 9(15) VALUE 100000000.
+       01  WS-FILE-STATUS.
+           05  WS-FS-IN                PIC XX.
+           05  WS-FS-OK                PIC XX.
+           05  WS-FS-REJ               PIC XX.
+           05  WS-FS-LEDGER            PIC XX.
+           05  WS-FS-SUMMARY           PIC XX.
+       01  WS-SWITCHES.
+           05  WS-EOF-SW               PIC X VALUE "N".
+               88  WS-EOF              VALUE "Y".
+           05  WS-OPEN-SW              PIC X VALUE "N".
+               88  WS-FILES-OPEN       VALUE "Y".
+           05  WS-DUPLICATE-SW         PIC X VALUE "N".
+               88  WS-DUPLICATE        VALUE "Y".
+       01  WS-RETURN-CODE              PIC 99 VALUE 0.
+       01  WS-COUNTERS.
+           05  WS-RECORDS              PIC 9(6) VALUE 0.
+           05  WS-ACCEPTED             PIC 9(6) VALUE 0.
+           05  WS-REJECTED             PIC 9(6) VALUE 0.
+           05  WS-SEALED               PIC 9(6) VALUE 0.
+       01  WS-PREV-MAC                 PIC X(64).
+
+      * The record being judged.
+       01  WS-REASON                   PIC X(4).
+           88  WS-VALID                VALUE "A000".
+       01  WS-FIELD                    PIC X(12).
+       01  WS-DETAIL                   PIC X(30).
+       01  WS-POS-EDIT                 PIC 9(3).
+       01  WS-SIGN                     PIC X.
+       01  WS-CENTS                    PIC 9(15) COMP-3.
+       01  WS-AMOUNT-RC                PIC S9(9) COMP-5.
+       01  WS-WORK                     PIC X(34).
+       01  WS-WORK-LEN                 PIC S9(9) COMP-5.
+       01  WS-TODAY                    PIC 9(8).
+       01  WS-TS-DATE                  PIC 9(8).
+
+      * Transaction ids seen in this batch (replay detection).
+       01  WS-SEEN-COUNT               PIC 9(4) VALUE 0.
+       01  WS-SEEN-TABLE.
+           05  WS-SEEN-ID              PIC X(12) OCCURS 1000 TIMES.
+       01  WS-SX                       PIC 9(4).
+
+      * Accepted totals per currency (ALZCCY allows 15 currencies).
+       01  WS-TOTAL-COUNT              PIC 99 VALUE 0.
+       01  WS-TOTALS.
+           05  WS-TOTAL OCCURS 20 TIMES.
+               10  WS-TOTAL-CCY        PIC X(3).
+               10  WS-TOTAL-CENTS      PIC 9(18) COMP-3.
+       01  WS-TX                       PIC 99.
+
+      * Summary lines.
+       01  WS-LABEL                    PIC X(20).
+       01  WS-NUMBER                   PIC 9(18).
+       01  WS-NUM-EDIT                 PIC Z(17)9.
+
+       PROCEDURE DIVISION.
+       0000-MAIN.
+           MOVE "TXNGUARD" TO ALZ-PROGRAM-NAME
+           PERFORM ALZ-PREPARE-KEYS
+           IF ALZ-KEYS-READY
+               MOVE ALZ-GENESIS TO WS-PREV-MAC
+               MOVE FUNCTION CURRENT-DATE(1:8) TO WS-TODAY
+               PERFORM 1000-OPEN-FILES
+           ELSE
+               MOVE 12 TO WS-RETURN-CODE
+           END-IF
+           IF WS-RETURN-CODE = 0
+               PERFORM 2000-NEXT-RECORD UNTIL WS-EOF
+           END-IF
+           PERFORM 9000-FINISH
+           MOVE WS-RETURN-CODE TO RETURN-CODE
+           STOP RUN.
+
+       1000-OPEN-FILES.
+           OPEN INPUT TXN-IN
+           IF WS-FS-IN NOT = "00"
+               DISPLAY "TXNGUARD: cannot open TXNIN.DAT, status "
+                   WS-FS-IN UPON SYSERR
+               MOVE 16 TO WS-RETURN-CODE
+           ELSE
+               OPEN OUTPUT TXN-OK TXN-REJ LEDGER SUMMARY
+               SET WS-FILES-OPEN TO TRUE
+               IF WS-FS-OK NOT = "00" OR WS-FS-REJ NOT = "00"
+                  OR WS-FS-LEDGER NOT = "00"
+                  OR WS-FS-SUMMARY NOT = "00"
+                   DISPLAY "TXNGUARD: cannot create the output files"
+                       UPON SYSERR
+                   MOVE 16 TO WS-RETURN-CODE
+               END-IF
+           END-IF.
+
+       2000-NEXT-RECORD.
+      *    Pre-fill the record area: GnuCOBOL returns status 00 for a
+      *    short final record and leaves stale bytes of the previous
+      *    record in the rest of the area. With LOW-VALUES there, the
+      *    structural check (E901) rejects the fragment instead.
+           MOVE LOW-VALUES TO TXN-IN-REC
+           READ TXN-IN
+           EVALUATE WS-FS-IN
+               WHEN "00"
+               WHEN "04"
+               WHEN "06"
+                   PERFORM 2100-JUDGE-RECORD
+               WHEN "10"
+                   SET WS-EOF TO TRUE
+               WHEN OTHER
+                   DISPLAY "TXNGUARD: read error, status " WS-FS-IN
+                       UPON SYSERR
+                   MOVE 16 TO WS-RETURN-CODE
+                   SET WS-EOF TO TRUE
+           END-EVALUATE.
+
+       2100-JUDGE-RECORD.
+           ADD 1 TO WS-RECORDS
+           IF WS-RECORDS > WS-MAX-RECORDS
+               DISPLAY "TXNGUARD: more than 1000 records in one batch"
+                   UPON SYSERR
+               MOVE 8 TO WS-RETURN-CODE
+               SET WS-EOF TO TRUE
+           ELSE
+               PERFORM 3000-VALIDATE
+               IF WS-VALID
+                   PERFORM 4000-WRITE-ACCEPTED
+               ELSE
+                   PERFORM 4500-WRITE-REJECTED
+               END-IF
+               PERFORM 5000-SEAL-LEDGER
+           END-IF.
+
+      *----------------------------------------------------------------
+      * Validation: the first failing check decides the reason code.
+      *----------------------------------------------------------------
+       3000-VALIDATE.
+           MOVE "A000" TO WS-REASON
+           MOVE SPACES TO WS-FIELD
+           MOVE SPACES TO WS-DETAIL
+           PERFORM 3100-CHECK-RECORD
+           IF WS-VALID
+               PERFORM 3200-CHECK-ID
+           END-IF
+           IF WS-VALID
+               PERFORM 3300-CHECK-TIMESTAMP
+           END-IF
+           IF WS-VALID
+               PERFORM 3400-CHECK-ACCOUNTS
+           END-IF
+      *    The amount is parsed for every record: the ledger records
+      *    what was attempted, even when another field failed.
+           PERFORM 3500-CHECK-AMOUNT
+           IF WS-VALID
+               PERFORM 3600-CHECK-CURRENCY
+           END-IF
+           IF WS-VALID
+               PERFORM 3700-CHECK-CARD
+           END-IF
+           IF WS-VALID
+               PERFORM 3800-CHECK-CHANNEL
+           END-IF
+           IF WS-VALID
+               PERFORM 3900-CHECK-MEMO
+           END-IF.
+
+      * Structure: only printable ASCII anywhere in the record.
+       3100-CHECK-RECORD.
+           CALL "ALZTEXT" USING BY CONTENT "P"
+                                BY REFERENCE TXN-IN-REC ALZ-RC ALZ-POS
+           IF ALZ-RC = 1
+               MOVE "E901" TO WS-REASON
+               MOVE "RECORD" TO WS-FIELD
+               PERFORM 3990-POSITION-DETAIL
+           END-IF.
+
+       3200-CHECK-ID.
+           CALL "ALZTEXT" USING BY CONTENT "I"
+                                BY REFERENCE TI-ID ALZ-RC ALZ-POS
+           EVALUATE ALZ-RC
+               WHEN 0
+                   PERFORM 3210-CHECK-REPLAY
+               WHEN 1
+                   MOVE "E101" TO WS-REASON
+                   MOVE "TXN-ID" TO WS-FIELD
+                   PERFORM 3990-POSITION-DETAIL
+               WHEN OTHER
+                   MOVE "E101" TO WS-REASON
+                   MOVE "TXN-ID" TO WS-FIELD
+                   MOVE "EMPTY" TO WS-DETAIL
+           END-EVALUATE.
+
+      * An id may appear once per batch: a second one is a replay.
+       3210-CHECK-REPLAY.
+           MOVE "N" TO WS-DUPLICATE-SW
+           PERFORM VARYING WS-SX FROM 1 BY 1
+                   UNTIL WS-SX > WS-SEEN-COUNT
+               IF WS-SEEN-ID(WS-SX) = TI-ID
+                   SET WS-DUPLICATE TO TRUE
+                   EXIT PERFORM
+               END-IF
+           END-PERFORM
+           IF WS-DUPLICATE
+               MOVE "E102" TO WS-REASON
+               MOVE "TXN-ID" TO WS-FIELD
+               MOVE "REPLAY" TO WS-DETAIL
+           ELSE
+               ADD 1 TO WS-SEEN-COUNT
+               MOVE TI-ID TO WS-SEEN-ID(WS-SEEN-COUNT)
+           END-IF.
+
+       3300-CHECK-TIMESTAMP.
+           CALL "ALZDATE" USING TI-TS ALZ-RC
+           EVALUATE ALZ-RC
+               WHEN 0
+                   MOVE TI-TS(1:8) TO WS-TS-DATE
+                   IF FUNCTION INTEGER-OF-DATE(WS-TS-DATE) >
+                      FUNCTION INTEGER-OF-DATE(WS-TODAY) + 1
+                       MOVE "E202" TO WS-REASON
+                       MOVE "TXN-TS" TO WS-FIELD
+                       MOVE "FUTURE" TO WS-DETAIL
+                   END-IF
+               WHEN 1
+                   MOVE "E201" TO WS-REASON
+                   MOVE "TXN-TS" TO WS-FIELD
+                   MOVE "NOT-NUMERIC" TO WS-DETAIL
+               WHEN 2
+                   MOVE "E201" TO WS-REASON
+                   MOVE "TXN-TS" TO WS-FIELD
+                   MOVE "NO-SUCH-DATE" TO WS-DETAIL
+               WHEN OTHER
+                   MOVE "E201" TO WS-REASON
+                   MOVE "TXN-TS" TO WS-FIELD
+                   MOVE "NO-SUCH-TIME" TO WS-DETAIL
+           END-EVALUATE.
+
+       3400-CHECK-ACCOUNTS.
+           CALL "ALZIBAN" USING TI-FROM-IBAN ALZ-RC
+           EVALUATE ALZ-RC
+               WHEN 0
+                   CONTINUE
+               WHEN 3
+                   MOVE "E302" TO WS-REASON
+                   MOVE "FROM-IBAN" TO WS-FIELD
+                   MOVE "MOD-97" TO WS-DETAIL
+               WHEN 2
+                   MOVE "E301" TO WS-REASON
+                   MOVE "FROM-IBAN" TO WS-FIELD
+                   MOVE "COUNTRY-LENGTH" TO WS-DETAIL
+               WHEN OTHER
+                   MOVE "E301" TO WS-REASON
+                   MOVE "FROM-IBAN" TO WS-FIELD
+                   MOVE "FORMAT" TO WS-DETAIL
+           END-EVALUATE
+           IF WS-VALID
+               CALL "ALZIBAN" USING TI-TO-IBAN ALZ-RC
+               EVALUATE ALZ-RC
+                   WHEN 0
+                       CONTINUE
+                   WHEN 3
+                       MOVE "E304" TO WS-REASON
+                       MOVE "TO-IBAN" TO WS-FIELD
+                       MOVE "MOD-97" TO WS-DETAIL
+                   WHEN 2
+                       MOVE "E303" TO WS-REASON
+                       MOVE "TO-IBAN" TO WS-FIELD
+                       MOVE "COUNTRY-LENGTH" TO WS-DETAIL
+                   WHEN OTHER
+                       MOVE "E303" TO WS-REASON
+                       MOVE "TO-IBAN" TO WS-FIELD
+                       MOVE "FORMAT" TO WS-DETAIL
+               END-EVALUATE
+           END-IF
+           IF WS-VALID AND TI-FROM-IBAN = TI-TO-IBAN
+               MOVE "E305" TO WS-REASON
+               MOVE "TO-IBAN" TO WS-FIELD
+               MOVE "SAME-ACCOUNT" TO WS-DETAIL
+           END-IF.
+
+       3500-CHECK-AMOUNT.
+           CALL "ALZAMNT" USING TI-AMOUNT WS-SIGN WS-CENTS
+                                WS-AMOUNT-RC ALZ-POS
+           IF WS-VALID
+               EVALUATE TRUE
+                   WHEN WS-AMOUNT-RC = 1
+                       MOVE "E401" TO WS-REASON
+                       MOVE "AMOUNT" TO WS-FIELD
+                       PERFORM 3990-POSITION-DETAIL
+                   WHEN WS-AMOUNT-RC = 2
+                       MOVE "E402" TO WS-REASON
+                       MOVE "AMOUNT" TO WS-FIELD
+                       MOVE "MORE-THAN-13-DIGITS" TO WS-DETAIL
+                   WHEN WS-SIGN = "-" OR WS-CENTS = 0
+                       MOVE "E403" TO WS-REASON
+                       MOVE "AMOUNT" TO WS-FIELD
+                       MOVE "NOT-POSITIVE" TO WS-DETAIL
+                   WHEN WS-CENTS > WS-LIMIT-CENTS
+                       MOVE "E404" TO WS-REASON
+                       MOVE "AMOUNT" TO WS-FIELD
+                       MOVE "OVER-LIMIT" TO WS-DETAIL
+               END-EVALUATE
+           END-IF.
+
+       3600-CHECK-CURRENCY.
+           CALL "ALZCCY" USING TI-CURRENCY ALZ-RC
+           IF ALZ-RC NOT = 0
+               MOVE "E501" TO WS-REASON
+               MOVE "CURRENCY" TO WS-FIELD
+               MOVE "NOT-ALLOWED" TO WS-DETAIL
+           END-IF.
+
+       3700-CHECK-CARD.
+           IF TI-PAN NOT = SPACES
+               CALL "ALZLUHN" USING TI-PAN ALZ-RC
+               EVALUATE ALZ-RC
+                   WHEN 1
+                       MOVE "E601" TO WS-REASON
+                       MOVE "CARD-PAN" TO WS-FIELD
+                       MOVE "FORMAT" TO WS-DETAIL
+                   WHEN 2
+                       MOVE "E602" TO WS-REASON
+                       MOVE "CARD-PAN" TO WS-FIELD
+                       MOVE "LUHN" TO WS-DETAIL
+               END-EVALUATE
+           END-IF.
+
+       3800-CHECK-CHANNEL.
+           IF NOT TI-CHANNEL-VALID
+               MOVE "E701" TO WS-REASON
+               MOVE "CHANNEL" TO WS-FIELD
+               MOVE "UNKNOWN" TO WS-DETAIL
+           END-IF.
+
+       3900-CHECK-MEMO.
+           IF TI-MEMO NOT = SPACES
+               CALL "ALZTEXT" USING BY CONTENT "S"
+                                    BY REFERENCE TI-MEMO ALZ-RC ALZ-POS
+               IF ALZ-RC = 1
+                   MOVE "E801" TO WS-REASON
+                   MOVE "MEMO" TO WS-FIELD
+                   PERFORM 3990-POSITION-DETAIL
+               ELSE
+                   CALL "ALZTEXT" USING BY CONTENT "F"
+                                        BY REFERENCE TI-MEMO ALZ-RC
+                                                     ALZ-POS
+                   IF ALZ-RC = 2
+                       MOVE "E802" TO WS-REASON
+                       MOVE "MEMO" TO WS-FIELD
+                       MOVE "FORMULA-PREFIX" TO WS-DETAIL
+                   END-IF
+               END-IF
+           END-IF.
+
+       3990-POSITION-DETAIL.
+           COMPUTE WS-POS-EDIT = ALZ-POS
+               ON SIZE ERROR
+                   MOVE 999 TO WS-POS-EDIT
+           END-COMPUTE
+           MOVE SPACES TO WS-DETAIL
+           STRING "POS=" WS-POS-EDIT DELIMITED BY SIZE INTO WS-DETAIL.
+
+      *----------------------------------------------------------------
+      * Outputs.
+      *----------------------------------------------------------------
+       4000-WRITE-ACCEPTED.
+           MOVE SPACES TO TXN-OK-REC
+           MOVE TI-ID TO TA-ID
+           MOVE TI-TS TO TA-TS
+           MOVE TI-FROM-IBAN TO WS-WORK
+           PERFORM 4100-ACCOUNT-TOKEN
+           MOVE ALZ-MAC-HEX(1:16) TO TA-FROM-TOKEN
+           MOVE TI-TO-IBAN TO WS-WORK
+           PERFORM 4100-ACCOUNT-TOKEN
+           MOVE ALZ-MAC-HEX(1:16) TO TA-TO-TOKEN
+           CALL "ALZMASK" USING BY CONTENT "I"
+                                BY REFERENCE TI-FROM-IBAN TA-FROM-MASKED
+           CALL "ALZMASK" USING BY CONTENT "I"
+                                BY REFERENCE TI-TO-IBAN TA-TO-MASKED
+           MOVE WS-CENTS TO TA-AMOUNT-CENTS
+           MOVE TI-CURRENCY TO TA-CURRENCY
+           MOVE TI-CHANNEL TO TA-CHANNEL
+           IF TI-PAN NOT = SPACES
+               CALL "ALZMASK" USING BY CONTENT "P"
+                                    BY REFERENCE TI-PAN TA-PAN-MASKED
+           END-IF
+           MOVE TI-MEMO TO TA-MEMO
+           WRITE TXN-OK-REC
+           IF WS-FS-OK NOT = "00"
+               PERFORM 8000-WRITE-FAILED
+           END-IF
+           ADD 1 TO WS-ACCEPTED
+           PERFORM 4200-ADD-TOTAL.
+
+      * Pseudonymous account id: HMAC-SHA256(K-token, IBAN). Stable
+      * for one key, and not linkable to the IBAN without that key.
+       4100-ACCOUNT-TOKEN.
+           MOVE 0 TO WS-WORK-LEN
+           INSPECT WS-WORK TALLYING WS-WORK-LEN
+               FOR CHARACTERS BEFORE INITIAL SPACE
+           MOVE 32 TO ALZ-KEY-LEN
+           CALL "alz_hmac_sha256_hex" USING ALZ-TOKEN-KEY ALZ-KEY-LEN
+                                            WS-WORK WS-WORK-LEN
+                                            ALZ-MAC-HEX
+                                  RETURNING ALZ-RC
+           IF NOT ALZ-OK
+               DISPLAY "TXNGUARD: token derivation failed" UPON SYSERR
+               MOVE 12 TO WS-RETURN-CODE
+               SET WS-EOF TO TRUE
+           END-IF.
+
+       4200-ADD-TOTAL.
+           PERFORM VARYING WS-TX FROM 1 BY 1
+                   UNTIL WS-TX > WS-TOTAL-COUNT
+               IF WS-TOTAL-CCY(WS-TX) = TI-CURRENCY
+                   EXIT PERFORM
+               END-IF
+           END-PERFORM
+           IF WS-TX > WS-TOTAL-COUNT
+               ADD 1 TO WS-TOTAL-COUNT
+               MOVE TI-CURRENCY TO WS-TOTAL-CCY(WS-TX)
+               MOVE 0 TO WS-TOTAL-CENTS(WS-TX)
+           END-IF
+           ADD WS-CENTS TO WS-TOTAL-CENTS(WS-TX)
+               ON SIZE ERROR
+                   DISPLAY "TXNGUARD: currency total overflow"
+                       UPON SYSERR
+                   MOVE 8 TO WS-RETURN-CODE
+                   SET WS-EOF TO TRUE
+           END-ADD.
+
+       4500-WRITE-REJECTED.
+           MOVE SPACES TO TXN-REJ-REC
+           MOVE WS-RECORDS TO TR-LINE
+           MOVE TI-ID TO TR-ID
+           CALL "ALZSANIT" USING BY CONTENT "I" BY REFERENCE TR-ID
+           MOVE WS-REASON TO TR-CODE
+           MOVE WS-FIELD TO TR-FIELD
+           MOVE WS-DETAIL TO TR-DETAIL
+           WRITE TXN-REJ-REC
+           IF WS-FS-REJ NOT = "00"
+               PERFORM 8000-WRITE-FAILED
+           END-IF
+           ADD 1 TO WS-REJECTED.
+
+      * Every record, accepted or rejected, is sealed: the MAC covers
+      * the entry and the previous MAC, so editing, deleting or
+      * reordering any entry breaks the chain from that point on.
+      * Untrusted fields are sanitised and masked before they are
+      * written: no raw card number or IBAN ever reaches the ledger.
+       5000-SEAL-LEDGER.
+           MOVE WS-RECORDS TO LG-SEQ
+           IF WS-VALID
+               SET LG-ACCEPTED TO TRUE
+           ELSE
+               SET LG-REJECTED TO TRUE
+           END-IF
+           MOVE TI-ID TO LG-ID
+           CALL "ALZSANIT" USING BY CONTENT "I" BY REFERENCE LG-ID
+           MOVE TI-TS TO LG-TS
+           CALL "ALZSANIT" USING BY CONTENT "D" BY REFERENCE LG-TS
+           MOVE WS-REASON TO LG-CODE
+           IF WS-AMOUNT-RC = 0
+               MOVE WS-CENTS TO LG-AMOUNT-CENTS
+           ELSE
+               MOVE 0 TO LG-AMOUNT-CENTS
+           END-IF
+           MOVE TI-CURRENCY TO LG-CURRENCY
+           CALL "ALZSANIT" USING BY CONTENT "A"
+                                 BY REFERENCE LG-CURRENCY
+           MOVE TI-FROM-IBAN TO WS-WORK
+           CALL "ALZSANIT" USING BY CONTENT "N" BY REFERENCE WS-WORK
+           CALL "ALZMASK" USING BY CONTENT "I"
+                                BY REFERENCE WS-WORK LG-FROM-MASKED
+           MOVE TI-PAN TO WS-WORK
+           CALL "ALZSANIT" USING BY CONTENT "D" BY REFERENCE WS-WORK
+           CALL "ALZMASK" USING BY CONTENT "L"
+                                BY REFERENCE WS-WORK LG-PAN-LAST4
+           MOVE WS-PREV-MAC TO LG-PREV-MAC
+           MOVE 32 TO ALZ-KEY-LEN
+           MOVE 181 TO ALZ-MSG-LEN
+           CALL "alz_hmac_sha256_hex" USING ALZ-LEDGER-KEY ALZ-KEY-LEN
+                                            LG-MAC-INPUT ALZ-MSG-LEN
+                                            LG-MAC
+                                  RETURNING ALZ-RC
+           IF NOT ALZ-OK
+               DISPLAY "TXNGUARD: ledger MAC failed" UPON SYSERR
+               MOVE 12 TO WS-RETURN-CODE
+               SET WS-EOF TO TRUE
+           ELSE
+               WRITE LEDGER-RECORD FROM LEDGER-LINE
+               IF WS-FS-LEDGER NOT = "00"
+                   PERFORM 8000-WRITE-FAILED
+               ELSE
+                   MOVE LG-MAC TO WS-PREV-MAC
+                   ADD 1 TO WS-SEALED
+               END-IF
+           END-IF.
+
+       8000-WRITE-FAILED.
+           DISPLAY "TXNGUARD: write error" UPON SYSERR
+           MOVE 16 TO WS-RETURN-CODE
+           SET WS-EOF TO TRUE.
+
+      *----------------------------------------------------------------
+      * End of job.
+      *----------------------------------------------------------------
+       9000-FINISH.
+           IF WS-RETURN-CODE = 0 AND WS-REJECTED > 0
+               MOVE 4 TO WS-RETURN-CODE
+           END-IF
+           IF WS-FILES-OPEN
+               PERFORM 9100-WRITE-SUMMARY
+               CLOSE TXN-IN TXN-OK TXN-REJ LEDGER SUMMARY
+           END-IF
+           PERFORM ALZ-WIPE-KEYS.
+
+       9100-WRITE-SUMMARY.
+           MOVE "ALZ-SUMMARY=1" TO SUMMARY-RECORD
+           WRITE SUMMARY-RECORD
+           MOVE SPACES TO SUMMARY-RECORD
+           STRING "JOB=" ALZ-JOB-ID DELIMITED BY SPACE
+               INTO SUMMARY-RECORD
+           WRITE SUMMARY-RECORD
+           MOVE "RECORDS" TO WS-LABEL
+           MOVE WS-RECORDS TO WS-NUMBER
+           PERFORM 9200-NUMBER-LINE
+           MOVE "ACCEPTED" TO WS-LABEL
+           MOVE WS-ACCEPTED TO WS-NUMBER
+           PERFORM 9200-NUMBER-LINE
+           MOVE "REJECTED" TO WS-LABEL
+           MOVE WS-REJECTED TO WS-NUMBER
+           PERFORM 9200-NUMBER-LINE
+           PERFORM VARYING WS-TX FROM 1 BY 1
+                   UNTIL WS-TX > WS-TOTAL-COUNT
+               MOVE SPACES TO WS-LABEL
+               STRING "TOTAL-" WS-TOTAL-CCY(WS-TX) DELIMITED BY SIZE
+                   INTO WS-LABEL
+               MOVE WS-TOTAL-CENTS(WS-TX) TO WS-NUMBER
+               PERFORM 9200-NUMBER-LINE
+           END-PERFORM
+           MOVE "LEDGER-ENTRIES" TO WS-LABEL
+           MOVE WS-SEALED TO WS-NUMBER
+           PERFORM 9200-NUMBER-LINE
+           MOVE SPACES TO SUMMARY-RECORD
+           STRING "LEDGER-HEAD=" WS-PREV-MAC DELIMITED BY SIZE
+               INTO SUMMARY-RECORD
+           WRITE SUMMARY-RECORD
+           MOVE "SELFTEST=PASS" TO SUMMARY-RECORD
+           WRITE SUMMARY-RECORD
+           MOVE "RC" TO WS-LABEL
+           MOVE WS-RETURN-CODE TO WS-NUMBER
+           PERFORM 9200-NUMBER-LINE.
+
+       9200-NUMBER-LINE.
+           MOVE WS-NUMBER TO WS-NUM-EDIT
+           MOVE SPACES TO SUMMARY-RECORD
+           STRING FUNCTION TRIM(WS-LABEL) "=" FUNCTION TRIM(WS-NUM-EDIT)
+               DELIMITED BY SIZE INTO SUMMARY-RECORD
+           WRITE SUMMARY-RECORD.
+
+       COPY ALZKEYP.
+       END PROGRAM TXNGUARD.

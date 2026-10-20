@@ -80,7 +80,7 @@ flowchart LR
 | **T**ampering: a risk report that hides, invents or silences a transfer | B3 | FRAUDSCAN's report must have scored exactly the accepted records, in order, with counts that add up and their amount range | `review.test.mjs` |
 | **T**ampering: Trojan Source / hidden code in contributions | Repo | `scripts/check-unicode.mjs` in CI; Watchtower `ALZ-GEN-001/002`, `ALZ-COB-014` | CI |
 | **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id. The anchor is signed with a key derived from the master key, which only its holder can use, so whoever holds `K_ledger` (an auditor) can recompute a chain but cannot produce a signed anchor that matches it; with `ALCAZAR_EVIDENCE_DIR`, the sealed bytes and the signed anchor outlive the job, written once and read-only | `ledger.test.mjs`, `evidence.test.mjs`, `verify-ledger.test.mjs` |
-| **I**nformation disclosure: card numbers | B2, B3 | The raw batch reaches TXNGUARD on stdin, so the card field never touches the disk, and job directories left by a crash are removed at start-up; the card field leaves the core only as BIN + last 4 (ACCEPTED) or last 4 (ledger); a card number typed into the memo is refused (E803) the ways people type it — grouped, next to an expiry date or a CVV, glued to a word — but not when glued to other digits (see the residual risks), and Lookout masks every card-like run of digits it shows | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (26 card formats, 13 look-alikes); Siege `pan-in-memo`; Lookout `dom.test.mjs` |
+| **I**nformation disclosure: card numbers | B2, B3 | The raw batch reaches TXNGUARD on stdin, so the card field never touches the disk, and job directories left by a crash are removed at start-up; the card field leaves the core only as BIN + last 4 (ACCEPTED) or last 4 (ledger); a card number typed into the memo is refused (E803) the ways people type it — grouped, next to an expiry date or a CVV, glued to a word — but not when glued to other digits (see the residual risks), and Lookout masks every run of 12+ digits it shows that are at most four non-alphanumeric characters apart | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (26 card formats, 13 look-alikes); Siege `pan-in-memo`; Lookout `dom.test.mjs` |
 | **I**nformation disclosure: account identity in analytics | B2 | FRAUDSCAN sees HMAC tokens (`K_token`) and masked IBANs (country, check digits, last 4), never a whole account field; a memo reaches it as typed, card numbers excepted (refused) — see the residual risks | `parseAccepted` tests |
 | **I**nformation disclosure: key exposure | B2 | The master key never leaves Gatehouse; each legacy program gets only its sub-keys (LEDGERCK: `K_ledger` only), on stdin (not argv, not env), read with `read(2)` so no stdio buffer keeps a copy, wiped after use; a program handed more than its keys, or equal sub-keys, refuses to run; key file decoded as bytes and refused if group/world readable or inside the job directory. Enforced by Gatehouse, not by the operating system: the programs run as its user (see the residual risks) | `review.test.mjs`, `ALZKEYP.cpy`, `app.mjs`; memory scan (HARDENING 20) |
 | **I**nformation disclosure: a job id (the key to a job) in the logs | Host | Request logs keep four hex digits of it | `auth.test.mjs` |
@@ -145,10 +145,12 @@ flowchart LR
 * **A memo is free text.** TXNGUARD refuses card numbers in it, not account
   numbers: an IBAN typed into a memo reaches ACCEPTED.DAT, FRAUDSCAN and the
   browser as typed. So would a card number ALZPANSC misses — glued to other
-  digits, or split by wider joiners than it links — and with
-  `ALCAZAR_EVIDENCE_DIR` it would be kept in the write-once evidence, which
-  cannot be redacted without breaking the seal. Lookout masks every
-  card-like run of digits it shows, more widely than ALZPANSC links them.
+  digits, or split by other punctuation or wider joiners than it links —
+  and with `ALCAZAR_EVIDENCE_DIR` it would be kept in the write-once
+  evidence, which cannot be redacted without breaking the seal. Lookout
+  masks every run of 12 or more digits it shows that are at most four
+  non-alphanumeric characters apart, far more widely than ALZPANSC links
+  them.
 * **Account tokens are stable pseudonyms.** The same IBAN gets the same token
   in every job under one master key — analytics can follow an account over
   time — and an operator can learn the token of any IBAN by submitting it.

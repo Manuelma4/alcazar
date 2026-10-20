@@ -205,6 +205,10 @@ describe('batch: parsing input and keeping only a masked projection', () => {
     assert.equal(maskMemo('4111  1111  1111  1111'), '****  ****  ****  1111');
     assert.equal(maskMemo('4111 - 1111 - 1111 - 1111'), '**** - **** - **** - 1111');
     assert.equal(maskMemo('4111 -- 1111 -- 1111 -- 1111'), '**** -- **** -- **** -- 1111');
+    // And any other punctuation, which ALZPANSC does not link at all.
+    assert.equal(maskMemo('4111,1111,1111,1111'), '****,****,****,1111');
+    assert.equal(maskMemo('(4111)(1111)(1111)(1111)'), '(****)(****)(****)(1111)');
+    assert.equal(maskMemo("4111'1111+1111:1111"), "****'****+****:1111");
     for (const memo of ['Rent October', 'tel +33 6 12 34 56 78', 'invoice 2026-10-20 n 0042', '']) assert.equal(maskMemo(memo), memo);
     const [row] = projectInput([{ id: 'X', memo: 'card 4111 1111 1111 1111 exp 12/28' }]);
     assert.equal(row.memo, 'card **** **** **** 1111 exp 12/28');

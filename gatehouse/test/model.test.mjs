@@ -166,8 +166,8 @@ const NETWORKS = [
 ];
 
 /**
- * ALZPANSC. Valid IBANs (either case, single spaces allowed, checked like
- * ALZIBAN) are set aside; digit groups joined by one or two spaces,
+ * ALZPANSC. Valid IBANs (either case, checked like ALZIBAN, their groups
+ * joined the ways the chains below link) are set aside; digit groups joined by one or two spaces,
  * hyphens, dots or slashes — or by one of them with a space on each side —
  * form a chain; inside it groups of 3+ digits link
  * up, and the chain's last group may be shorter; any stretch from a group
@@ -189,9 +189,16 @@ function memoHasPan(memo) {
       if (alnum(text[q])) {
         chars.push(text[q].toUpperCase());
         at.push(q);
-      } else if (!(text[q] === ' ' && q + 1 < text.length && alnum(text[q + 1]))) {
-        break;
+        continue;
       }
+      // Across the joiners the chains link: one or two of " -./", or one
+      // of "-./" with a space on each side, then a letter or digit.
+      let n = 0;
+      while (q + n < text.length && n < 4 && ' -./'.includes(text[q + n])) n += 1;
+      const joins = n > 0 && n < 4 && q + n < text.length && alnum(text[q + n]) &&
+        (n <= 2 || (text[q] === ' ' && text[q + 2] === ' ' && text[q + 1] !== ' '));
+      if (!joins) break;
+      q += n - 1;
     }
     for (let L = 15; L <= chars.length; L += 1) {
       if (ibanRc(chars.slice(0, L).join('')) === 0) {

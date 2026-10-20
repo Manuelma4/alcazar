@@ -108,6 +108,9 @@
        01  LS-Q                        PIC S9(9) COMP-5.
        01  LS-CH                       PIC X.
        01  LS-NEXT                     PIC X.
+       01  LS-JN                       PIC S9(9) COMP-5.
+       01  LS-JOINS-SW                 PIC X.
+           88  LS-JOINS                VALUE "Y".
        01  LS-JOINER-LEN               PIC S9(9) COMP-5.
        01  LS-JOINER-TXT               PIC X(3) VALUE SPACES.
        01  LS-GAP-SW                   PIC X.
@@ -206,8 +209,9 @@
                END-IF
            END-IF.
 
-      * Up to 34 letters and digits, upper-cased; a single space
-      * between them (the printed form) is allowed.
+      * Up to 34 letters and digits, upper-cased, across the joiners
+      * the chains link (1210): an IBAN is set aside however its
+      * groups are joined, before its digits could look like a card.
        1200-GATHER-CANDIDATE.
            MOVE SPACES TO LS-CAND
            MOVE 0 TO LS-CAND-LEN
@@ -221,17 +225,40 @@
                    MOVE LS-Q TO LS-CAND-POS(LS-CAND-LEN)
                    ADD 1 TO LS-Q
                ELSE
-                   IF LS-CH NOT = SPACE OR LS-Q = LS-LEN
+                   PERFORM 1210-JOINER-RUN
+                   IF NOT LS-JOINS
                        EXIT PERFORM
                    END-IF
-                   MOVE LK-TEXT(LS-Q + 1:1) TO LS-NEXT
-                   IF LS-NEXT IS NOT ALZ-LETTER
-                      AND LS-NEXT IS NOT ALZ-DIGIT
-                       EXIT PERFORM
-                   END-IF
-                   ADD 1 TO LS-Q
+                   ADD LS-JN TO LS-Q
                END-IF
            END-PERFORM.
+
+      * The joiner run at LS-Q (LS-JN characters) joins when the chains
+      * would link across it - one or two of " -./", or one of "-./"
+      * with a space on each side - and a letter or digit follows.
+       1210-JOINER-RUN.
+           MOVE "N" TO LS-JOINS-SW
+           MOVE 0 TO LS-JN
+           PERFORM UNTIL LS-Q + LS-JN > LS-LEN OR LS-JN = 4
+               IF LK-TEXT(LS-Q + LS-JN:1) IS NOT ALZ-JOINER
+                   EXIT PERFORM
+               END-IF
+               ADD 1 TO LS-JN
+           END-PERFORM
+           IF LS-JN > 0 AND LS-JN < 4 AND LS-Q + LS-JN <= LS-LEN
+               MOVE LK-TEXT(LS-Q + LS-JN:1) TO LS-NEXT
+               IF LS-NEXT IS ALZ-LETTER OR LS-NEXT IS ALZ-DIGIT
+                   IF LS-JN <= 2
+                       SET LS-JOINS TO TRUE
+                   END-IF
+                   IF LS-JN = 3
+                      AND LK-TEXT(LS-Q:1) = SPACE
+                      AND LK-TEXT(LS-Q + 2:1) = SPACE
+                      AND LK-TEXT(LS-Q + 1:1) NOT = SPACE
+                       SET LS-JOINS TO TRUE
+                   END-IF
+               END-IF
+           END-IF.
 
       * Only the length of the country's IBANs can pass ALZIBAN.
        1300-CONFIRM-CANDIDATE.

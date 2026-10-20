@@ -412,6 +412,22 @@
            MOVE 0 TO T-EXPECT
            MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ES60 - 5914 - 1077 - 2046 - 3592 - 5631" TO T-TEXT
+           MOVE "IBAN with spaced hyphens is set aside" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "DE89-3704-0044-0532-0130-00" TO T-TEXT
+           MOVE "IBAN with hyphens is set aside" TO T-NAME
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "DE89  3704  0044  0532  0130  00" TO T-TEXT
+           MOVE "IBAN with double spaces is set aside" TO T-NAME
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "BE68-5390-0754-7034 4111111111111111" TO T-TEXT
+           MOVE "PAN after a hyphenated IBAN" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 21 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
            MOVE "ref 5555-5555-5555-4444" TO T-TEXT
            MOVE "PAN with hyphens" TO T-NAME
            MOVE 1 TO T-EXPECT

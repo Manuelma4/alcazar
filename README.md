@@ -63,7 +63,7 @@ that fails them.
 
 ```bash
 brew install gnucobol gcc        # Debian/Ubuntu: sudo apt install gnucobol3 gfortran make
-make && make test                # warnings are errors; 267 COBOL/Fortran checks
+make && make test                # warnings are errors; 273 COBOL/Fortran checks
 npm test                         # Gatehouse, Siege, Watchtower and Lookout tests
 npm start                        # Gatehouse under the Node.js permission model; prints the sign-in link
 ```

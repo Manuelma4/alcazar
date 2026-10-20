@@ -168,7 +168,8 @@ const NETWORKS = [
 /**
  * ALZPANSC. Valid IBANs (either case, single spaces allowed, checked like
  * ALZIBAN) are set aside; digit groups joined by one or two spaces,
- * hyphens, dots or slashes form a chain; inside it groups of 3+ digits link
+ * hyphens, dots or slashes — or by one of them with a space on each side —
+ * form a chain; inside it groups of 3+ digits link
  * up, and the chain's last group may be shorter; any stretch from a group
  * start to a group end of 16 or 19 digits starting with 2-6, or of 13-18
  * digits with a network's prefix and length, that passes Luhn is a card.
@@ -201,25 +202,26 @@ function memoHasPan(memo) {
   }
   const groups = [];
   let digits = '';
-  let joiner = 0;
+  let joiner = '';
   let gap = true;
+  const joins = (j) => j.length <= 2 || (j.length === 3 && j[0] === ' ' && j[2] === ' ' && j[1] !== ' ');
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
     if (aside[i]) {
       gap = true;
-      joiner = 0;
+      joiner = '';
     } else if (digit(ch)) {
       const last = groups.at(-1);
-      if (last && !gap && joiner === 0) last.len += 1;
-      else groups.push({ start: digits.length, len: 1, joined: Boolean(last) && !gap && joiner <= 2 });
+      if (last && !gap && joiner === '') last.len += 1;
+      else groups.push({ start: digits.length, len: 1, joined: Boolean(last) && !gap && joins(joiner) });
       digits += ch;
-      joiner = 0;
+      joiner = '';
       gap = false;
     } else if (' -./'.includes(ch)) {
-      joiner += 1;
+      joiner += ch;
     } else {
       gap = true;
-      joiner = 0;
+      joiner = '';
     }
   }
   const network = (d) => ((d.length === 16 || d.length === 19) && '23456'.includes(d[0])) || NETWORKS.some(([n, low, high, lengths]) => {

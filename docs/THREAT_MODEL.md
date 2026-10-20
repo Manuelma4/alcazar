@@ -144,7 +144,11 @@ flowchart LR
   off by default — in the image too.
 * **A memo is free text.** TXNGUARD refuses card numbers in it, not account
   numbers: an IBAN typed into a memo reaches ACCEPTED.DAT, FRAUDSCAN and the
-  browser as typed.
+  browser as typed. So would a card number ALZPANSC misses — glued to other
+  digits, or split by wider joiners than it links — and with
+  `ALCAZAR_EVIDENCE_DIR` it would be kept in the write-once evidence, which
+  cannot be redacted without breaking the seal. Lookout masks every
+  card-like run of digits it shows, more widely than ALZPANSC links them.
 * **Account tokens are stable pseudonyms.** The same IBAN gets the same token
   in every job under one master key — analytics can follow an account over
   time — and an operator can learn the token of any IBAN by submitting it.

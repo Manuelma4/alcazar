@@ -382,7 +382,9 @@ any client could evict by sending 40 small batches.
 signed anchor are written once, read-only, outside the job directory, and
 outlive the job and the process. Only operators can submit batches now.
 Write-once storage under that directory (WORM, object lock) is the
-deployment's part.
+deployment's part. Evidence also needs a master key that outlives the
+process (`ALCAZAR_KEY_FILE`): sealed with a key generated per run, it would
+outlive every key that could check it, and Gatehouse refuses to start.
 
 ### Not a vulnerability, but you will see it
 

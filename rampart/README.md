@@ -11,7 +11,7 @@ make the safe way the easy way in legacy languages.
 
 ```bash
 make lib     # build/lib/librampart_cob.a and build/lib/librampart_f.a
-make test    # 169 COBOL checks, 98 Fortran checks
+make test    # 175 COBOL checks, 98 Fortran checks
 ```
 
 ## COBOL modules

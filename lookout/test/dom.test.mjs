@@ -201,6 +201,10 @@ describe('batch: parsing input and keeping only a masked projection', () => {
     assert.equal(maskMemo('card 4111 1111 1111 1111 exp 12/28'), 'card **** **** **** 1111 exp 12/28');
     assert.equal(maskMemo('ref 41111111111111111234'), 'ref ****************1234');
     assert.equal(maskMemo('4111-1111.1111/1111'), '****-****.****/1111');
+    // Every joiner ALZPANSC links — and wider ones.
+    assert.equal(maskMemo('4111  1111  1111  1111'), '****  ****  ****  1111');
+    assert.equal(maskMemo('4111 - 1111 - 1111 - 1111'), '**** - **** - **** - 1111');
+    assert.equal(maskMemo('4111 -- 1111 -- 1111 -- 1111'), '**** -- **** -- **** -- 1111');
     for (const memo of ['Rent October', 'tel +33 6 12 34 56 78', 'invoice 2026-10-20 n 0042', '']) assert.equal(maskMemo(memo), memo);
     const [row] = projectInput([{ id: 'X', memo: 'card 4111 1111 1111 1111 exp 12/28' }]);
     assert.equal(row.memo, 'card **** **** **** 1111 exp 12/28');

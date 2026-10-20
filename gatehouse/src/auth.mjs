@@ -39,6 +39,8 @@ export async function loadOperatorToken(config) {
     if (!isLoopback(config.host)) {
       throw new Error(`ALCAZAR_AUTH=none is refused on ${config.host}: without authentication Gatehouse listens on a loopback address only`);
     }
+    // Behind a proxy, a loopback address says nothing about who connects.
+    if (config.trustProxyHops > 0) throw new Error('ALCAZAR_AUTH=none is refused behind a proxy (ALCAZAR_TRUST_PROXY): remote clients would reach Gatehouse unauthenticated');
     return { digest: null, source: 'none', signIn: null };
   }
   if (config.apiToken && config.apiTokenFile) throw new Error('Set ALCAZAR_API_TOKEN or ALCAZAR_API_TOKEN_FILE, not both');
@@ -125,13 +127,20 @@ export function sessionCookieName(secure) {
   return secure ? '__Host-alz_session' : 'alz_session';
 }
 
-export function readCookie(header, name) {
-  if (typeof header !== 'string' || header.length > 8192) return null;
+/**
+ * Every value of the named cookie, in order (at most 16). Without the
+ * `__Host-` prefix another application on the same host can set a cookie of
+ * the same name, and browsers may send it first: each value is looked at.
+ */
+export function readCookies(header, name) {
+  const values = [];
+  if (typeof header !== 'string') return values;
   for (const part of header.split(';')) {
     const eq = part.indexOf('=');
-    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+    if (eq > 0 && part.slice(0, eq).trim() === name) values.push(part.slice(eq + 1).trim());
+    if (values.length === 16) break;
   }
-  return null;
+  return values;
 }
 
 export function sessionCookie(name, value, maxAgeS, secure) {

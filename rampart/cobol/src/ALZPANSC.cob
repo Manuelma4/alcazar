@@ -109,6 +109,7 @@
        01  LS-CH                       PIC X.
        01  LS-NEXT                     PIC X.
        01  LS-JOINER-LEN               PIC S9(9) COMP-5.
+       01  LS-JOINER-TXT               PIC X(3) VALUE SPACES.
        01  LS-GAP-SW                   PIC X.
            88  LS-GAP                  VALUE "Y".
            88  LS-NO-GAP               VALUE "N".
@@ -268,6 +269,9 @@
                        PERFORM 2100-DIGIT
                    WHEN LS-CH IS ALZ-JOINER
                        ADD 1 TO LS-JOINER-LEN
+                       IF LS-JOINER-LEN <= 3
+                           MOVE LS-CH TO LS-JOINER-TXT(LS-JOINER-LEN:1)
+                       END-IF
                    WHEN OTHER
                        SET LS-GAP TO TRUE
                        MOVE 0 TO LS-JOINER-LEN
@@ -301,6 +305,14 @@
                MOVE "N" TO LS-G-JOINED(LS-NGROUP)
                IF LS-NGROUP > 1 AND LS-NO-GAP AND LS-JOINER-LEN <= 2
                    MOVE "Y" TO LS-G-JOINED(LS-NGROUP)
+               END-IF
+      *        "4111 - 1111": one joiner with a space on each side.
+               IF LS-NGROUP > 1 AND LS-NO-GAP AND LS-JOINER-LEN = 3
+                   IF LS-JOINER-TXT(1:1) = SPACE
+                       AND LS-JOINER-TXT(3:1) = SPACE
+                       AND LS-JOINER-TXT(2:1) NOT = SPACE
+                       MOVE "Y" TO LS-G-JOINED(LS-NGROUP)
+                   END-IF
                END-IF
            END-IF.
 

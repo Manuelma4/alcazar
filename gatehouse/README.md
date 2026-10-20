@@ -44,10 +44,10 @@ into Lookout's sign-in screen. Production runs `node scripts/start-hardened.mjs`
 | `ALCAZAR_BIN_DIR` | `build/bin` | Where the legacy programs are. |
 | `ALCAZAR_WORK_DIR` | `var/jobs` | Job directories. It must be Gatehouse's own — this user's, mode `0700` — since leftover job directories in it are deleted at start-up. Use a tmpfs in production. |
 | `ALCAZAR_KEY_FILE` | — | The master key: 64 lower-case hex digits, mode `0600` or stricter, never inside the job directory (refused). Without it a fresh key is generated per process. It stays in Gatehouse; the legacy programs only get sub-keys, and auditors what `scripts/audit-keys.mjs` derives. The launcher lets Gatehouse read this one file wherever it is: a read-only secret mount such as `/run/secrets` is best (see `compose.yaml`). |
-| `ALCAZAR_AUTH` | `token` | `token`: every API call but `/api/health` needs the operator. `none`: no authentication, accepted on a loopback address only. |
-| `ALCAZAR_API_TOKEN_FILE` | — | The operator token, 32–512 printable ASCII characters and no spaces, in a `0600` file (read like the master key). Recommended. |
+| `ALCAZAR_AUTH` | `token` | `token`: every API call but `/api/health` needs the operator. `none`: no authentication, accepted on a loopback address only, and never behind a proxy (`ALCAZAR_TRUST_PROXY`). |
+| `ALCAZAR_API_TOKEN_FILE` | — | The operator token, 32–512 printable ASCII characters and no spaces, in a `0600` file outside the job directory (read like the master key). Recommended. |
 | `ALCAZAR_API_TOKEN` | — | The same token from the environment (not both). With neither, a token is generated per run and printed as a sign-in link. |
-| `ALCAZAR_EVIDENCE_DIR` | — | Where each sealed job's files and signed anchor are kept, read-only (`0700`, never inside or around the job directory). Put it on WORM or object-lock storage. |
+| `ALCAZAR_EVIDENCE_DIR` | — | Where each sealed job's files and signed anchor are kept, read-only (`0700`, never inside or around the job directory). Needs `ALCAZAR_KEY_FILE`: evidence sealed with a key generated per run could never be verified. Put it on WORM or object-lock storage. |
 | `ALCAZAR_DEMO` | `0` | Enables the tamper endpoint (ledger and record edits) used by the Siege lab. `npm start` and `compose.yaml` turn it on for the showcase. |
 | `ALCAZAR_ALLOWED_HOSTS` | — | Extra host names accepted in the `Host` header. |
 | `ALCAZAR_TRUST_PROXY` | `0` | Number of trusted reverse proxies that append to `X-Forwarded-For`; the client is that many entries from the right (entries further left are client-controlled and ignored). |

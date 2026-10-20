@@ -6,7 +6,7 @@ import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { STATUS_CODES, createServer } from 'node:http';
 import { join, sep } from 'node:path';
 import {
-  Sessions, loadOperatorToken, readCookie, sessionCookie, sessionCookieName, tokenMatches,
+  Sessions, loadOperatorToken, readCookies, sessionCookie, sessionCookieName, tokenMatches,
 } from './auth.mjs';
 import { ROOT, VERSION } from './config.mjs';
 import {
@@ -37,9 +37,15 @@ const STATIC_MOUNTS = [
 export async function createApp(config, { log = defaultLog } = {}) {
   const operator = await loadOperatorToken(config);
   await prepareWorkDir(config.workDir);
+  if (config.apiTokenFile) await refuseInsideWorkDir(config.apiTokenFile, config.workDir, 'ALCAZAR_API_TOKEN_FILE');
   await reapOrphans(config.workDir, log);
   const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile, config.workDir);
-  if (config.evidenceDir) await prepareEvidenceDir(config.evidenceDir, config.workDir);
+  if (config.evidenceDir) {
+    // A key generated per run dies with the process, and with it K_ledger
+    // and the anchor key: nobody could ever check that evidence.
+    if (!config.keyFile) throw new Error('ALCAZAR_EVIDENCE_DIR needs ALCAZAR_KEY_FILE: evidence sealed with a key generated per run could never be verified');
+    await prepareEvidenceDir(config.evidenceDir, config.workDir);
+  }
   const pipeline = new Pipeline({ config, masterKey });
   masterKey.fill(0);
 
@@ -122,7 +128,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
       if (match && tokenMatches(match[1], operator.digest)) return 'bearer';
       throw new HttpError(401, 'P-AUTH', 'Invalid bearer token');
     }
-    if (sessions.valid(readCookie(req.headers.cookie, cookieName))) return 'session';
+    if (readCookies(req.headers.cookie, cookieName).some((id) => sessions.valid(id))) return 'session';
     throw new HttpError(401, 'P-AUTH', 'Sign in first: the API needs the operator token or a Lookout session');
   }
 
@@ -134,7 +140,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
     }
     if (req.method === 'DELETE') {
       checkSameOrigin(req);
-      sessions.revoke(readCookie(req.headers.cookie, cookieName));
+      for (const id of readCookies(req.headers.cookie, cookieName)) sessions.revoke(id);
       sendJson(res, 200, { auth: config.auth, via: null }, { 'set-cookie': sessionCookie(cookieName, '', 0, config.hsts) });
       return;
     }
@@ -451,10 +457,7 @@ async function loadMasterKey(file, workDir) {
   if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) {
     throw new Error(`${file} must not be accessible by group or others (chmod 600)`);
   }
-  const [real, work] = await Promise.all([realpath(file), realpath(workDir)]);
-  if (real.startsWith(work + sep)) {
-    throw new Error(`${file} is inside the job directory (ALCAZAR_WORK_DIR): keep the master key elsewhere, e.g. on a read-only secret mount`);
-  }
+  await refuseInsideWorkDir(file, workDir, 'The master key');
   // Bytes from start to finish: a hex string could never be wiped.
   const raw = await readFile(file);
   try {
@@ -479,6 +482,14 @@ async function prepareWorkDir(workDir) {
   const owner = typeof process.getuid === 'function' ? process.getuid() : info.uid;
   if (process.platform !== 'win32' && ((info.mode & 0o077) !== 0 || info.uid !== owner)) {
     throw new Error(`ALCAZAR_WORK_DIR (${workDir}) must be a private directory: owned by this user, mode 0700`);
+  }
+}
+
+/** A secret file is never kept in the job directory, the insider's territory. */
+async function refuseInsideWorkDir(file, workDir, what) {
+  const [real, work] = await Promise.all([realpath(file), realpath(workDir)]);
+  if (real.startsWith(work + sep)) {
+    throw new Error(`${what} (${file}) is inside the job directory (ALCAZAR_WORK_DIR): keep it elsewhere, e.g. on a read-only secret mount`);
   }
 }
 

@@ -71,6 +71,11 @@ describe('Evidence', { skip: SKIP_REASON }, () => {
 
   it('refuses an evidence directory inside the job directory', async () => {
     const work = join(dir, 'work-2');
-    await assert.rejects(startGatehouse({ ALCAZAR_EVIDENCE_DIR: join(work, 'evidence') }, { workDir: work }), /must not contain one another/);
+    await assert.rejects(startGatehouse({ ALCAZAR_KEY_FILE: masterFile, ALCAZAR_EVIDENCE_DIR: join(work, 'evidence') }, { workDir: work }),
+      /must not contain one another/);
+  });
+
+  it('refuses evidence sealed with a key generated per run: nobody could ever check it', async () => {
+    await assert.rejects(startGatehouse({ ALCAZAR_EVIDENCE_DIR: join(dir, 'evidence-3') }, { workDir: join(dir, 'work-3') }), /needs ALCAZAR_KEY_FILE/);
   });
 });

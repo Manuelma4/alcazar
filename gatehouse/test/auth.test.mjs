@@ -7,7 +7,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { Sessions, readCookie } from '../src/auth.mjs';
+import { Sessions, readCookies } from '../src/auth.mjs';
 import { ROOT, loadConfig } from '../src/config.mjs';
 import { SKIP_REASON, VALID, postJson, startGatehouse } from './helpers.mjs';
 
@@ -41,10 +41,11 @@ describe('Sessions', () => {
     assert.equal(sessions.valid(c.id), false);
   });
 
-  it('read only the named cookie', () => {
-    assert.equal(readCookie('a=1; alz_session=xyz; b=2', 'alz_session'), 'xyz');
-    assert.equal(readCookie('xalz_session=1', 'alz_session'), null);
-    assert.equal(readCookie(undefined, 'alz_session'), null);
+  it('read every value of the named cookie, and only that cookie', () => {
+    assert.deepEqual(readCookies('a=1; alz_session=xyz; b=2; alz_session=abc', 'alz_session'), ['xyz', 'abc']);
+    assert.deepEqual(readCookies('xalz_session=1', 'alz_session'), []);
+    assert.deepEqual(readCookies(undefined, 'alz_session'), []);
+    assert.equal(readCookies(Array.from({ length: 40 }, () => 'alz_session=x').join('; '), 'alz_session').length, 16);
   });
 });
 
@@ -109,6 +110,14 @@ describe('Operator authentication', { skip: SKIP_REASON }, () => {
     assert.equal((await postJson(gh.base, '/api/session', 'token')).status, 400);
   });
 
+  it('finds its session among cookies another application set on the same host', async () => {
+    const { pair } = await signIn(gh.app.signIn);
+    // A same-named cookie set first by something else, and 9 KB of other cookies.
+    assert.equal((await get('/api/session', { cookie: `alz_session=x; ${pair}` })).status, 200);
+    const crowd = Array.from({ length: 90 }, (_, i) => `other${i}=${'v'.repeat(90)}`).join('; ');
+    assert.equal((await get('/api/session', { cookie: `${crowd}; ${pair}` })).status, 200);
+  });
+
   it('takes the token as a bearer token, for scripts', async () => {
     assert.deepEqual(await (await get('/api/session', { authorization: `Bearer ${gh.app.signIn}` })).json(), { auth: 'token', via: 'bearer' });
     // A wrong bearer token is refused, whatever cookie comes with it.
@@ -141,8 +150,9 @@ describe('Operator token configuration', { skip: SKIP_REASON }, () => {
   after(() => rm(dir, { recursive: true, force: true }));
   const work = () => join(dir, `work-${Math.random().toString(36).slice(2)}`);
 
-  it('refuses no authentication off loopback, and contradictory or weak settings', async () => {
+  it('refuses no authentication off loopback or behind a proxy, and contradictory or weak settings', async () => {
     await assert.rejects(startGatehouse({ ALCAZAR_AUTH: 'none', ALCAZAR_HOST: '0.0.0.0' }, { workDir: work() }), /refused on 0\.0\.0\.0/);
+    await assert.rejects(startGatehouse({ ALCAZAR_AUTH: 'none', ALCAZAR_TRUST_PROXY: '1' }, { workDir: work() }), /refused behind a proxy/);
     await assert.rejects(startGatehouse({ ALCAZAR_AUTH: 'none', ALCAZAR_API_TOKEN: TOKEN }, { workDir: work() }), /cannot be combined/);
     await assert.rejects(startGatehouse({ ALCAZAR_API_TOKEN: 'short' }, { workDir: work() }), /32 to 512 printable ASCII/);
     await assert.rejects(startGatehouse({ ALCAZAR_API_TOKEN: `${TOKEN} with spaces` }, { workDir: work() }), /32 to 512 printable ASCII/);
@@ -160,6 +170,11 @@ describe('Operator token configuration', { skip: SKIP_REASON }, () => {
     }
     await chmod(file, 0o644);
     await assert.rejects(startGatehouse({ ALCAZAR_API_TOKEN_FILE: file }, { workDir: work() }), /chmod 600/);
+    // Never in the job directory: whoever reads the jobs would be the operator.
+    const jobs = work();
+    await mkdir(jobs, { recursive: true, mode: 0o700 });
+    await writeFile(join(jobs, 'operator.token'), TOKEN, { mode: 0o600 });
+    await assert.rejects(startGatehouse({ ALCAZAR_API_TOKEN_FILE: join(jobs, 'operator.token') }, { workDir: jobs }), /inside the job directory/);
     await writeFile(file, 'too-short\n', { mode: 0o600 });
     await chmod(file, 0o600);
     await assert.rejects(startGatehouse({ ALCAZAR_API_TOKEN_FILE: file }, { workDir: work() }), /must hold the operator token/);

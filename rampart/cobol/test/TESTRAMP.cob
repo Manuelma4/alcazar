@@ -397,6 +397,21 @@
            MOVE 1 TO T-EXPECT
            MOVE 6 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
+           MOVE "pay 4111 - 1111 - 1111 - 1111" TO T-TEXT
+           MOVE "PAN joined by spaced hyphens" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 5 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ref 5555 / 5555 / 5555 / 4444" TO T-TEXT
+           MOVE "PAN joined by spaced slashes" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 5 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ref 1234 - 5678 - 9012" TO T-TEXT
+           MOVE "spaced hyphens, too short" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
            MOVE "ref 5555-5555-5555-4444" TO T-TEXT
            MOVE "PAN with hyphens" TO T-NAME
            MOVE 1 TO T-EXPECT

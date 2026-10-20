@@ -99,8 +99,10 @@ verdict        BROKEN
 
 An auditor checks a sealed job the same way, outside Gatehouse, with
 `K_ledger` and Gatehouse's public key — no master key, no token key, nothing
-that can seal. Gatehouse signs every job's anchor (Ed25519), and with
-`ALCAZAR_EVIDENCE_DIR` keeps each sealed job read-only after it expires:
+that can sign an anchor (`K_ledger` can recompute a chain, but not the
+signature that pins its head). Gatehouse signs every job's anchor (Ed25519),
+and with `ALCAZAR_EVIDENCE_DIR` keeps each sealed job read-only after it
+expires:
 
 ```bash
 node scripts/audit-keys.mjs --master-key-file master.key --out audit/   # K_LEDGER.key + ANCHOR.pub
@@ -126,13 +128,15 @@ flowchart LR
 
 1. **Gatehouse** checks structure only — JSON types, lengths, printable ASCII,
    no unknown keys, at most 1,000 transfers — and pipes fixed-length records
-   to TXNGUARD's stdin, after its keys: raw card numbers never touch the disk.
+   to TXNGUARD's stdin, after its keys: the card field never touches the disk.
 2. **TXNGUARD** (COBOL) re-checks everything and applies the business rules
    with Rampart: IBAN check digits, Luhn, a strict amount grammar that refuses
    to truncate, per-currency transfer limits, an ISO 4217 allowlist, real
    calendar dates, replays, the SEPA character set, spreadsheet-formula
    prefixes, card numbers typed into the memo. Accounts leave it only as
-   HMAC tokens and masked IBANs; card numbers only as BIN + last 4.
+   HMAC tokens and masked IBANs; the card field only as BIN + last 4 (a
+   memo leaves as typed, so a card number glued to other digits, which
+   ALZPANSC cannot tell apart, would too — Lookout masks such runs).
 3. **FRAUDSCAN** (Fortran) scores what was accepted: Benford's law (chi-square
    with p-value, Nigrini MAD), robust z-scores against each sender's own
    history, structuring just under the reporting threshold, velocity bursts
@@ -219,14 +223,16 @@ $ node watchtower/bin/watchtower.mjs scan examples/vulnerable/ACCTXFER.cbl
   `*> watchtower-ignore ALZ-COB-006 -- amount validated positive above`.
 * **Zero dependencies, ReDoS-safe hand-written lexers**, and a browser-safe
   core: Lookout scans pasted code without a server round-trip.
-* **Dogfooded**: CI fails if Watchtower finds anything in Alcazar's own COBOL
-  and Fortran — and if it stops finding all 34 rules in `examples/vulnerable`.
+* **Dogfooded**: CI fails if Watchtower finds anything, at any severity, in
+  Alcazar's own COBOL and Fortran (each suppression is justified in the
+  source) — and if it stops finding all 34 rules in `examples/vulnerable`.
 
 Watchtower is also a **GitHub Action** — scan your own legacy code on every
 pull request:
 
 ```yaml
 # .github/workflows/watchtower.yml, in your repository
+on: [pull_request]
 permissions:
   contents: read
   security-events: write
@@ -265,7 +271,7 @@ jobs:
 | [ALZ-COB-014](docs/rules/ALZ-COB-014.md) | Code-like text beyond column 72 | medium | CWE-561 |
 | [ALZ-COB-015](docs/rules/ALZ-COB-015.md) | ALTER statement (self-modifying control flow) | low | CWE-691 |
 | [ALZ-COB-016](docs/rules/ALZ-COB-016.md) | LINE SEQUENTIAL input without record-length check | medium | CWE-130 |
-| [ALZ-COB-017](docs/rules/ALZ-COB-017.md) | Secret read with ACCEPT (stdio keeps a copy) | low | CWE-316 |
+| [ALZ-COB-017](docs/rules/ALZ-COB-017.md) | Secret read with ACCEPT | low | CWE-316 |
 
 </details>
 
@@ -308,7 +314,8 @@ More in the [Watchtower README](watchtower/README.md).
   pinned by digest, GitHub Actions pinned by commit SHA, Dependabot on all
   three.
 * **No shell, ever.** Legacy programs are spawned with an argv array, an
-  allow-listed environment (two variables), a wall-clock timeout, bounded
+  allow-listed environment (`PATH` and `LC_ALL`; under the permission model
+  Node adds its own `NODE_OPTIONS`), a wall-clock timeout, bounded
   output and — on Linux — `prlimit` CPU, memory, file-size and core limits.
 * **Least-privilege keys, on stdin.** The 256-bit master key never leaves
   Gatehouse: each legacy program reads only the purpose-specific sub-keys it
@@ -319,12 +326,13 @@ More in the [Watchtower README](watchtower/README.md).
   an HttpOnly, SameSite=Strict session cookie. No token configured? One is
   generated per run and printed as a sign-in link.
 * **Evidence an auditor can check but not forge.** Every job's anchor is
-  signed with an Ed25519 key that never leaves Gatehouse; auditors get
-  `K_ledger` and the public key, and the sealed files can be kept read-only
-  after the job expires.
-* **Fail closed.** Every program starts with known-answer self-tests (NIST,
-  RFC 4231) and Gatehouse refuses batches if the full pipeline does not match
-  OpenSSL bit for bit at start-up.
+  signed with an Ed25519 key derived from the master key and never stored,
+  so only the master key's holder can sign; auditors get `K_ledger` and the
+  public key, and the sealed files can be kept read-only after the job
+  expires.
+* **Fail closed.** TXNGUARD and LEDGERCK start with known-answer self-tests
+  (NIST, RFC 4231), and Gatehouse refuses batches if the full pipeline does
+  not match OpenSSL bit for bit at start-up.
 * **Strict browser policy.** `default-src 'none'`, Trusted Types required,
   COOP/COEP/CORP, no inline code, DOM built without HTML parsing.
 * **Defence in depth.** Gatehouse validates structure, COBOL re-validates
@@ -343,8 +351,9 @@ Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
 
 ## Lessons from the trenches
 
-Building this surfaced real, measurable traps — each now has a defence and a
-test ([all 27](docs/HARDENING.md)):
+Building this surfaced real, measurable traps — each now has a defence and,
+all but one (item 20, checked with a memory scan), an automated test
+([all 27](docs/HARDENING.md)):
 
 * GnuCOBOL **splits an over-long LINE SEQUENTIAL line into extra records**,
   **trims the trailing blanks of every record it writes** (so a MAC of the
@@ -402,6 +411,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the coding rules of each language.
 
 ## License
 
-[Apache-2.0](LICENSE). Test card numbers are the public test numbers of the
-card schemes; IBANs in samples are the standard documentation examples or
-randomly generated.
+[Apache-2.0](LICENSE). Card numbers in samples and tests are the schemes'
+public test numbers, or random Luhn-valid numbers under test BIN prefixes;
+IBANs are the standard documentation examples or randomly generated.

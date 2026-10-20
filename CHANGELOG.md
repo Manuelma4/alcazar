@@ -13,7 +13,7 @@ First public version.
   with a C ABI (`alz.h`) and power-on self-tests.
 * **TXNGUARD / LEDGERCK / FRAUDSCAN** — the demo batch core: validation and
   pseudonymisation in COBOL with per-currency transfer limits, the batch
-  read from stdin so raw card numbers never touch the disk; the Seal, an
+  read from stdin so the card field never touches the disk; the Seal, an
   HMAC-chained audit ledger (format v2) whose every entry also seals the full
   accepted or rejected record; Benford, robust z-score, structuring, velocity
   and entropy analytics in Fortran, currency by currency.
@@ -30,10 +30,11 @@ First public version.
 * **`scripts/verify-ledger.mjs`** — an auditor's check of a sealed job with
   `K_ledger` and Gatehouse's public key, both verifiers and the signed
   anchor; without an anchor it answers UNANCHORED, never INTACT.
-  **`scripts/audit-keys.mjs`** derives those two keys, and nothing that can
-  seal, from the master key.
+  **`scripts/audit-keys.mjs`** derives those two keys from the master key,
+  and nothing that can sign an anchor.
 * **Lookout** — dashboard with the Siege attack lab (29 attacks), ledger and
   record tampering demo and in-browser code scanning.
 * Docker image with the core compiled and tested at build time, hardened
-  compose file (the master key as a read-only secret), CI with pinned
+  compose file (with the master key and operator token as optional
+  read-only secrets), CI with pinned
   actions.

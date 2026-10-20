@@ -8,7 +8,7 @@ characters...) and reports them as a terminal report, JSON, or SARIF 2.1.0 for G
 
 - **Zero dependencies.** Plain modern JavaScript (ESM), no npm packages at run time or for tests.
 - **Fast and ReDoS-safe.** Hand-written single-pass lexers; no backtracking regular expressions run on
-  scanned code. A 200,000-character pathological line scans in tens of milliseconds.
+  scanned code. A 200,000-character pathological line scans in about a tenth of a second.
 - **Low false positives.** Rules use a real token stream, a DATA DIVISION symbol table with PICTURE
   typing, Fortran program-unit and scope tracking, and prove some results safe (for example an
   arithmetic result that always fits its receiver) instead of guessing.

@@ -5,10 +5,10 @@
 ! Demo material for Watchtower, the Alcazar static analyzer. Every flaw
 ! is deliberate; the fixed version is examples/hardened/risk_engine.f90.
 !
-! Planted flaws: a shell command built from input, random_number() for
-! session tokens, secrets compared with ==, a hard-coded API key, a
-! format string read from the input file, I/O without iostat, a
-! substring index that is not short-circuited and single-precision money.
+! Planted flaws: a shell command built from input, random_number() for session
+! tokens, secrets compared with ==, a hard-coded API key, a format string read
+! from the input file, I/O without iostat, a substring index that is not
+! short-circuited, an exact == test on a real, and single-precision money.
 !=======================================================================
 module risk_engine
   implicit none

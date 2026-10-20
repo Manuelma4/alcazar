@@ -4,7 +4,8 @@
 // generated for this run and printed once as a sign-in link. Scripts send it
 // as a bearer token; Lookout trades it for a session cookie (HttpOnly,
 // SameSite=Strict), so no script in the page ever holds a credential.
-// Gatehouse keeps digests only: of the token, and of every session id.
+// Gatehouse compares digests only — of the token and of every session id —
+// and wipes a token read from a file once it is hashed.
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';

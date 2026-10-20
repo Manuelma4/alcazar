@@ -128,8 +128,9 @@ Lookout works under it with no console violations on any view:
 * **No markup parsing, ever.** `js/dom.mjs` builds everything with
   `createElement` / `createElementNS` and text nodes. It refuses executable or
   embedding tags (`script`, `iframe`, `object`, `foreignObject`, `style`…),
-  `on*` and `style` attributes, unsafe properties, and any URL that is not
-  http(s), mailto, blob, fragment or same-origin. With `trusted-types 'none'`
+  `on*` and `style` attributes, unsafe properties, and — in `href`, `src`,
+  `action`, `xlink:href` and `poster` — any URL that is not http(s), mailto,
+  blob, fragment or same-origin. With `trusted-types 'none'`
   no policy can exist, so `innerHTML`-style sinks are simply never used.
 * **Styles without style attributes.** Dynamic geometry goes through the CSSOM
   (`element.style.setProperty('--x', …)`) or SVG presentation attributes.
@@ -198,11 +199,12 @@ index.html             shell: landmarks, live regions, module entry
 manifest.webmanifest
 assets/                favicon, logo, zellige tessellation (CSS mask)
 css/                   base (tokens, themes) · shell · components · views · charts
-js/main.mjs            shell, theme, routing
+js/main.mjs            shell, theme, routing, sign-in links
+js/signin.mjs          the sign-in screen
 js/dom.mjs             the only DOM builder
 js/api.mjs             the only network module (contract + Siege fetch)
 js/strings.mjs         every UI string
 js/format.mjs records.mjs batch.mjs jobmodel.mjs   pure, tested in Node
 js/fortress.mjs editor.mjs recordview.mjs jobui.mjs ui.mjs icons.mjs charts/  views/
-test/dom.test.mjs      node:test suite
+test/dom.test.mjs actions.test.mjs   node:test suites
 ```

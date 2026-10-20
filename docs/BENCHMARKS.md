@@ -27,8 +27,8 @@ costs nothing measurable and keeps the same guarantee (no stdio copy).
 
 **A file-scanning agent stretches the tail, not the median.** Re-run later
 with an endpoint-security agent scanning file writes in real time, the
-medians came back within 3 %, but about 7 % of TXNGUARD runs — the only
-program here that writes files — stalled for 0.2–2 s with unchanged CPU time
+medians came back within 3 %, but about 7 % of TXNGUARD runs — which write
+four files each — stalled for 0.2–2 s with unchanged CPU time
 (0.05–0.07 s user), pushing p95 to several hundred milliseconds. In a Linux
 container on the same machine, out of the agent's reach, 100 runs of the
 same batch gave a 50.0 ms median and a 52.8 ms p95, with no outlier. If your
@@ -55,7 +55,7 @@ instructions, while the Fortran kernel is portable integer code. That does
 not matter for 247-byte ledger entries, but it is the reason the roadmap
 lists a pluggable crypto backend behind the same `alz.h` ABI.
 
-**Watchtower is fast enough to run on every keystroke**, which is what
-Lookout does in the browser: about 150,000 lines of COBOL a second (its
-symbol table and statement segmentation are the expensive part) and over
-700,000 lines of Fortran.
+**Watchtower is fast enough to run as you type**, which is what Lookout does
+in the browser, 220 ms after the last keystroke: about 150,000 lines of
+COBOL a second (its symbol table and statement segmentation are the
+expensive part) and over 700,000 lines of Fortran.

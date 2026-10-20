@@ -156,7 +156,8 @@ GnuCOBOL maps file names through environment variables (`DD_name`,
 `COB_LIBRARY_PATH`.
 
 *Defence:* static calls (above), and Gatehouse starts every batch program with
-an allow-listed environment (`PATH`, `LC_ALL` — nothing else), no shell, and
+an allow-listed environment (`PATH`, `LC_ALL`, and under the permission model
+the `NODE_OPTIONS` Node adds — item 15), no shell, and
 the sub-keys on stdin.
 
 ### 12. Statistics have pitfalls too

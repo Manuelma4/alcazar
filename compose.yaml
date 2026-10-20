@@ -33,7 +33,8 @@ services:
 
 # The secret files, readable by the container's user (uid 10001) only and
 # mounted read-only, outside the job directory: the master key is 64
-# lower-case hex digits, the operator token 32 printable characters or more.
+# lower-case hex digits, the operator token 32 to 512 printable ASCII
+# characters with no spaces.
 #   (umask 077 && openssl rand -hex 32 > master.key && openssl rand -base64 33 | tr -d '\n' > operator.token)
 #   sudo chown 10001 master.key operator.token
 # secrets:

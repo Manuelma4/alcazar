@@ -11,11 +11,11 @@ Demo material for [Watchtower](../watchtower/README.md), the Alcazar static anal
 | Program | Vulnerable | Hardened | Highlights |
 |---|---|---|---|
 | `PAYROLL.cob` + `EMPREC.cpy` | yes | yes | Monthly payroll: division and money arithmetic without `ON SIZE ERROR`, no `ROUNDED`, `COMP-2` tax, truncating MOVEs (one through a copybook field), IBAN on SYSOUT, `CALL "SYSTEM"` with a literal. |
-| `ACCTXFER.cbl` | yes | yes | Funds transfer: sign-loss MOVE, numeric and text truncation, dynamic `CALL` chosen by the input record, `CALL "SYSTEM"` with record data, hard-coded password, PAN on SYSOUT, file without FILE STATUS, unchecked LINE SEQUENTIAL record splitting, `ALTER`, a condition hidden in columns 73-80, and an unjustified suppression that is ignored. |
+| `ACCTXFER.cbl` | yes | yes | Funds transfer: sign-loss MOVE, numeric and text truncation, dynamic `CALL` chosen by the input record, `CALL "SYSTEM"` with record data, hard-coded password, PAN on SYSOUT, file without FILE STATUS, unchecked LINE SEQUENTIAL record splitting, `ALTER`, a condition hidden in columns 73-80, fee and FX arithmetic without `ON SIZE ERROR` or `ROUNDED` (a division by a rate that may be zero among them), and an unjustified suppression that is ignored. |
 | `KEYLOAD.cbl` | yes | yes | Key loading: the HMAC key read with `ACCEPT` (stdio and the run time keep copies) and echoed to SYSOUT; the hardened version reads it with `alz_read_line`, refuses extra input and wipes it. |
 | `CUSTSQL.cbl` | yes | - | Embedded SQL: `PREPARE ... FROM :host` and `EXECUTE IMMEDIATE :host` built with `STRING`. |
 | `loancalc.f` | yes | yes | Fortran 77 fixed form: no `IMPLICIT NONE`, `COMMON`, `EQUIVALENCE`, `REAL*4` money, exact float comparison, arithmetic IF, computed GO TO, I/O without `IOSTAT`, assumed-size dummy, bound check without short-circuit. |
-| `risk_engine.f90` | yes | yes | Modern Fortran: `execute_command_line` with a built command, `random_number` session tokens, secrets compared with `==`, hard-coded API key (AWS's public documentation example key), runtime format string, I/O without `iostat`, unprotected substring index, single-precision money. |
+| `risk_engine.f90` | yes | yes | Modern Fortran: `execute_command_line` with a built command, `random_number` session tokens, secrets compared with `==`, hard-coded API key (AWS's public documentation example key), runtime format string, I/O without `iostat`, unprotected substring index, an exact `==` test on a real, single-precision money. |
 | `trojan_source.cob` | yes | - | Real Unicode bidirectional controls (CVE-2021-42574), a zero-width space and a Cyrillic homoglyph identifier. It is the only file of the repository allowed to contain such characters (see `scripts/check-unicode.mjs`). |
 
 ## Try it
@@ -28,8 +28,8 @@ node watchtower/bin/watchtower.mjs scan examples/vulnerable --format sarif --out
 
 ## Compile check
 
-Every example except `CUSTSQL.cbl` and `trojan_source.cob` compiles; the Watchtower test suite checks
-it when the compilers are installed:
+Every example except `CUSTSQL.cbl` and `trojan_source.cob` is compiled by the Watchtower test
+suite when the compilers are installed:
 
 ```sh
 cobc -fsyntax-only -I examples/vulnerable examples/vulnerable/PAYROLL.cob
@@ -43,5 +43,6 @@ needed. Excluded from the check:
 
 - `CUSTSQL.cbl` contains `EXEC SQL` blocks and needs an SQL precompiler (IBM Db2 precompiler,
   `ocesql`, ...) before `cobc` can compile it.
-- `trojan_source.cob` is a hostile sample: its homoglyph and zero-width identifiers are deliberately
-  not valid names, and it must never be compiled or copied into real code.
+- `trojan_source.cob` is a hostile sample, left out on purpose: GnuCOBOL accepts it with a single
+  warning — a zero-width space makes `WS-APP<U+200B>ROVED` a different, undefined name, which is
+  the point — and it must never be compiled into or copied into real code.

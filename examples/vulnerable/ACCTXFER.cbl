@@ -6,11 +6,11 @@
 000600* Every flaw in this program is deliberate; the fixed version is
 000700* examples/hardened/ACCTXFER.cbl.
 000800*
-000900* Planted flaws: sign-loss MOVE, numeric and text truncation,
-001000* dynamic CALL chosen by the input record, CALL "SYSTEM" with
-001100* record data, hard-coded password, PAN on SYSOUT, a file with
-001200* no FILE STATUS, unchecked LINE SEQUENTIAL record splitting,
-001300* ALTER, and a condition hidden beyond column 72.
+000900* Planted flaws: sign-loss MOVE, truncation, a dynamic CALL chosen
+001000* by input, CALL "SYSTEM" with record data, a hard-coded password,
+001100* PAN on SYSOUT, no FILE STATUS, unchecked LINE SEQUENTIAL splits,
+001200* ALTER, a condition beyond column 72, and fee and FX arithmetic
+001300* with no ON SIZE ERROR and no ROUNDED (a zero-rate division too).
 001400*================================================================
 001500 IDENTIFICATION DIVISION.
 001600 PROGRAM-ID. ACCTXFER.

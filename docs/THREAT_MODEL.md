@@ -52,7 +52,8 @@ flowchart LR
   G -- B2: argv + stdin: sub-keys, then fixed-width records --> T
   T --> D
   D -- B3: legacy outputs parsed as untrusted --> G
-  F --> D
+  G -- B2: verified ACCEPTED bytes on stdin --> F
+  F -- B3: risk report on stdout --> G
   C --> V
 ```
 
@@ -67,8 +68,8 @@ flowchart LR
 | Threat | Boundary | Mitigation | Verified by |
 |--------|----------|------------|-------------|
 | **S**poofing: cross-site requests from a hostile page | B1 | Only `application/json` bodies (forms cannot send it), `Origin` / `Sec-Fetch-Site` must be same-origin, `Host` must be local or allow-listed (DNS rebinding) | `gatehouse/test/server.test.mjs`, Siege `content-type` |
-| **S**poofing: API use without the operator | B1 | Every API call but `/api/health` needs the operator: the operator token — from a `0600` file, the environment, or generated per run and printed once as a sign-in link — as a bearer token, or the session Lookout trades it for: an HttpOnly, SameSite=Strict cookie (`__Host-` and Secure over TLS). Gatehouse keeps digests only; `ALCAZAR_AUTH=none` is refused off loopback | `auth.test.mjs` |
-| **T**ampering: record injection via CR/LF or over-long fields | B1, B2 | Printable ASCII only at Gatehouse; fixed-length records with no terminators in COBOL; LOW-VALUES pre-fill catches fragments | Siege `record-injection`, COBOL tests |
+| **S**poofing: API use without the operator | B1 | Every API call but `/api/health` needs the operator: the operator token — from a `0600` file, the environment, or generated per run and printed once as a sign-in link — as a bearer token, or the session Lookout trades it for: an HttpOnly, SameSite=Strict cookie (`__Host-` and Secure with `ALCAZAR_HSTS=1`, to be set behind TLS). Gatehouse compares digests only, of the token and of every session id; a token from a file is wiped once hashed (one from the environment stays in it, and a generated one is kept to print the link); `ALCAZAR_AUTH=none` is refused off loopback | `auth.test.mjs` |
+| **T**ampering: record injection via CR/LF or over-long fields | B1, B2 | Printable ASCII only at Gatehouse; TXNGUARD reads the batch on stdin, one 200-byte record per line, and any line of another length — or input that ends inside a line — refuses the whole batch (return code 8); LOW-VALUES pre-fill catches fragments | Siege `record-injection`, `review.test.mjs`, COBOL tests |
 | **T**ampering: sign flip, truncation, fractional cents | B2 | Strict amount grammar, ON SIZE ERROR, separate sign | Siege `sign-flip`, `truncation`, `salami` |
 | **T**ampering: forged identifiers (IBAN, card) | B2 | ISO 7064 MOD 97-10 with the never-issued check digits 00/01/99 refused (one account, two IBANs), ISO 13616 country lengths, Luhn | Siege `iban-checksum`, `iban-alias`, `pan-luhn` |
 | **T**ampering: injection (SQL, HTML, formulas, shell) | B1, B2 | No shell anywhere (spawn with argv), SEPA character set, formula-prefix rule, DOM built without HTML parsing + Trusted Types | Siege `xss-memo`, `sqli-memo`, `formula-injection`, `cmd-injection` |
@@ -78,8 +79,8 @@ flowchart LR
 | **T**ampering: editing input or output files while a job runs | Disk | No input file: the batch is piped to TXNGUARD; sealed files read once and those bytes verified; FRAUDSCAN fed through pipes; one ledger entry per submitted transfer and every accepted record checked against the transfer Gatehouse sent (masked card and tokens recomputed); totals recomputed from the verified records; LEDGERCK and Node must agree, so concurrent edits can only yield "broken" | `insider.test.mjs` |
 | **T**ampering: a risk report that hides, invents or silences a transfer | B3 | FRAUDSCAN's report must have scored exactly the accepted records, in order, with counts that add up and their amount range | `review.test.mjs` |
 | **T**ampering: Trojan Source / hidden code in contributions | Repo | `scripts/check-unicode.mjs` in CI; Watchtower `ALZ-GEN-001/002`, `ALZ-COB-014` | CI |
-| **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id. The anchor is signed by Gatehouse alone, so whoever holds `K_ledger` (an auditor) can check a ledger but cannot seal one that matches it; with `ALCAZAR_EVIDENCE_DIR`, the sealed bytes and the signed anchor outlive the job, written once and read-only | `ledger.test.mjs`, `evidence.test.mjs`, `verify-ledger.test.mjs` |
-| **I**nformation disclosure: card numbers | B2, B3 | The raw batch reaches TXNGUARD on stdin and never touches the disk, and job directories left by a crash are removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core; a card number typed into the memo is refused (E803), however it is grouped and whatever digits surround it | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (15 card formats, 8 look-alikes); Siege `pan-in-memo` |
+| **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id. The anchor is signed with a key derived from the master key, which only its holder can use, so whoever holds `K_ledger` (an auditor) can recompute a chain but cannot produce a signed anchor that matches it; with `ALCAZAR_EVIDENCE_DIR`, the sealed bytes and the signed anchor outlive the job, written once and read-only | `ledger.test.mjs`, `evidence.test.mjs`, `verify-ledger.test.mjs` |
+| **I**nformation disclosure: card numbers | B2, B3 | The raw batch reaches TXNGUARD on stdin, so the card field never touches the disk, and job directories left by a crash are removed at start-up; the card field leaves the core only as BIN + last 4 (ACCEPTED) or last 4 (ledger); a card number typed into the memo is refused (E803) the ways people type it — grouped, next to an expiry date or a CVV, glued to a word — but not when glued to other digits (see the residual risks), and Lookout masks every card-like run of digits it shows | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (26 card formats, 13 look-alikes); Siege `pan-in-memo`; Lookout `dom.test.mjs` |
 | **I**nformation disclosure: account identity in analytics | B2 | FRAUDSCAN sees HMAC tokens (`K_token`) and masked IBANs (country, check digits, last 4), never a whole account field; a memo reaches it as typed, card numbers excepted (refused) — see the residual risks | `parseAccepted` tests |
 | **I**nformation disclosure: key exposure | B2 | The master key never leaves Gatehouse; each legacy program gets only its sub-keys (LEDGERCK: `K_ledger` only), on stdin (not argv, not env), read with `read(2)` so no stdio buffer keeps a copy, wiped after use; a program handed more than its keys, or equal sub-keys, refuses to run; key file decoded as bytes and refused if group/world readable or inside the job directory. Enforced by Gatehouse, not by the operating system: the programs run as its user (see the residual risks) | `review.test.mjs`, `ALZKEYP.cpy`, `app.mjs`; memory scan (HARDENING 20) |
 | **I**nformation disclosure: a job id (the key to a job) in the logs | Host | Request logs keep four hex digits of it | `auth.test.mjs` |
@@ -96,9 +97,11 @@ flowchart LR
 * **TLS is not terminated by Gatehouse.** Put it behind a reverse proxy and set
   `ALCAZAR_HSTS=1`. `compose.yaml` publishes on `127.0.0.1` only; the image
   itself listens on every interface, operator authentication on.
-* **The master key lives in Gatehouse's memory** (generated per start, or
-  read from a `0600` file outside the job directory, ideally a read-only
-  secret mount) — the legacy programs only ever see sub-keys.
+* **The master key is read once and wiped** (generated per start, or read
+  from a `0600` file outside the job directory, ideally a read-only secret
+  mount): what lives in Gatehouse's memory are the keys derived from it —
+  `K_ledger`, `K_token` and the anchor-signing key. The legacy programs only
+  ever see sub-keys.
   Production should keep it in an HSM/KMS and only hand Gatehouse the derived
   keys.
 * **The insider is someone with the job directory, not with Gatehouse.** The

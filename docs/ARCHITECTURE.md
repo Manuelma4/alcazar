@@ -7,7 +7,7 @@ it ("never trust the front").
 ```mermaid
 flowchart LR
   B[Browser · Lookout<br/>strict CSP + Trusted Types] -->|JSON over HTTP| G[Gatehouse<br/>Node.js gateway, zero deps]
-  G -->|fixed-width records<br/>execFile, no shell| T[TXNGUARD<br/>COBOL validator]
+  G -->|fixed-width records<br/>spawn, no shell| T[TXNGUARD<br/>COBOL validator]
   T -->|CALL via C ABI| K[(Rampart Fortran kernel<br/>SHA-256 · HMAC · CT compare)]
   T -->|ACCEPTED · REJECTED · LEDGER<br/>seal on stdout| G
   G -->|verified ACCEPTED bytes, stdin| F[FRAUDSCAN<br/>Fortran analytics]
@@ -113,7 +113,7 @@ feed. `SUMMARY` is `KEY=VALUE` lines.
 | Pos | Len | Field |
 |----:|----:|-------|
 | 1 | 6 | LINE-NO |
-| 7 | 12 | TXN-ID (sanitized: chars outside `[A-Z0-9-]` → `?`) |
+| 7 | 12 | TXN-ID (sanitized: chars outside `[A-Z0-9 -]` → `?`; spaces are kept) |
 | 19 | 4 | CODE |
 | 23 | 12 | FIELD |
 | 35 | 30 | DETAIL |
@@ -152,7 +152,9 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
   only, so the verifier can neither compute nor link account tokens.
 * Account tokens: `hex(HMAC(K_token, IBAN))[0..16]`.
 * The anchor-signing key is an Ed25519 key whose seed is
-  `HMAC(K_master, "alcazar/anchor/v1" || 0x01)`; it never leaves Gatehouse.
+  `HMAC(K_master, "alcazar/anchor/v1" || 0x01)`. It is never stored: only a
+  holder of the master key — Gatehouse, or an operator running
+  `scripts/audit-keys.mjs` — can sign.
   The signed bytes are the lines `alcazar.anchor/v1`, `job=<id>`,
   `entries=<n>`, `head=<64 hex>`, `sealedAt=<ISO 8601, ms, Z>`, each ended by
   a line feed. Its public key is in `/api/health`;
@@ -161,7 +163,8 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
 
 ### SUMMARY — `KEY=VALUE` lines
 `ALZ-SUMMARY=1`, `JOB`, `RECORDS`, `ACCEPTED`, `REJECTED`, `TOTAL-<CCY>` (cents),
-`LEDGER-ENTRIES`, `LEDGER-HEAD`, `SELFTEST=PASS|FAIL`, `RC`. Nothing seals
+`LEDGER-ENTRIES`, `LEDGER-HEAD`, `SELFTEST=PASS` (a failed self-test ends the
+run with 12 before any summary is written), `RC`. Nothing seals
 it: Gatehouse only cross-checks it (with TXNGUARD's stdout and the totals of
 the verified records), and auditors use the signed anchor instead.
 
@@ -187,7 +190,7 @@ the verified records), and auditors use the signed anchor instead.
 | E602 | CARD-PAN | Luhn check failed |
 | E701 | CHANNEL | unknown channel |
 | E801 | MEMO | character outside the SEPA character set |
-| E802 | MEMO | spreadsheet formula prefix (`+`, `-`, `=`, `@`) |
+| E802 | MEMO | spreadsheet formula prefix `+` or `-` (a leading `=` or `@` is outside the SEPA set and refused first, as E801) |
 | E803 | MEMO | contains a payment card number: valid IBANs (either case, MOD 97 checked) are set aside; digit groups joined by one or two spaces, hyphens, dots or slashes form chains in which groups of 3+ digits link up and the last group may be shorter (so dates and phone numbers never join, and Diners 4-4-4-2 or Visa 4-4-4-1 do); any stretch from a group start to a group end of 16 or 19 digits starting with 2–6, or of 13, 14, 15, 17 or 18 digits with a card network's prefix that issues that length (Visa 4: 13, Amex 34/37: 15, Diners: 14, Discover, JCB, UnionPay, Maestro, Mir, Bancontact...), that passes Luhn — so a PAN next to its expiry date or CVV, or glued to a word, is still found |
 | E901 | RECORD | control or non-ASCII bytes in the record |
 
@@ -195,7 +198,7 @@ the verified records), and auditors use the signed anchor instead.
 
 | Signal | Rule |
 |--------|------|
-| `ZSCORE` | robust z-score of `log10(amount)` > 3.5, currency by currency: against the sender's own transfers in that currency when there are ≥ 5, otherwise against all of the batch's transfers in that currency (no score with fewer than 5), with the scale floored at 0.25 so a transfer must be ~7.5× off the typical amount |
+| `ZSCORE` | robust z-score of `log10(amount)` beyond ±3.5 (unusually large *or* small), currency by currency: against the sender's own transfers in that currency when there are ≥ 5, otherwise against all of the batch's transfers in that currency (no score with fewer than 5), with the scale floored at 0.25 so a transfer must be ~7.5× off the typical amount, either way |
 | `STRUCTURING` | ≥ 2 transfers from the same sender, each in [90 %, 100 %) of the reporting threshold of its own currency (`thresholds.structuring`) |
 | `VELOCITY` | ≥ 5 transfers from the same sender within 600 s |
 | `ENTROPY` | memo contains a space-free token ≥ 20 chars with Shannon entropy ≥ 4.0 bits/char (possible exfiltration) |
@@ -208,9 +211,10 @@ reporting thresholds are illustrative and set per currency, in its own units:
 10,000.00 in EUR, USD, GBP, CHF, CAD, AUD and NZD; 100,000.00 in SEK and NOK;
 75,000.00 DKK; 40,000.00 PLN; 250,000.00 CZK; 4,000,000.00 HUF; 50,000.00
 RON — round figures near EUR 10,000. A deployment sets its own.
-`amounts` (median, MAD, range, histogram) describes the whole batch in minor
-units, all currencies together; Benford's law is scale-invariant, so the
-first-digit test holds across currencies.
+`amounts` (median, MAD, range, histogram) describes the whole batch, all
+currencies together: the median, MAD and range in minor units, the
+histogram's edges as log10 of major units. Benford's law is scale-invariant,
+so the first-digit test holds across currencies.
 
 Benford first-digit test: chi-square (8 d.o.f.) with p-value, and the mean
 absolute deviation (MAD). Nigrini's MAD thresholds — `close` (≤ 0.006),
@@ -226,8 +230,9 @@ the chi-square p-value decides: `acceptable` (p ≥ 0.05), `marginal`
 All responses are JSON (`application/json; charset=utf-8`) except static files.
 `POST` bodies must be `application/json`, ≤ 512 KiB, same-origin.
 
-The page and `/api/health` are public; every other endpoint answers the
-operator only — `401 P-AUTH` with `WWW-Authenticate: Bearer` otherwise.
+The page and `/api/health` are public, and `DELETE /api/session` only ends
+the caller's own session; every other endpoint answers the operator only —
+`401 P-AUTH` with `WWW-Authenticate: Bearer` otherwise.
 Scripts send the operator token as `Authorization: Bearer <token>`; Lookout
 sends the session cookie it got by signing in (`/api/session`). With
 `ALCAZAR_AUTH=none`, accepted on a loopback address only, nothing is asked.
@@ -250,7 +255,7 @@ interface Health {
 
 // GET    /api/session                → 200 Session (signed in) | 401 P-AUTH
 // POST   /api/session { token }      → 200 Session + Set-Cookie: alz_session=…; HttpOnly; SameSite=Strict; Max-Age=28800
-//                                      (`__Host-alz_session`, Secure, over TLS) | 401 P-AUTH
+//                                      (`__Host-alz_session`, Secure, with ALCAZAR_HSTS=1 — set it behind TLS) | 401 P-AUTH
 // DELETE /api/session                → 200 { auth, via: null }, the cookie cleared and the session ended
 interface Session { auth: 'token' | 'none'; via: 'session' | 'bearer' | 'none'; expiresAt?: string }
 
@@ -271,12 +276,15 @@ interface TransactionInput {
 
 // Any error
 interface ApiError {
-  error: { layer: 'gatehouse'; code: string; status: number; message: string; field?: string; index?: number };
+  error: { layer: 'gatehouse'; code: string; status: number; message: string; field?: string; index?: number;
+           allow?: string;          // with 405: the methods the endpoint takes
+           legacyRc?: number };     // with 502: the legacy program's return code
 }
 // Gatehouse error codes: P-METHOD 405, P-MEDIA 415, P-ORIGIN 403, P-SIZE 413, P-JSON 400,
 // P-SCHEMA 400, P-LENGTH 400, P-CHARSET 400, P-LIMIT 400, P-RATE 429, P-BUSY 503,
 // P-AUTH 401, P-NOTFOUND 404 (414 for an over-long path), P-HOST 421, P-TIMEOUT 504,
-// P-LEGACY 502, P-DEMO 403, P-EVIDENCE 503, P-UNAVAILABLE 503, P-INTERNAL 500
+// P-LEGACY 502 (503 when the power-on self-test failed), P-DEMO 403, P-EVIDENCE 503,
+// P-UNAVAILABLE 503, P-INTERNAL 500
 
 // POST /api/batch  { transactions: TransactionInput[] }  → 200 Job
 // GET  /api/jobs/:job                                     → 200 Job
@@ -300,13 +308,14 @@ interface Stage {
   status: 'ok' | 'warn' | 'error';
   ms: number;
   rc?: number;                                  // legacy return code
-  detail: Record<string, number | string>;      // e.g. { in: 200, accepted: 182, rejected: 18 }
+  detail: Record<string, number | string>;      // gatehouse { in }, txnguard { records, accepted, rejected },
+                                                // fraudscan { scored, flagged }, seal { entries, verifiers }
 }
 
 interface Rejection {
   line: number;               // 1-based record number in the batch
   id: string;                 // the id as submitted (Gatehouse joins by line number)
-  legacyId: string;           // TXNGUARD's sanitized copy (chars outside [A-Z0-9-] → '?')
+  legacyId: string;           // TXNGUARD's sanitized copy (chars outside [A-Z0-9 -] → '?')
   code: string; field: string; detail: string;
   message: string;            // English text for the code
 }

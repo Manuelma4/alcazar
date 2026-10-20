@@ -220,7 +220,7 @@ export const SCENARIOS = Object.freeze([
     category: 'injection',
     cwe: 'CWE-78',
     title: 'Shell metacharacters in the id',
-    summary: 'Gatehouse never uses a shell (execFile, fixed argv) and TXNGUARD rejects the identifier.',
+    summary: 'Gatehouse never uses a shell (spawn, fixed argv, no shell) and TXNGUARD rejects the identifier.',
     request: { kind: 'batch', transactions: [txn({ id: 'A;rm -rf /' })] },
     expected: { layer: 'cobol', id: 'A;rm -rf /', code: 'E101' },
   },

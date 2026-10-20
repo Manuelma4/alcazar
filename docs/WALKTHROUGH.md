@@ -83,8 +83,8 @@ narrower field silently drops the high-order ones (`12345` into `PIC 9(3)` is
 GnuCOBOL returns an over-long LINE SEQUENTIAL line as **two** records: the
 first part with status `06`, then the rest of the line with status `00`. The
 program only expects `00` and `10`, so a single crafted line injects a
-second, fully attacker-controlled transfer. (See
-[HARDENING.md](HARDENING.md), items 1–3, for how we measured these.)
+second, fully attacker-controlled transfer. ([HARDENING.md](HARDENING.md),
+items 1 and 3, shows how these two were measured.)
 
 ## 3. Fix — the Rampart patterns
 
@@ -107,8 +107,10 @@ core (TXNGUARD) the same ideas are packaged as reusable
                    PERFORM 8100-REJECT-RECORD
 ```
 
-TXNGUARD goes further: untrusted input is fixed-length `ORGANIZATION
-SEQUENTIAL`, so a newline is just a byte and no record can be injected.
+TXNGUARD goes further: it reads no input file. The batch arrives on stdin,
+one 200-byte record per line, and a line of any other length — or input that
+ends inside a line — refuses the whole batch (return code 8), so no record
+can be injected.
 
 **Money — signed receivers, explicit rules, no silent rounding:**
 

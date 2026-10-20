@@ -16,9 +16,11 @@ make test    # 169 COBOL checks, 98 Fortran checks
 
 ## COBOL modules
 
-Every module is a callable subprogram with `LOCAL-STORAGE` (no state survives
-between calls) and `PIC X ANY LENGTH` linkage items, so it always knows the
-real size of the caller's field. Every return code is a `PIC S9(9) COMP-5`.
+Every module is a callable subprogram that keeps no state between calls
+(`LOCAL-STORAGE` where it needs working storage at all). Variable-length
+inputs are `PIC X ANY LENGTH` linkage items, so the module always knows the
+real size of the caller's field; `ALZDATE` and `ALZCCY` take fixed-size
+fields (14 and 3 characters). Every return code is a `PIC S9(9) COMP-5`.
 
 | Module | Call | Returns |
 |--------|------|---------|
@@ -26,10 +28,10 @@ real size of the caller's field. Every return code is a `PIC S9(9) COMP-5`.
 | `ALZSANIT` | `policy text` | Replaces, in place, every character outside the policy with `?` — for writing untrusted text to reports and logs. |
 | `ALZIBAN` | `iban rc` | ISO 13616 structure, country length (all 88 countries of the SWIFT registry, binary search) and ISO 7064 MOD 97-10 check digits, refusing 00, 01 and 99 — they can satisfy the check but are never issued, and would give one account two valid IBANs. `rc` 0 ok, 1 format, 2 country/length, 3 check digits. The BBAN's national structure is not checked. |
 | `ALZLUHN` | `pan rc` | 12–19 digits and the Luhn check digit. |
-| `ALZMASK` | `mode input output` | PCI DSS masking: `P` BIN + last 4, `L` last 4, `I` IBAN country + last 4. Length preserved. |
+| `ALZMASK` | `mode input output` | PCI DSS masking: `P` last 4, and the BIN (first 6) too from 15 digits up; `L` last 4; `I` IBAN country and check digits + last 4. Length preserved. |
 | `ALZAMNT` | `text sign cents rc position` | Strict decimal parser: `[+-]`, 1–13 digits, optional 1–2 decimals. Never `NUMVAL`; overflow is `rc 2`, not truncation; the sign comes back separately. |
 | `ALZDATE` | `timestamp rc` | `YYYYMMDDHHMMSS` with `FUNCTION TEST-DATE-YYYYMMDD`; digits are checked before any numeric field is touched. |
-| `ALZPANSC` | `text rc position` | Finds a payment card number in free text, however it is grouped (spaces, hyphens, dots, slashes) and whatever sits next to it (expiry date, CVV, a word): every stretch between group boundaries of 16 or 19 digits starting with 2–6, or of another length a card network issues with that prefix, that passes Luhn. Valid IBANs (checked with `ALZIBAN`), dates, phone numbers, SIRET and IMEI numbers are not mistaken for cards. |
+| `ALZPANSC` | `text rc position` | Finds a payment card number in free text, however it is grouped (spaces, hyphens, dots, slashes) and whatever sits next to it (expiry date, CVV, a word): every stretch between group boundaries of 16 or 19 digits starting with 2–6, or of another length a card network issues with that prefix, that passes Luhn. A number glued to other digits, with no separator, is not found. Valid IBANs (checked with `ALZIBAN`), dates, phone numbers and IMEI numbers are not mistaken for cards; about 1.7 % of SIRETs — those that start like a 14-digit Diners card — are. |
 | `ALZCCY` | `currency rc` | ISO 4217 allowlist of two-decimal currencies (no BGN: Bulgaria adopted the euro in 2026). |
 
 ```cobol

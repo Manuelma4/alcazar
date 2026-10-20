@@ -8,24 +8,28 @@
       *
       *   CALL "ALZPANSC" USING text rc position
       *
-      *   text      PIC X ANY LENGTH (the first 160 digits are read)
+      *   text      PIC X ANY LENGTH (the first 1024 characters)
       *   rc        0 none found, 1 card number found
       *   position  1-based offset of its first digit
       *
       * People write card numbers in groups - "4111 1111 1111 1111",
       * "4111-1111-...", "4111.1111-..." - often next to an expiry
-      * date or a CVV. So:
-      *   1. Digit groups joined by one or two spaces, hyphens, dots
-      *      or slashes form a chain.
-      *   2. A chain glued to a capital letter is part of an
-      *      identifier (an IBAN, a BBAN with letters, an RF creditor
-      *      reference) and is skipped.
-      *   3. Inside a chain only groups of 3 or more digits link up:
-      *      dates, phone numbers and amounts, written in groups of
-      *      two, never join a card number.
+      * date or a CVV, sometimes glued to a word. So:
+      *   1. Every valid IBAN in the text (two letters of either case
+      *      starting a word, check digits, BBAN; single spaces allowed;
+      *      confirmed by ALZIBAN) is set aside: its digits are not a
+      *      card, whatever they look like.
+      *   2. Digit groups joined by one or two spaces, hyphens, dots or
+      *      slashes form a chain.
+      *   3. Inside a chain only groups of 3 or more digits link up,
+      *      except that the chain's last group may be shorter (Diners
+      *      4-4-4-2, Visa 4-4-4-1): dates, phone numbers and amounts,
+      *      written in groups of two, never join a card number.
       *   4. Every stretch from a group start to a group end that has
-      *      13-19 digits, starts with 2-6 (the major card networks)
-      *      and passes the Luhn check is a card number.
+      *      13-19 digits, a card network's prefix with a length that
+      *      network issues (Visa 4: 13/16/19, Mastercard 51-55 and
+      *      2221-2720: 16, Amex 34/37: 15, ...), and a valid Luhn check
+      *      digit is a card number.
       * Known limit: a card number glued to more digits with no
       * separator at all ("41111111111111111234") is one group, and
       * is not found.
@@ -34,32 +38,100 @@
        CONFIGURATION SECTION.
        SPECIAL-NAMES.
            CLASS ALZ-DIGIT  IS "0123456789"
-           CLASS ALZ-UPPER  IS "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+           CLASS ALZ-LETTER IS "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                               "abcdefghijklmnopqrstuvwxyz"
            CLASS ALZ-JOINER IS " -./".
        DATA DIVISION.
+       WORKING-STORAGE SECTION.
+      * Card networks, read-only: prefix digits (1-4), prefix range,
+      * and the lengths issued, 13 to 19 ("1" = issued).
+       01  WS-NETWORK-DATA.
+      *    Visa
+           05  FILLER PIC X(16) VALUE "1000400041001001".
+      *    Mastercard
+           05  FILLER PIC X(16) VALUE "2005100550001000".
+      *    Mastercard 2-series
+           05  FILLER PIC X(16) VALUE "4222127200001000".
+      *    American Express
+           05  FILLER PIC X(16) VALUE "2003400340010000".
+      *    American Express
+           05  FILLER PIC X(16) VALUE "2003700370010000".
+      *    Diners Club
+           05  FILLER PIC X(16) VALUE "3030003050111111".
+      *    Diners Club
+           05  FILLER PIC X(16) VALUE "2003600360111111".
+      *    Diners Club / Discover
+           05  FILLER PIC X(16) VALUE "2003800390001111".
+      *    Discover
+           05  FILLER PIC X(16) VALUE "4601160110001111".
+      *    Discover
+           05  FILLER PIC X(16) VALUE "3064406490001111".
+      *    Discover
+           05  FILLER PIC X(16) VALUE "2006500650001111".
+      *    JCB
+           05  FILLER PIC X(16) VALUE "4352835890001111".
+      *    UnionPay
+           05  FILLER PIC X(16) VALUE "2006200620001111".
+      *    Mir
+           05  FILLER PIC X(16) VALUE "4220022040001111".
+      *    RuPay
+           05  FILLER PIC X(16) VALUE "2006000600001111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4501850181111111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4502050201111111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4503850381111111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4589358931111111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4630463041111111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4675967591111111".
+      *    Maestro
+           05  FILLER PIC X(16) VALUE "4676167631111111".
+       01  WS-NETWORKS REDEFINES WS-NETWORK-DATA.
+           05  WS-NET                  OCCURS 22 TIMES.
+               10  WS-NET-DIGITS       PIC 9.
+               10  WS-NET-LOW          PIC 9(4).
+               10  WS-NET-HIGH         PIC 9(4).
+               10  WS-NET-LENGTHS      PIC X(7).
        LOCAL-STORAGE SECTION.
        01  LS-LEN                      PIC S9(9) COMP-5.
        01  LS-I                        PIC S9(9) COMP-5.
+       01  LS-P                        PIC S9(9) COMP-5.
+       01  LS-Q                        PIC S9(9) COMP-5.
        01  LS-CH                       PIC X.
+       01  LS-NEXT                     PIC X.
        01  LS-JOINER-LEN               PIC S9(9) COMP-5.
        01  LS-GAP-SW                   PIC X.
            88  LS-GAP                  VALUE "Y".
            88  LS-NO-GAP               VALUE "N".
        01  LS-FULL-SW                  PIC X VALUE "N".
            88  LS-FULL                 VALUE "Y".
-       01  LS-DIGITS                   PIC X(160).
+      * IBANs: the positions set aside, and the candidate being tried.
+       01  LS-EXCLUDED                 PIC X(1024).
+       01  LS-WORD-START               PIC X.
+       01  LS-CAND                     PIC X(34).
+       01  LS-CAND-LEN                 PIC S9(9) COMP-5.
+       01  LS-CAND-POSITIONS.
+           05  LS-CAND-POS             PIC S9(9) COMP-5 OCCURS 34 TIMES.
+       01  LS-L                        PIC S9(9) COMP-5.
+       01  LS-IBAN                     PIC X(34).
+       01  LS-IBAN-RC                  PIC S9(9) COMP-5.
+       01  LS-IBAN-SW                  PIC X.
+           88  LS-IBAN-FOUND           VALUE "Y".
+      * Digit groups: where each is in the text and in LS-DIGITS, how
+      * long it is, and whether a joiner links it to the one before.
+       01  LS-DIGITS                   PIC X(1024).
        01  LS-NDIG                     PIC S9(9) COMP-5.
        01  LS-NGROUP                   PIC S9(9) COMP-5.
-      * One entry per digit group: where it is in the text and in
-      * LS-DIGITS, how long it is, whether a joiner links it to the
-      * group before, and whether it is glued to a capital letter.
        01  LS-GROUPS.
-           05  LS-GROUP                OCCURS 80 TIMES.
+           05  LS-GROUP                OCCURS 512 TIMES.
                10  LS-G-POS            PIC S9(9) COMP-5.
                10  LS-G-START          PIC S9(9) COMP-5.
                10  LS-G-LEN            PIC S9(9) COMP-5.
                10  LS-G-JOINED         PIC X.
-               10  LS-G-GLUED          PIC X.
        01  LS-A                        PIC S9(9) COMP-5.
        01  LS-Z                        PIC S9(9) COMP-5.
        01  LS-C                        PIC S9(9) COMP-5.
@@ -69,6 +141,13 @@
        01  LS-WIN-START                PIC S9(9) COMP-5.
        01  LS-WIN-LEN                  PIC S9(9) COMP-5.
        01  LS-WINDOW                   PIC X(19).
+       01  LS-K                        PIC S9(9) COMP-5.
+       01  LS-D                        PIC S9(9) COMP-5.
+       01  LS-PREFIX                   PIC 9(4).
+       01  LS-DIGIT-X                  PIC X.
+       01  LS-DIGIT REDEFINES LS-DIGIT-X PIC 9.
+       01  LS-NETWORK-SW               PIC X.
+           88  LS-NETWORK-OK           VALUE "Y".
        01  LS-LUHN-RC                  PIC S9(9) COMP-5.
        LINKAGE SECTION.
        01  LK-TEXT                     PIC X ANY LENGTH.
@@ -79,15 +158,93 @@
        0000-MAIN.
            MOVE 0 TO LK-RC
            MOVE 0 TO LK-POS
-           PERFORM 1000-COLLECT-GROUPS
-           PERFORM 2000-SCAN-CHAINS
+           MOVE FUNCTION LENGTH(LK-TEXT) TO LS-LEN
+           IF LS-LEN > 1024
+               MOVE 1024 TO LS-LEN
+           END-IF
+           PERFORM 1000-SET-ASIDE-IBANS
+           PERFORM 2000-COLLECT-GROUPS
+           PERFORM 3000-SCAN-CHAINS
            GOBACK.
 
       *----------------------------------------------------------------
-      * Pass 1: the digit groups and the joiners between them.
+      * Pass 1: valid IBANs are set aside.
       *----------------------------------------------------------------
-       1000-COLLECT-GROUPS.
-           MOVE FUNCTION LENGTH(LK-TEXT) TO LS-LEN
+       1000-SET-ASIDE-IBANS.
+           MOVE ALL "N" TO LS-EXCLUDED
+           PERFORM VARYING LS-P FROM 1 BY 1 UNTIL LS-P > LS-LEN - 3
+               IF LS-EXCLUDED(LS-P:1) = "N"
+                   PERFORM 1100-TRY-IBAN-AT
+               END-IF
+           END-PERFORM.
+
+      * Two letters, then two check digits, at the start of a word.
+       1100-TRY-IBAN-AT.
+           IF LK-TEXT(LS-P:1) IS ALZ-LETTER
+              AND LK-TEXT(LS-P + 1:1) IS ALZ-LETTER
+              AND LK-TEXT(LS-P + 2:1) IS ALZ-DIGIT
+              AND LK-TEXT(LS-P + 3:1) IS ALZ-DIGIT
+               MOVE "Y" TO LS-WORD-START
+               IF LS-P > 1
+                   IF LK-TEXT(LS-P - 1:1) IS ALZ-LETTER
+                      OR LK-TEXT(LS-P - 1:1) IS ALZ-DIGIT
+                       MOVE "N" TO LS-WORD-START
+                   END-IF
+               END-IF
+               IF LS-WORD-START = "Y"
+                   PERFORM 1200-GATHER-CANDIDATE
+                   PERFORM 1300-CONFIRM-CANDIDATE
+               END-IF
+           END-IF.
+
+      * Up to 34 letters and digits, upper-cased; a single space
+      * between them (the printed form) is allowed.
+       1200-GATHER-CANDIDATE.
+           MOVE SPACES TO LS-CAND
+           MOVE 0 TO LS-CAND-LEN
+           MOVE LS-P TO LS-Q
+           PERFORM UNTIL LS-Q > LS-LEN OR LS-CAND-LEN = 34
+               MOVE LK-TEXT(LS-Q:1) TO LS-CH
+               IF LS-CH IS ALZ-LETTER OR LS-CH IS ALZ-DIGIT
+                   ADD 1 TO LS-CAND-LEN
+                   MOVE FUNCTION UPPER-CASE(LS-CH)
+                     TO LS-CAND(LS-CAND-LEN:1)
+                   MOVE LS-Q TO LS-CAND-POS(LS-CAND-LEN)
+                   ADD 1 TO LS-Q
+               ELSE
+                   IF LS-CH NOT = SPACE OR LS-Q = LS-LEN
+                       EXIT PERFORM
+                   END-IF
+                   MOVE LK-TEXT(LS-Q + 1:1) TO LS-NEXT
+                   IF LS-NEXT IS NOT ALZ-LETTER
+                      AND LS-NEXT IS NOT ALZ-DIGIT
+                       EXIT PERFORM
+                   END-IF
+                   ADD 1 TO LS-Q
+               END-IF
+           END-PERFORM.
+
+      * Only the length of the country's IBANs can pass ALZIBAN.
+       1300-CONFIRM-CANDIDATE.
+           MOVE "N" TO LS-IBAN-SW
+           PERFORM VARYING LS-L FROM 15 BY 1
+                   UNTIL LS-L > LS-CAND-LEN OR LS-IBAN-FOUND
+               MOVE SPACES TO LS-IBAN
+               MOVE LS-CAND(1:LS-L) TO LS-IBAN
+               CALL "ALZIBAN" USING LS-IBAN LS-IBAN-RC
+               IF LS-IBAN-RC = 0
+                   SET LS-IBAN-FOUND TO TRUE
+                   PERFORM VARYING LS-Q FROM LS-P BY 1
+                           UNTIL LS-Q > LS-CAND-POS(LS-L)
+                       MOVE "Y" TO LS-EXCLUDED(LS-Q:1)
+                   END-PERFORM
+               END-IF
+           END-PERFORM.
+
+      *----------------------------------------------------------------
+      * Pass 2: the digit groups and the joiners between them.
+      *----------------------------------------------------------------
+       2000-COLLECT-GROUPS.
            MOVE 0 TO LS-NDIG
            MOVE 0 TO LS-NGROUP
            MOVE 0 TO LS-JOINER-LEN
@@ -96,8 +253,11 @@
                    UNTIL LS-I > LS-LEN OR LS-FULL
                MOVE LK-TEXT(LS-I:1) TO LS-CH
                EVALUATE TRUE
+                   WHEN LS-EXCLUDED(LS-I:1) = "Y"
+                       SET LS-GAP TO TRUE
+                       MOVE 0 TO LS-JOINER-LEN
                    WHEN LS-CH IS ALZ-DIGIT
-                       PERFORM 1100-DIGIT
+                       PERFORM 2100-DIGIT
                    WHEN LS-CH IS ALZ-JOINER
                        ADD 1 TO LS-JOINER-LEN
                    WHEN OTHER
@@ -106,24 +266,24 @@
                END-EVALUATE
            END-PERFORM.
 
-       1100-DIGIT.
+       2100-DIGIT.
            IF LS-NGROUP > 0 AND LS-NO-GAP AND LS-JOINER-LEN = 0
                ADD 1 TO LS-G-LEN(LS-NGROUP)
            ELSE
-               PERFORM 1200-NEW-GROUP
+               PERFORM 2200-NEW-GROUP
            END-IF
            IF NOT LS-FULL
                ADD 1 TO LS-NDIG
                MOVE LS-CH TO LS-DIGITS(LS-NDIG:1)
-               IF LS-NDIG = 160
+               IF LS-NDIG = 1024
                    SET LS-FULL TO TRUE
                END-IF
            END-IF
            SET LS-NO-GAP TO TRUE
            MOVE 0 TO LS-JOINER-LEN.
 
-       1200-NEW-GROUP.
-           IF LS-NGROUP = 80
+       2200-NEW-GROUP.
+           IF LS-NGROUP = 512
                SET LS-FULL TO TRUE
            ELSE
                ADD 1 TO LS-NGROUP
@@ -131,24 +291,16 @@
                COMPUTE LS-G-START(LS-NGROUP) = LS-NDIG + 1
                MOVE 1 TO LS-G-LEN(LS-NGROUP)
                MOVE "N" TO LS-G-JOINED(LS-NGROUP)
-               MOVE "N" TO LS-G-GLUED(LS-NGROUP)
                IF LS-NGROUP > 1 AND LS-NO-GAP AND LS-JOINER-LEN <= 2
                    MOVE "Y" TO LS-G-JOINED(LS-NGROUP)
-               ELSE
-                   IF LS-I > 1
-                       IF LK-TEXT(LS-I - 1:1) IS ALZ-UPPER
-                           MOVE "Y" TO LS-G-GLUED(LS-NGROUP)
-                       END-IF
-                   END-IF
                END-IF
            END-IF.
 
       *----------------------------------------------------------------
-      * Pass 2: chains (groups linked by joiners) A..Z; inside a chain
-      * that is not glued to a capital letter, strict chains C..B of
-      * groups of 3+ digits; inside those, the candidate windows.
+      * Pass 3: chains (groups linked by joiners) A..Z; inside them,
+      * strict chains C..B; inside those, the candidate windows.
       *----------------------------------------------------------------
-       2000-SCAN-CHAINS.
+       3000-SCAN-CHAINS.
            MOVE 1 TO LS-A
            PERFORM UNTIL LS-A > LS-NGROUP OR LK-RC NOT = 0
                MOVE LS-A TO LS-Z
@@ -158,18 +310,21 @@
                    END-IF
                    ADD 1 TO LS-Z
                END-PERFORM
-               IF LS-G-GLUED(LS-A) = "N"
-                   PERFORM 3000-STRICT-CHAINS
-               END-IF
+               PERFORM 3100-STRICT-CHAINS
                COMPUTE LS-A = LS-Z + 1
            END-PERFORM.
 
-       3000-STRICT-CHAINS.
+      * Groups of 3+ digits link up; the chain's last group may be
+      * shorter.
+       3100-STRICT-CHAINS.
            MOVE LS-A TO LS-C
            PERFORM UNTIL LS-C > LS-Z OR LK-RC NOT = 0
                MOVE LS-C TO LS-B
                PERFORM UNTIL LS-B = LS-Z
-                   IF LS-G-LEN(LS-B) < 3 OR LS-G-LEN(LS-B + 1) < 3
+                   IF LS-G-LEN(LS-B) < 3
+                       EXIT PERFORM
+                   END-IF
+                   IF LS-G-LEN(LS-B + 1) < 3 AND LS-B + 1 NOT = LS-Z
                        EXIT PERFORM
                    END-IF
                    ADD 1 TO LS-B
@@ -196,14 +351,33 @@
 
        4100-CHECK-WINDOW.
            MOVE LS-G-START(LS-GI) TO LS-WIN-START
-           IF LS-DIGITS(LS-WIN-START:1) = "2" OR "3" OR "4" OR "5"
-                                          OR "6"
-               MOVE SPACES TO LS-WINDOW
-               MOVE LS-DIGITS(LS-WIN-START:LS-WIN-LEN) TO LS-WINDOW
+           MOVE SPACES TO LS-WINDOW
+           MOVE LS-DIGITS(LS-WIN-START:LS-WIN-LEN) TO LS-WINDOW
+           PERFORM 4200-CHECK-NETWORK
+           IF LS-NETWORK-OK
                CALL "ALZLUHN" USING LS-WINDOW LS-LUHN-RC
                IF LS-LUHN-RC = 0
                    MOVE 1 TO LK-RC
                    MOVE LS-G-POS(LS-GI) TO LK-POS
                END-IF
            END-IF.
+
+      * A network prefix, and a length that network issues.
+       4200-CHECK-NETWORK.
+           MOVE "N" TO LS-NETWORK-SW
+           PERFORM VARYING LS-K FROM 1 BY 1
+                   UNTIL LS-K > 22 OR LS-NETWORK-OK
+               MOVE 0 TO LS-PREFIX
+               PERFORM VARYING LS-D FROM 1 BY 1
+                       UNTIL LS-D > WS-NET-DIGITS(LS-K)
+                   MOVE LS-WINDOW(LS-D:1) TO LS-DIGIT-X
+                   COMPUTE LS-PREFIX = LS-PREFIX * 10 + LS-DIGIT
+               END-PERFORM
+               IF LS-PREFIX >= WS-NET-LOW(LS-K)
+                  AND LS-PREFIX <= WS-NET-HIGH(LS-K)
+                   IF WS-NET-LENGTHS(LS-K)(LS-WIN-LEN - 12:1) = "1"
+                       SET LS-NETWORK-OK TO TRUE
+                   END-IF
+               END-IF
+           END-PERFORM.
        END PROGRAM ALZPANSC.

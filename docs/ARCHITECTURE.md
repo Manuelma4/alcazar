@@ -171,7 +171,7 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
 | E701 | CHANNEL | unknown channel |
 | E801 | MEMO | character outside the SEPA character set |
 | E802 | MEMO | spreadsheet formula prefix (`+`, `-`, `=`, `@`) |
-| E803 | MEMO | contains a payment card number: digit groups joined by one or two spaces, hyphens, dots or slashes (groups of 3+ digits only, so dates and phone numbers never join; a chain glued to a capital letter, as in an IBAN, is skipped), any stretch from a group start to a group end of 13–19 digits starting with 2–6 that passes Luhn — so a PAN next to its expiry date or CVV is still found |
+| E803 | MEMO | contains a payment card number: valid IBANs (either case, MOD 97 checked) are set aside; digit groups joined by one or two spaces, hyphens, dots or slashes form chains in which groups of 3+ digits link up and the last group may be shorter (so dates and phone numbers never join, and Diners 4-4-4-2 or Visa 4-4-4-1 do); any stretch from a group start to a group end of 13–19 digits with a card network's prefix and issued length (Visa 4: 13/16/19, Mastercard 51–55 and 2221–2720: 16, Amex 34/37: 15, Diners, Discover, JCB, UnionPay, Maestro, Mir) that passes Luhn — so a PAN next to its expiry date or CVV, or glued to a word, is still found |
 | E901 | RECORD | control or non-ASCII bytes in the record |
 
 ## 4. FRAUDSCAN signals

@@ -120,10 +120,13 @@ flowchart LR
   files, but production deployments must set `ALCAZAR_DEMO=0`.
 * **Finding a card number in free text is a heuristic.** ALZPANSC catches the
   ways people type cards (groups, separators, an expiry date or CVV next to
-  it) but not a number glued to other digits with no separator, spelled out
-  in words or deliberately encoded; and about one 13–19-digit reference in
-  ten that starts with 2–6 passes Luhn and is refused as a card. Deliberate
-  exfiltration through the memo is FRAUDSCAN's ENTROPY signal's job.
+  it, glued to a word) but not a number glued to other digits with no
+  separator, spelled out in words or deliberately encoded. Measured on random
+  look-alikes, valid IBANs, invoice numbers with dates and phone numbers are
+  never flagged; a reference number with a card network's prefix and length
+  sometimes passes Luhn too (2–5 %), and a SIRET that starts like a Diners
+  card (1.7 %) is refused as one. Deliberate exfiltration through the memo is
+  FRAUDSCAN's ENTROPY signal's job.
 * **Watchtower is a heuristic analyzer**, not a sound verifier: it has no
   full data-flow analysis and does not read EBCDIC sources. Absence of
   findings is not proof of absence of bugs.

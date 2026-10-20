@@ -412,6 +412,16 @@
            MOVE 1 TO T-EXPECT
            MOVE 1 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
+           MOVE "3056 9309 0259 04" TO T-TEXT
+           MOVE "Diners, 14 digits, 4-4-4-2" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4222 2222 2222 2" TO T-TEXT
+           MOVE "Visa, 13 digits, 4-4-4-1" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
            MOVE "4111 1111 1111 1111 123" TO T-TEXT
            MOVE "PAN followed by a CVV" TO T-NAME
            MOVE 1 TO T-EXPECT
@@ -448,7 +458,32 @@
            MOVE 1 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "card4111 1111 1111 1111" TO T-TEXT
-           MOVE "PAN glued to a lower-case word" TO T-NAME
+           MOVE "PAN glued to a word" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 5 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "VISA4111111111111111" TO T-TEXT
+           MOVE "PAN glued to capitals" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 5 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "PAN4111-1111-1111-1111" TO T-TEXT
+           MOVE "PAN glued to PAN" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 4 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "REF A12 4111 1111 1111 1111" TO T-TEXT
+           MOVE "PAN after a short code" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 9 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "BE68 5390 0754 7034 4111 1111 1111 1111" TO T-TEXT
+           MOVE "PAN right after an IBAN" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 21 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ref 4111 1111 1111 1111 11" TO T-TEXT
+           MOVE "the IBAN's digits outside an IBAN" TO T-NAME
            MOVE 1 TO T-EXPECT
            MOVE 5 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
@@ -463,7 +498,7 @@
            MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "ref 1111111111111117" TO T-TEXT
-           MOVE "run starting with 1 is not a card" TO T-NAME
+           MOVE "no card network starts with 1" TO T-NAME
            MOVE 0 TO T-EXPECT
            MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
@@ -477,18 +512,16 @@
            MOVE 0 TO T-EXPECT
            MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
-      *    Its digits 2789...0240 pass Luhn: only the capital letters
-      *    glued to the first group say it is an IBAN.
-           MOVE "DE08 2789 2536 2826 0240 19" TO T-TEXT
-           MOVE "an IBAN with a Luhn-valid stretch" TO T-NAME
-           PERFORM 8390-RUN-PAN-SCAN
-           MOVE "ref 2789 2536 2826 0240" TO T-TEXT
-           MOVE "the same digits outside an IBAN" TO T-NAME
-           MOVE 1 TO T-EXPECT
-           MOVE 5 TO T-EXPECT-POS
-           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "DE89 4111 1111 1111 1111 11" TO T-TEXT
+           MOVE "an IBAN that embeds a Visa number" TO T-NAME
            MOVE 0 TO T-EXPECT
            MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "refund fr75 0001 4093 1234 5975 1277 407" TO T-TEXT
+           MOVE "a lower-case IBAN is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
            MOVE "RF18 5390 0754 7034" TO T-TEXT
            MOVE "an RF reference is not a card" TO T-NAME
            MOVE 0 TO T-EXPECT
@@ -501,6 +534,21 @@
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "tel 06 12 34 56 78 90 12 34" TO T-TEXT
            MOVE "2-digit groups never join" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "SIRET 552 081 317 00018" TO T-TEXT
+           MOVE "a SIRET is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "SIRET 55208131700018" TO T-TEXT
+           MOVE "a SIRET, unspaced, is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "IMEI 352099001761481" TO T-TEXT
+           MOVE "an IMEI is not a card" TO T-NAME
            MOVE 0 TO T-EXPECT
            MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN.

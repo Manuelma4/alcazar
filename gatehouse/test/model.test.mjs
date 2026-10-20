@@ -155,29 +155,62 @@ function expectedCode(t, seen, nowUtcSeconds) {
   return 'A000';
 }
 
+// Card networks: [prefix digits, low, high, lengths 13..19 issued].
+const NETWORKS = [
+  [1, 4, 4, '1001001'], [2, 51, 55, '0001000'], [4, 2221, 2720, '0001000'], [2, 34, 34, '0010000'], [2, 37, 37, '0010000'],
+  [3, 300, 305, '0111111'], [2, 36, 36, '0111111'], [2, 38, 39, '0001111'], [4, 6011, 6011, '0001111'], [3, 644, 649, '0001111'],
+  [2, 65, 65, '0001111'], [4, 3528, 3589, '0001111'], [2, 62, 62, '0001111'], [4, 2200, 2204, '0001111'], [2, 60, 60, '0001111'],
+  [4, 5018, 5018, '1111111'], [4, 5020, 5020, '1111111'], [4, 5038, 5038, '1111111'], [4, 5893, 5893, '1111111'],
+  [4, 6304, 6304, '1111111'], [4, 6759, 6759, '1111111'], [4, 6761, 6763, '1111111'],
+];
+
 /**
- * ALZPANSC. Digit groups joined by one or two spaces, hyphens, dots or
- * slashes form a chain; a chain glued to a capital letter (IBAN, RF
- * reference) is skipped; inside a chain only groups of 3+ digits link up;
- * any stretch from a group start to a group end of 13-19 digits that
- * starts with 2-6 and passes Luhn is a card number.
+ * ALZPANSC. Valid IBANs (either case, single spaces allowed, checked like
+ * ALZIBAN) are set aside; digit groups joined by one or two spaces,
+ * hyphens, dots or slashes form a chain; inside it groups of 3+ digits link
+ * up, and the chain's last group may be shorter; any stretch from a group
+ * start to a group end of 13-19 digits with a network's prefix and length
+ * that passes Luhn is a card number.
  */
 function memoHasPan(memo) {
   const text = memo.padEnd(40, ' ');
+  const letter = (c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+  const digit = (c) => c >= '0' && c <= '9';
+  const alnum = (c) => letter(c) || digit(c);
+  const aside = new Array(text.length).fill(false);
+  for (let p = 0; p + 3 < text.length; p += 1) {
+    if (aside[p] || !letter(text[p]) || !letter(text[p + 1]) || !digit(text[p + 2]) || !digit(text[p + 3])) continue;
+    if (p > 0 && alnum(text[p - 1])) continue;
+    const chars = [];
+    const at = [];
+    for (let q = p; q < text.length && chars.length < 34; q += 1) {
+      if (alnum(text[q])) {
+        chars.push(text[q].toUpperCase());
+        at.push(q);
+      } else if (!(text[q] === ' ' && q + 1 < text.length && alnum(text[q + 1]))) {
+        break;
+      }
+    }
+    for (let L = 15; L <= chars.length; L += 1) {
+      if (ibanRc(chars.slice(0, L).join('')) === 0) {
+        for (let q = p; q <= at[L - 1]; q += 1) aside[q] = true;
+        break;
+      }
+    }
+  }
   const groups = [];
   let digits = '';
   let joiner = 0;
   let gap = true;
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
-    if (ch >= '0' && ch <= '9') {
+    if (aside[i]) {
+      gap = true;
+      joiner = 0;
+    } else if (digit(ch)) {
       const last = groups.at(-1);
-      if (last && !gap && joiner === 0) {
-        last.len += 1;
-      } else {
-        const joined = Boolean(last) && !gap && joiner <= 2;
-        groups.push({ start: digits.length, len: 1, joined, glued: !joined && i > 0 && text[i - 1] >= 'A' && text[i - 1] <= 'Z' });
-      }
+      if (last && !gap && joiner === 0) last.len += 1;
+      else groups.push({ start: digits.length, len: 1, joined: Boolean(last) && !gap && joiner <= 2 });
       digits += ch;
       joiner = 0;
       gap = false;
@@ -188,23 +221,26 @@ function memoHasPan(memo) {
       joiner = 0;
     }
   }
+  const network = (d) => NETWORKS.some(([n, low, high, lengths]) => {
+    const prefix = Number(d.slice(0, n));
+    return prefix >= low && prefix <= high && lengths[d.length - 13] === '1';
+  });
   for (let a = 0; a < groups.length;) {
     let z = a;
     while (z + 1 < groups.length && groups[z + 1].joined) z += 1;
-    if (!groups[a].glued) {
-      for (let c = a; c <= z;) {
-        let b = c;
-        while (b < z && groups[b].len >= 3 && groups[b + 1].len >= 3) b += 1;
-        for (let i = c; i <= b; i += 1) {
-          for (let j = i; j <= b; j += 1) {
-            const start = groups[i].start;
-            const length = groups[j].start + groups[j].len - start;
-            if (length > 19) break;
-            if (length >= 13 && '23456'.includes(digits[start]) && luhnValid(digits.slice(start, start + length))) return true;
-          }
+    for (let c = a; c <= z;) {
+      let b = c;
+      while (b < z && groups[b].len >= 3 && (groups[b + 1].len >= 3 || b + 1 === z)) b += 1;
+      for (let i = c; i <= b; i += 1) {
+        for (let j = i; j <= b; j += 1) {
+          const start = groups[i].start;
+          const length = groups[j].start + groups[j].len - start;
+          if (length > 19) break;
+          const d = digits.slice(start, start + length);
+          if (length >= 13 && network(d) && luhnValid(d)) return true;
         }
-        c = b + 1;
       }
+      c = b + 1;
     }
     a = z + 1;
   }
@@ -331,7 +367,11 @@ function generator(seed, { chaos = false } = {}) {
           '4111 1111 1111 1111 123', 'card 4111 1111 1111 1111 12/28', '12/28 4111 1111 1111 1111', '4111.1111.1111.1111',
           '4111/1111/1111/1111', '4111-1111-1111-1111-1228', '4111   1111 1111 1111', 'DE08 2789 2536 2826 0240 19',
           'ref 2789 2536 2826 0240', 'Inv 5234-567 05.10.2025 qty 12', `${digits(4)} ${digits(4)} ${digits(4)} ${digits(4)}`,
-          `${digits(3)}.${digits(4)}/${digits(4)}-${digits(4)}`, `n ${digits(2)} ${digits(4)} ${digits(4)} ${digits(4)} ${digits(3)}`]),
+          `${digits(3)}.${digits(4)}/${digits(4)}-${digits(4)}`, `n ${digits(2)} ${digits(4)} ${digits(4)} ${digits(4)} ${digits(3)}`,
+          'VISA4111111111111111', 'PAN4111-1111-1111-1111', '3056 9309 0259 04', '4222 2222 2222 2', 'REF A12 4111 1111 1111 1111',
+          'BE68 5390 0754 7034 4111 1111 1111 1111', 'DE89 4111 1111 1111 1111 11', 'refund fr75 0001 4093 1234 5975 1277 407',
+          'SIRET 552 081 317 00018', 'IMEI 352099001761481', `${pick(['DE', 'de', 'FR', 'fr'])}${digits(2)} ${digits(4)} ${digits(4)} ${digits(4)} ${digits(4)}`,
+          `x ${luhnComplete(`${pick(['4', '51', '37', '6011', '3528'])}${digits(10)}`)}`]),
       ])();
     },
   };

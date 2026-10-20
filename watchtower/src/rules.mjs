@@ -77,7 +77,7 @@ export const RULES = Object.freeze([
     precision: 'medium',
     summary: 'A password, PIN, token or key field is initialised with a literal.',
     rationale: 'VALUE literals are compiled into the load module and copied into source libraries, compile listings and backups. Anyone who can read the PDS or a listing obtains the credential, every environment shares it, and rotating it requires a recompile.',
-    fix: 'Remove the literal and obtain the secret at run time (ACCEPT ... FROM ENVIRONMENT, a protected dataset, or a credential service); clear the field after use.',
+    fix: 'Remove the literal and obtain the secret at run time (a protected dataset, a credential service, or a pipe read without stdio buffering — see ALZ-COB-017); clear the field after use.',
   }),
   defineRule({
     id: 'ALZ-COB-005',
@@ -222,6 +222,18 @@ export const RULES = Object.freeze([
     summary: 'A LINE SEQUENTIAL file is read but its FILE STATUS is never tested for 04/06 (record length mismatch).',
     rationale: 'On GnuCOBOL 3.2, when a LINE SEQUENTIAL line is longer than the FD record, READ returns status 06 for the first part and the rest of the line comes back as an extra record with status 00 (COB_LS_SPLIT): one crafted line injects a second record. A program that only checks for 00/10 processes both.',
     fix: 'Use fixed-length ORGANIZATION SEQUENTIAL for untrusted input, pre-fill the record area with LOW-VALUES before each READ (a short final record otherwise keeps stale bytes), and treat status 04/06 as a rejected record.',
+  }),
+  defineRule({
+    id: 'ALZ-COB-017',
+    name: 'SecretAccept',
+    title: 'Secret read with ACCEPT',
+    severity: 'low',
+    cwe: 'CWE-316',
+    language: 'cobol',
+    precision: 'medium',
+    summary: 'ACCEPT reads a password, PIN, token or cryptographic key from standard input.',
+    rationale: 'ACCEPT goes through the C library\'s stdin buffer and the COBOL run time\'s own line buffer. Wiping the receiving field afterwards leaves those copies in the process, where a core dump, a swap file or a memory-scraping attacker finds them: on GnuCOBOL 3.2, three copies of a key survived the wipe.',
+    fix: 'Read secrets with an unbuffered read straight into the field (read(2), byte by byte, as Rampart\'s alz_read_line does), zeroize the field after use, and refuse input beyond what the program needs (alz_expect_eof). Better still, receive only derived, purpose-specific keys.',
   }),
   defineRule({
     id: 'ALZ-FOR-001',

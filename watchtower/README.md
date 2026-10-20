@@ -86,8 +86,8 @@ from the scanned code are replaced by U+FFFD, so a Trojan Source sample cannot r
 ```json
 {
   "tool": { "name": "Watchtower", "version": "0.1.0" },
-  "summary": { "files": 7, "findings": 70, "suppressed": 0,
-               "bySeverity": { "critical": 3, "high": 14, "medium": 27, "low": 26, "info": 0 },
+  "summary": { "files": 8, "findings": 72, "suppressed": 0,
+               "bySeverity": { "critical": 3, "high": 14, "medium": 28, "low": 27, "info": 0 },
                "byRule": { "ALZ-COB-001": 1 } },
   "results": [
     { "file": "examples/vulnerable/ACCTXFER.cbl", "language": "cobol", "format": "fixed",
@@ -189,6 +189,7 @@ Suppressions are explicit and justified:
 | [ALZ-COB-014](../docs/rules/ALZ-COB-014.md) | Medium | CWE-561 | COBOL | Code-like text beyond column 72 |
 | [ALZ-COB-015](../docs/rules/ALZ-COB-015.md) | Low | CWE-691 | COBOL | ALTER statement (self-modifying control flow) |
 | [ALZ-COB-016](../docs/rules/ALZ-COB-016.md) | Medium | CWE-130 | COBOL | LINE SEQUENTIAL input without record-length check |
+| [ALZ-COB-017](../docs/rules/ALZ-COB-017.md) | Low | CWE-316 | COBOL | Secret read with ACCEPT |
 | [ALZ-FOR-001](../docs/rules/ALZ-FOR-001.md) | Medium | CWE-457 | Fortran | Missing IMPLICIT NONE |
 | [ALZ-FOR-002](../docs/rules/ALZ-FOR-002.md) | Medium | CWE-119 | Fortran | Assumed-size dummy array |
 | [ALZ-FOR-003](../docs/rules/ALZ-FOR-003.md) | Medium | CWE-843 | Fortran | EQUIVALENCE storage aliasing |

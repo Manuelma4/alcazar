@@ -191,7 +191,7 @@ $ node watchtower/bin/watchtower.mjs scan examples/vulnerable/ACCTXFER.cbl
   (PIC 9(9)V99): a negative value silently loses its sign (-500.00 becomes 500.00).
 ```
 
-* **33 rules** — 16 COBOL, 14 Fortran, 3 for any language — each with a page
+* **34 rules** — 17 COBOL, 14 Fortran, 3 for any language — each with a page
   in [`docs/rules/`](docs/rules/): why it matters on a real mainframe or HPC
   system, vulnerable and fixed code, references.
 * **Text, JSON and SARIF 2.1.0** for GitHub code scanning (security severity,
@@ -201,7 +201,7 @@ $ node watchtower/bin/watchtower.mjs scan examples/vulnerable/ACCTXFER.cbl
 * **Zero dependencies, ReDoS-safe hand-written lexers**, and a browser-safe
   core: Lookout scans pasted code without a server round-trip.
 * **Dogfooded**: CI fails if Watchtower finds anything in Alcazar's own COBOL
-  and Fortran — and if it stops finding all 33 rules in `examples/vulnerable`.
+  and Fortran — and if it stops finding all 34 rules in `examples/vulnerable`.
 
 Watchtower is also a **GitHub Action** — scan your own legacy code on every
 pull request:
@@ -226,7 +226,7 @@ jobs:
           sarif_file: watchtower.sarif
 ```
 
-<details open><summary><b>COBOL</b> — 16 rules</summary>
+<details open><summary><b>COBOL</b> — 17 rules</summary>
 
 | Rule | Finds | Severity | CWE |
 |------|-------|----------|-----|
@@ -246,6 +246,7 @@ jobs:
 | [ALZ-COB-014](docs/rules/ALZ-COB-014.md) | Code-like text beyond column 72 | medium | CWE-561 |
 | [ALZ-COB-015](docs/rules/ALZ-COB-015.md) | ALTER statement (self-modifying control flow) | low | CWE-691 |
 | [ALZ-COB-016](docs/rules/ALZ-COB-016.md) | LINE SEQUENTIAL input without record-length check | medium | CWE-130 |
+| [ALZ-COB-017](docs/rules/ALZ-COB-017.md) | Secret read with ACCEPT (stdio keeps a copy) | low | CWE-316 |
 
 </details>
 

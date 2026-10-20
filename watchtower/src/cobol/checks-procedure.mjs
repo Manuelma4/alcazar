@@ -1,9 +1,10 @@
 /**
  * PROCEDURE DIVISION rules: CALL (001, 002), dynamic SQL (003), DISPLAY of
  * sensitive data (005), MOVE sign loss / truncation (006-008), arithmetic
- * without ON SIZE ERROR or ROUNDED (009, 010, 013) and ALTER (015).
+ * without ON SIZE ERROR or ROUNDED (009, 010, 013), ALTER (015) and secrets
+ * read with ACCEPT (017).
  */
-import { cobolMoneyStrength, isCobolSensitiveName } from '../names.mjs';
+import { cobolMoneyStrength, isCobolSecretName, isCobolSensitiveName } from '../names.mjs';
 import { escapeInvisible } from '../text.mjs';
 import {
   addBounds, expressionBound, fitsIntegerDigits, itemBound, literalBound, multiplyBounds, parseNumericLiteral,
@@ -38,6 +39,11 @@ const DISPLAY_STOPS = new Set([
   'UNDERLINE', 'BLINK', 'SIZE', 'CONVERSION', 'MODE', 'SCROLL', 'TIME-OUT', 'TIMEOUT',
 ]);
 const LENGTH_FUNCTIONS = new Set(['LENGTH', 'BYTE-LENGTH', 'LENGTH-AN', 'STORED-CHAR-LENGTH']);
+/** ACCEPT ... FROM these does not read standard input. */
+const ACCEPT_NOT_STDIN = new Set([
+  'DATE', 'DAY', 'DAY-OF-WEEK', 'TIME', 'COMMAND-LINE', 'ARGUMENT-NUMBER', 'ARGUMENT-VALUE', 'ENVIRONMENT',
+  'ENVIRONMENT-VALUE', 'ENVIRONMENT-NAME', 'EXCEPTION', 'ESCAPE', 'USER', 'LINES', 'COLUMNS',
+]);
 const ARITHMETIC_VERBS = new Set(['ADD', 'SUBTRACT', 'MULTIPLY', 'DIVIDE', 'COMPUTE']);
 
 /**
@@ -49,6 +55,7 @@ export function checkProcedure(ctx) {
     switch (statement.verb) {
       case 'CALL': checkCall(ctx, statement); break;
       case 'DISPLAY': checkDisplay(ctx, statement); break;
+      case 'ACCEPT': checkAccept(ctx, statement); break;
       case 'MOVE': checkMove(ctx, statement); break;
       case 'ALTER':
         ctx.sink.addAt('ALZ-COB-015', ctx.tokens[statement.start],
@@ -219,7 +226,26 @@ function reportSensitive(ctx, token) {
   if (!isCobolSensitiveName(token.upper)) return;
   ctx.sink.addAt('ALZ-COB-005', token,
     `DISPLAY writes ${escapeInvisible(token.value)} to SYSOUT and the job log, where operators and log archives keep it: `
-    + 'card numbers, CVVs, PINs, passwords, IBANs and tokens must never be displayed. Display a masked value instead.');
+    + 'card numbers, CVVs, PINs, passwords, IBANs, tokens and keys must never be displayed. Display a masked value instead.');
+}
+
+// -------------------------------------------------------------- ACCEPT ---
+
+/**
+ * @param {CobolContext} ctx
+ * @param {Statement} statement
+ */
+function checkAccept(ctx, statement) {
+  const { tokens } = ctx;
+  if (statement.start + 1 >= statement.end) return;
+  const target = readOperand(tokens, statement.start + 1, statement.end);
+  if (target.kind !== 'identifier') return;
+  const from = target.next;
+  if (isWord(tokens[from], 'FROM') && tokens[from + 1]?.type === 'word' && ACCEPT_NOT_STDIN.has(tokens[from + 1].upper)) return;
+  if (!isCobolSecretName(target.token.upper)) return;
+  ctx.sink.addAt('ALZ-COB-017', target.token,
+    `ACCEPT reads ${escapeInvisible(target.token.value)} through stdio and the COBOL run time's line buffer: `
+    + 'copies of the secret stay in memory after the field is wiped. Read it with an unbuffered read straight into the field (alz_read_line), then zeroize it.');
 }
 
 // ---------------------------------------------------------------- MOVE ---

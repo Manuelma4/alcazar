@@ -397,3 +397,34 @@ describe('COBOL results', () => {
     assert.equal(findingsOf(result, 'ALZ-COB-001').length, 1);
   });
 });
+
+describe('ALZ-COB-017 secret read with ACCEPT', () => {
+  it('flags credentials and cryptographic keys read from standard input', () => {
+    const found = hits({
+      data: ['01  WS-PASSWORD PIC X(20).', '01  WS-PIN PIC 9(4).', '01  WS-HMAC-KEY PIC X(64).', '01  ALZ-KEY-HEX PIC X(80).',
+        '01  WS-API-KEY PIC X(40).', '01  WS-AUTH-TOKEN PIC X(32).'],
+      procedure: ['    ACCEPT WS-PASSWORD', '    ACCEPT WS-PIN FROM CONSOLE', '    ACCEPT WS-HMAC-KEY', '    ACCEPT ALZ-KEY-HEX',
+        '    ACCEPT WS-API-KEY FROM SYSIN', '    ACCEPT WS-AUTH-TOKEN'],
+    }, 'ALZ-COB-017');
+    assert.equal(found.length, 6);
+    assert.equal(found[0].severity, 'low');
+    assert.equal(found[0].cwe, 'CWE-316');
+    assert.match(found[2].message, /WS-HMAC-KEY/);
+  });
+
+  it('leaves record keys, metadata and other ACCEPT sources alone', () => {
+    const found = hits({
+      data: ['01  WS-CUST-KEY PIC X(10).', '01  WS-KEY-LEN PIC 99.', '01  WS-DATE PIC 9(8).', '01  WS-ARGS PIC X(80).',
+        '01  WS-PASSWORD PIC X(20).', '01  WS-PIN-TRIES PIC 9.'],
+      procedure: ['    ACCEPT WS-CUST-KEY', '    ACCEPT WS-KEY-LEN', '    ACCEPT WS-DATE FROM DATE YYYYMMDD', '    ACCEPT WS-ARGS FROM COMMAND-LINE',
+        '    ACCEPT WS-PASSWORD FROM ENVIRONMENT "DB_PASSWORD"', '    ACCEPT WS-PIN-TRIES'],
+    }, 'ALZ-COB-017');
+    assert.equal(found.length, 0);
+  });
+
+  it('makes DISPLAY of a cryptographic key an ALZ-COB-005 finding', () => {
+    const found = hits({ data: ['01  WS-MASTER-KEY PIC X(64).', '01  WS-CUST-KEY PIC X(10).'], procedure: ['    DISPLAY WS-MASTER-KEY WS-CUST-KEY'] }, 'ALZ-COB-005');
+    assert.equal(found.length, 1);
+    assert.match(found[0].message, /WS-MASTER-KEY/);
+  });
+});

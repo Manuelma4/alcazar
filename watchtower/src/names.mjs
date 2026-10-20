@@ -95,7 +95,8 @@ export function isCobolSensitiveName(name) {
     || part === 'CARDNUMBER' || part === 'CCNUM' || part === 'CCNO'
     || part.startsWith('CVV') || part.startsWith('CVC') || part === 'SSN' || isPinWord(part)
     || part.startsWith('IBAN') || part.includes('PASSWORD') || part.includes('PASSWD')
-    || part.includes('SECRET') || part.startsWith('TOKEN') || part.endsWith('TOKEN'));
+    || part.includes('SECRET') || part.startsWith('TOKEN') || part.endsWith('TOKEN'))
+    || isCobolSecretName(name);
 }
 
 /**
@@ -129,6 +130,29 @@ export function cobolCredentialKind(name) {
     || part === 'APIKEY' || part.includes('CREDENTIAL'))
     || hasPartSequence(parts, ['API', 'KEY']) || hasPartSequence(parts, ['PRIVATE', 'KEY']);
   return { match, pin: pin || passwordLike };
+}
+
+/** What makes a KEY a cryptographic key rather than a record key. */
+const KEY_QUALIFIERS = new Set([
+  'MASTER', 'SECRET', 'PRIVATE', 'PRIV', 'HMAC', 'MAC', 'AES', 'DES', 'TDES', 'CRYPTO', 'CIPHER', 'SIGNING',
+  'SESSION', 'ENC', 'ENCRYPTION', 'HEX', 'LEDGER', 'SUB',
+]);
+const KEY_WORDS = new Set(['APIKEY', 'PRIVKEY', 'PRIVATEKEY', 'HMACKEY', 'AESKEY', 'SECKEY', 'ENCKEY', 'MACKEY', 'MASTERKEY']);
+
+/**
+ * COBOL items that hold a secret a program must not leave in buffers or
+ * logs: credentials (ALZ-COB-004's) and cryptographic keys — a KEY that
+ * also says MASTER, HMAC, AES, HEX..., never a plain record KEY (ALZ-COB-005,
+ * ALZ-COB-017).
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isCobolSecretName(name) {
+  if (cobolCredentialKind(name).match) return true;
+  const parts = nameParts(name);
+  if (hasMeta(parts, META_PARTS)) return false;
+  if (parts.some((part) => KEY_WORDS.has(part))) return true;
+  return (parts.includes('KEY') || parts.includes('KEYS')) && parts.some((part) => KEY_QUALIFIERS.has(part));
 }
 
 /**

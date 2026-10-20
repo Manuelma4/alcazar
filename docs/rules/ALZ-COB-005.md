@@ -12,7 +12,7 @@ DISPLAY prints a field that looks like a card number, CVV, PIN, password, IBAN o
 
 ## What Watchtower detects
 
-A `DISPLAY` operand (including arguments of `FUNCTION` calls such as `FUNCTION TRIM(...)`) whose name, split on hyphens, contains PAN, CARD-NUM / CARD-NO / CARDNO / CCNUM, CVV / CVC, SSN, PASSWORD / PASSWD, PIN (as a word: SPINDLE is not a PIN), IBAN, SECRET or TOKEN. Masked or metadata names (`-MASKED`, `-LAST4`, `-LEN`, `-STATUS`, `-TRIES`...), reference-modified operands (`WS-PAN(1:6)`, the usual masking idiom), `LENGTH OF` and `FUNCTION LENGTH(...)` are not reported.
+A `DISPLAY` operand (including arguments of `FUNCTION` calls such as `FUNCTION TRIM(...)`) whose name, split on hyphens, contains PAN, CARD-NUM / CARD-NO / CARDNO / CCNUM, CVV / CVC, SSN, PASSWORD / PASSWD, PIN (as a word: SPINDLE is not a PIN), IBAN, SECRET or TOKEN, or names a cryptographic key (a KEY that also says MASTER, HMAC, AES, HEX... — see [ALZ-COB-017](ALZ-COB-017.md); a plain record KEY is not one). Masked or metadata names (`-MASKED`, `-LAST4`, `-LEN`, `-STATUS`, `-TRIES`...), reference-modified operands (`WS-PAN(1:6)`, the usual masking idiom), `LENGTH OF` and `FUNCTION LENGTH(...)` are not reported.
 
 ## Why it matters in legacy systems
 

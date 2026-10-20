@@ -12,6 +12,7 @@ Demo material for [Watchtower](../watchtower/README.md), the Alcazar static anal
 |---|---|---|---|
 | `PAYROLL.cob` + `EMPREC.cpy` | yes | yes | Monthly payroll: division and money arithmetic without `ON SIZE ERROR`, no `ROUNDED`, `COMP-2` tax, truncating MOVEs (one through a copybook field), IBAN on SYSOUT, `CALL "SYSTEM"` with a literal. |
 | `ACCTXFER.cbl` | yes | yes | Funds transfer: sign-loss MOVE, numeric and text truncation, dynamic `CALL` chosen by the input record, `CALL "SYSTEM"` with record data, hard-coded password, PAN on SYSOUT, file without FILE STATUS, unchecked LINE SEQUENTIAL record splitting, `ALTER`, a condition hidden in columns 73-80, and an unjustified suppression that is ignored. |
+| `KEYLOAD.cbl` | yes | yes | Key loading: the HMAC key read with `ACCEPT` (stdio and the run time keep copies) and echoed to SYSOUT; the hardened version reads it with `alz_read_line`, refuses extra input and wipes it. |
 | `CUSTSQL.cbl` | yes | - | Embedded SQL: `PREPARE ... FROM :host` and `EXECUTE IMMEDIATE :host` built with `STRING`. |
 | `loancalc.f` | yes | yes | Fortran 77 fixed form: no `IMPLICIT NONE`, `COMMON`, `EQUIVALENCE`, `REAL*4` money, exact float comparison, arithmetic IF, computed GO TO, I/O without `IOSTAT`, assumed-size dummy, bound check without short-circuit. |
 | `risk_engine.f90` | yes | yes | Modern Fortran: `execute_command_line` with a built command, `random_number` session tokens, secrets compared with `==`, hard-coded API key (AWS's public documentation example key), runtime format string, I/O without `iostat`, unprotected substring index, single-precision money. |
@@ -20,7 +21,7 @@ Demo material for [Watchtower](../watchtower/README.md), the Alcazar static anal
 ## Try it
 
 ```sh
-node watchtower/bin/watchtower.mjs scan examples/vulnerable               # exit 1, ~70 findings
+node watchtower/bin/watchtower.mjs scan examples/vulnerable               # exit 1, ~72 findings
 node watchtower/bin/watchtower.mjs scan examples/hardened --fail-on info  # exit 0, no findings
 node watchtower/bin/watchtower.mjs scan examples/vulnerable --format sarif --output vulnerable.sarif --fail-on none
 ```

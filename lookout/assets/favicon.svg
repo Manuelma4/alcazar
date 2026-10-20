@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Alcazar Lookout</title>
+  <rect width="64" height="64" rx="14" fill="#0A0F1E"/>
+  <rect x="10.5" y="6.5" width="43" height="51" rx="2" fill="none" stroke="#E2BF63" stroke-width="2.5"/>
+  <path d="M20 57.5 V30.5 A14 14 0 1 1 44 30.5 V57.5" fill="#16213A" stroke="#E2BF63" stroke-width="3.5" stroke-linejoin="round"/>
+  <circle cx="32" cy="31.5" r="5" fill="#E2BF63"/>
+  <path d="M29.2 34.5 L27.6 46 H36.4 L34.8 34.5 Z" fill="#E2BF63"/>
+</svg>

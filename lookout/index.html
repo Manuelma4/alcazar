@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lookout · Alcazar</title>
+  <meta name="description" content="Lookout, the dashboard of Alcazar: a hardened gateway, a COBOL and Fortran batch core, an HMAC-sealed ledger and a static analyzer for legacy code.">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0A0F1E">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/shell.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/views.css">
+  <link rel="stylesheet" href="/css/charts.css">
+  <script src="/js/theme-boot.js"></script>
+  <script type="module" src="/js/main.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="backdrop" aria-hidden="true"></div>
+  <div class="shell" id="app">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="workspace">
+      <header class="topbar" id="topbar"></header>
+      <main class="main" id="main" tabindex="-1">
+        <noscript>
+          <p class="lead">Lookout is a zero-dependency JavaScript application. Enable JavaScript to use the dashboard; nothing on this page is loaded from third parties.</p>
+        </noscript>
+      </main>
+      <footer class="site-foot" id="site-foot"></footer>
+    </div>
+  </div>
+  <div class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

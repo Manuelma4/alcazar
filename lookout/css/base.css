@@ -1,0 +1,274 @@
+/* Lookout · base: design tokens, reset, typography, utilities.
+ *
+ * Palette: night ink + gold leaf + lapis, one identity colour per layer.
+ * Layer colours were validated with the dataviz palette checker on every
+ * pair (normal vision >= 15 dE, protan/deutan >= 8 dE, >= 3:1 vs surface).
+ * "-ink" variants are the text-safe steps (>= 4.5:1 on every surface).
+ */
+
+:root {
+  color-scheme: dark;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, ui-serif, serif;
+
+  /* night ink */
+  --bg: #0A0F1E;
+  --bg-2: #0C1325;
+  --surface: #111A2E;
+  --surface-2: #16213A;
+  --surface-3: #1C2946;
+  --surface-sunk: #0C1426;
+  --overlay: rgba(4, 7, 16, .72);
+  --line: rgba(255, 255, 255, .07);
+  --line-2: rgba(255, 255, 255, .12);
+  --line-3: rgba(255, 255, 255, .2);
+  --text: #E8ECF6;
+  --text-2: #B6BFD4;
+  --muted: #8B95AE;
+  --faint: #5D6782;
+
+  /* gold leaf (structure, headings, focus) */
+  --gold: #E2BF63;
+  --gold-bright: #F2D688;
+  --gold-ink: #E8C873;
+  --gold-display: #E2BF63;
+  --gold-wash: rgba(226, 191, 99, .1);
+  --gold-line: rgba(226, 191, 99, .32);
+  --on-gold: #1B1406;
+  --focus: #F2D688;
+
+  /* layer identities */
+  --gatehouse: #3F7BFF;  --gatehouse-ink: #8DAFFF;  --gatehouse-wash: rgba(63, 123, 255, .14);
+  --cobol: #1FB5A3;      --cobol-ink: #52D3C2;      --cobol-wash: rgba(31, 181, 163, .14);
+  --fortran: #F0782F;    --fortran-ink: #FF9F66;    --fortran-wash: rgba(240, 120, 47, .14);
+  --seal: #E2BF63;       --seal-ink: #E8C873;       --seal-wash: rgba(226, 191, 99, .12);
+  --watchtower: #B18CFF; --watchtower-ink: #C6AAFF; --watchtower-wash: rgba(177, 140, 255, .14);
+
+  /* status (reserved: always paired with an icon and a label) */
+  --ok: #3FB97A;     --ok-ink: #63D497;     --ok-wash: rgba(63, 185, 122, .14);
+  --danger: #E5484D; --danger-ink: #FF7B7F; --danger-wash: rgba(229, 72, 77, .15);
+  --warn: #F5A524;   --warn-ink: #FFC261;   --warn-wash: rgba(245, 165, 36, .14);
+
+  /* Watchtower severities */
+  --sev-critical: #FF4F70; --sev-critical-ink: #FF91A8; --sev-critical-wash: rgba(255, 79, 112, .16); --sev-critical-solid: #C81E4A;
+  --sev-high: #E5484D;     --sev-high-ink: #FF7B7F;     --sev-high-wash: rgba(229, 72, 77, .15);
+  --sev-medium: #F5A524;   --sev-medium-ink: #FFC261;   --sev-medium-wash: rgba(245, 165, 36, .14);
+  --sev-low: #7D93C4;      --sev-low-ink: #A9BBE3;      --sev-low-wash: rgba(125, 147, 196, .16);
+  --sev-info: #8B95AE;     --sev-info-ink: #B6BFD4;     --sev-info-wash: rgba(139, 149, 174, .14);
+
+  /* charts */
+  --chart-neutral: #5A6C93;
+  --chart-grid: rgba(255, 255, 255, .07);
+  --chart-axis: rgba(255, 255, 255, .2);
+  --chart-ring: var(--surface);
+
+  /* decoration */
+  --pattern: #E2BF63;
+  --pattern-opacity: .045;
+  --glow-a: rgba(63, 123, 255, .1);
+  --glow-b: rgba(226, 191, 99, .06);
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, .035) inset, 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 22px 44px -26px rgba(0, 0, 0, .75);
+  --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, .65), 0 0 0 1px var(--line-2);
+
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --radius-xl: 20px;
+  --sidebar-w: 268px;
+  --topbar-h: 64px;
+  --tabbar-h: 64px;
+}
+
+/* Parchment & lapis — the same identities, stepped for contrast. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #F6F1E7; --bg-2: #EFE8DA; --surface: #FFFCF5; --surface-2: #FBF6EC; --surface-3: #F3ECDE; --surface-sunk: #F4EEE2;
+    --overlay: rgba(40, 32, 18, .38);
+    --line: rgba(58, 42, 12, .1); --line-2: rgba(58, 42, 12, .16); --line-3: rgba(58, 42, 12, .28);
+    --text: #1B2236; --text-2: #3A4359; --muted: #5B6478; --faint: #8C93A3;
+    --gold: #AF8D1E; --gold-bright: #D9B54A; --gold-ink: #7A5C14; --gold-display: #8F6F18; --gold-wash: rgba(175, 141, 30, .11); --gold-line: rgba(122, 92, 20, .32);
+    --on-gold: #1B1406; --focus: #1A4CC4;
+    --gatehouse: #1A4CC4;  --gatehouse-ink: #1A4CC4;  --gatehouse-wash: rgba(26, 76, 196, .09);
+    --cobol: #00897A;      --cobol-ink: #006A5F;      --cobol-wash: rgba(0, 137, 122, .1);
+    --fortran: #B5430B;    --fortran-ink: #A33C09;    --fortran-wash: rgba(181, 67, 11, .09);
+    --seal: #AF8D1E;       --seal-ink: #7A5C14;       --seal-wash: rgba(175, 141, 30, .12);
+    --watchtower: #9A6AE6; --watchtower-ink: #6E43C4; --watchtower-wash: rgba(154, 106, 230, .11);
+    --ok: #1F8A55;     --ok-ink: #12663C;     --ok-wash: rgba(31, 138, 85, .1);
+    --danger: #D2343A; --danger-ink: #B42318; --danger-wash: rgba(210, 52, 58, .09);
+    --warn: #D88A0E;   --warn-ink: #8A5300;   --warn-wash: rgba(216, 138, 14, .12);
+    --sev-critical: #D6305A; --sev-critical-ink: #A3123A; --sev-critical-wash: rgba(214, 48, 90, .1); --sev-critical-solid: #A3123A;
+    --sev-high: #D93A3F;     --sev-high-ink: #B42318;     --sev-high-wash: rgba(217, 58, 63, .09);
+    --sev-medium: #D88A0E;   --sev-medium-ink: #8A5300;   --sev-medium-wash: rgba(216, 138, 14, .12);
+    --sev-low: #6B83B8;      --sev-low-ink: #3D5488;      --sev-low-wash: rgba(107, 131, 184, .13);
+    --sev-info: #8C93A3;     --sev-info-ink: #4A5368;     --sev-info-wash: rgba(140, 147, 163, .14);
+    --chart-neutral: #7D879E; --chart-grid: rgba(58, 42, 12, .09); --chart-axis: rgba(58, 42, 12, .28);
+    --pattern: #1A4CC4; --pattern-opacity: .05;
+    --glow-a: rgba(26, 76, 196, .07); --glow-b: rgba(175, 141, 30, .09);
+    --shadow-1: 0 1px 0 rgba(255, 255, 255, .8) inset, 0 1px 2px rgba(58, 42, 12, .08);
+    --shadow-2: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 18px 36px -24px rgba(58, 42, 12, .35);
+    --shadow-pop: 0 18px 44px -14px rgba(58, 42, 12, .35), 0 0 0 1px var(--line-2);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F6F1E7; --bg-2: #EFE8DA; --surface: #FFFCF5; --surface-2: #FBF6EC; --surface-3: #F3ECDE; --surface-sunk: #F4EEE2;
+  --overlay: rgba(40, 32, 18, .38);
+  --line: rgba(58, 42, 12, .1); --line-2: rgba(58, 42, 12, .16); --line-3: rgba(58, 42, 12, .28);
+  --text: #1B2236; --text-2: #3A4359; --muted: #5B6478; --faint: #8C93A3;
+  --gold: #AF8D1E; --gold-bright: #D9B54A; --gold-ink: #7A5C14; --gold-display: #8F6F18; --gold-wash: rgba(175, 141, 30, .11); --gold-line: rgba(122, 92, 20, .32);
+  --on-gold: #1B1406; --focus: #1A4CC4;
+  --gatehouse: #1A4CC4;  --gatehouse-ink: #1A4CC4;  --gatehouse-wash: rgba(26, 76, 196, .09);
+  --cobol: #00897A;      --cobol-ink: #006A5F;      --cobol-wash: rgba(0, 137, 122, .1);
+  --fortran: #B5430B;    --fortran-ink: #A33C09;    --fortran-wash: rgba(181, 67, 11, .09);
+  --seal: #AF8D1E;       --seal-ink: #7A5C14;       --seal-wash: rgba(175, 141, 30, .12);
+  --watchtower: #9A6AE6; --watchtower-ink: #6E43C4; --watchtower-wash: rgba(154, 106, 230, .11);
+  --ok: #1F8A55;     --ok-ink: #12663C;     --ok-wash: rgba(31, 138, 85, .1);
+  --danger: #D2343A; --danger-ink: #B42318; --danger-wash: rgba(210, 52, 58, .09);
+  --warn: #D88A0E;   --warn-ink: #8A5300;   --warn-wash: rgba(216, 138, 14, .12);
+  --sev-critical: #D6305A; --sev-critical-ink: #A3123A; --sev-critical-wash: rgba(214, 48, 90, .1); --sev-critical-solid: #A3123A;
+  --sev-high: #D93A3F;     --sev-high-ink: #B42318;     --sev-high-wash: rgba(217, 58, 63, .09);
+  --sev-medium: #D88A0E;   --sev-medium-ink: #8A5300;   --sev-medium-wash: rgba(216, 138, 14, .12);
+  --sev-low: #6B83B8;      --sev-low-ink: #3D5488;      --sev-low-wash: rgba(107, 131, 184, .13);
+  --sev-info: #8C93A3;     --sev-info-ink: #4A5368;     --sev-info-wash: rgba(140, 147, 163, .14);
+  --chart-neutral: #7D879E; --chart-grid: rgba(58, 42, 12, .09); --chart-axis: rgba(58, 42, 12, .28);
+  --pattern: #1A4CC4; --pattern-opacity: .05;
+  --glow-a: rgba(26, 76, 196, .07); --glow-b: rgba(175, 141, 30, .09);
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, .8) inset, 0 1px 2px rgba(58, 42, 12, .08);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 18px 36px -24px rgba(58, 42, 12, .35);
+  --shadow-pop: 0 18px 44px -14px rgba(58, 42, 12, .35), 0 0 0 1px var(--line-2);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ---------- reset ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--topbar-h) + 16px);
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--bg);
+  color: var(--text);
+  font: 400 .9375rem/1.55 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+img, svg { display: block; max-width: 100%; }
+svg { overflow: visible; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--gatehouse-ink); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
+ul, ol { margin: 0; padding: 0; }
+dl, dd { margin: 0; }
+table { border-collapse: collapse; }
+pre, code, kbd, samp { font-family: var(--font-mono); }
+[hidden] { display: none !important; }
+::selection { background: color-mix(in srgb, var(--gold) 35%, transparent); }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ---------- typography ---------- */
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -.005em;
+}
+h1.view-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.9rem, 1.35rem + 1.7vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -.01em;
+}
+h1.view-title:focus { outline: none; }
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .72rem;
+  font-weight: 650;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.lead { color: var(--text-2); font-size: 1rem; line-height: 1.6; max-width: 72ch; }
+.muted { color: var(--muted); }
+.text-2 { color: var(--text-2); }
+.small { font-size: .8125rem; }
+.tiny { font-size: .75rem; }
+.mono {
+  font-family: var(--font-mono);
+  font-size: .8125em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.num, .tabular { font-variant-numeric: tabular-nums; }
+.strong { font-weight: 650; }
+.nowrap { white-space: nowrap; }
+.break { overflow-wrap: anywhere; word-break: break-word; }
+.ink-ok { color: var(--ok-ink); }
+.ink-danger { color: var(--danger-ink); }
+.ink-warn { color: var(--warn-ink); }
+.ink-gold { color: var(--gold-ink); }
+
+/* ---------- utilities ---------- */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: fixed;
+  left: 12px; top: 12px;
+  z-index: 1000;
+  padding: 10px 16px;
+  border-radius: var(--radius-m);
+  background: var(--gold);
+  color: var(--on-gold);
+  font-weight: 650;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform .15s ease;
+}
+.skip-link:focus { transform: none; }
+.stack { display: grid; gap: var(--stack-gap, 12px); }
+.row { display: flex; align-items: center; gap: var(--row-gap, 10px); flex-wrap: wrap; }
+.row.nowrap { flex-wrap: nowrap; }
+.spacer { flex: 1 1 auto; }
+.grow { flex: 1 1 auto; min-width: 0; }
+
+/* ---------- motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .backdrop, .sidebar, .topbar, .nav, .toasts, .no-print { display: none !important; }
+  body { background: #fff; color: #000; }
+}

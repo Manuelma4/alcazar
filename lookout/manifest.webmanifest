@@ -1,0 +1,14 @@
+{
+  "name": "Alcazar Lookout",
+  "short_name": "Lookout",
+  "description": "Dashboard for Alcazar, the security toolkit for legacy COBOL and Fortran.",
+  "start_url": "/#/overview",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0A0F1E",
+  "theme_color": "#0A0F1E",
+  "icons": [
+    { "src": "/assets/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/assets/logo.svg", "sizes": "120x120", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

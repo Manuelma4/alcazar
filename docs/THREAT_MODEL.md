@@ -97,6 +97,11 @@ flowchart LR
   read from a `0600` file) — the legacy programs only ever see sub-keys.
   Production should keep it in an HSM/KMS and only hand Gatehouse the derived
   keys.
+* **The insider is someone with the job directory, not with Gatehouse.** The
+  checks above make the job directory useless as an attack surface, even
+  while a job runs; whoever controls the Gatehouse process or its user
+  holds the keys and is out of scope. In Docker that user is unprivileged
+  and the job directory is a private tmpfs.
 * **Truncation detection depends on the anchor**, which lives in Gatehouse's
   memory for the job's lifetime (15 minutes). A durable deployment must store
   the head MAC somewhere the insider cannot write (WORM storage, a separate

@@ -132,6 +132,9 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
   record left over after the last entry is a `RECORD-MISMATCH` at the next
   sequence number. Gatehouse then compares the head MAC and entry count with
   the anchor it recorded at sealing (`HEAD-MISMATCH`).
+* Outside Gatehouse, `scripts/verify-ledger.mjs` runs the same two verifiers
+  with `K_ledger` only (an auditor never needs the master key or `K_token`)
+  and checks the anchor when it is given.
 * Sub-keys are derived from the master key by Gatehouse (key separation):
   `K_ledger = HMAC(K_master, "alcazar/ledger/v1" || 0x01)`,
   `K_token = HMAC(K_master, "alcazar/token/v1" || 0x01)`. TXNGUARD receives

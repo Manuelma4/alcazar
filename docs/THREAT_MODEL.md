@@ -102,7 +102,8 @@ flowchart LR
   while a job runs; whoever controls the Gatehouse process or its user
   holds the keys and is out of scope. In Docker that user is unprivileged
   and the job directory is a private tmpfs.
-* **Truncation detection depends on the anchor**, which lives in Gatehouse's
+* **Truncation detection depends on the anchor** (`scripts/verify-ledger.mjs`
+  takes it as `--entries` / `--head`), which lives in Gatehouse's
   memory for the job's lifetime (15 minutes). A durable deployment must store
   the head MAC somewhere the insider cannot write (WORM storage, a separate
   service, a public transparency log).

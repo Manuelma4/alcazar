@@ -30,7 +30,8 @@ run() { env -i PATH=/usr/bin:/bin "$@"; }
 
 echo "== TXNGUARD (COBOL) =========================================="
 rc=0
-printf '%s\n%s\n' "$k_ledger" "$k_token" | run "$bin/txnguard" "$job" || rc=$?
+seal=$(printf '%s\n%s\n' "$k_ledger" "$k_token" | run "$bin/txnguard" "$job") || rc=$?
+echo "$seal"
 echo "return code $rc (0 all accepted, 4 some rejected)"
 sed -n 's/^/  /p' SUMMARY.DAT
 echo
@@ -51,3 +52,20 @@ echo
 echo "== FRAUDSCAN (Fortran) ======================================="
 run "$bin/fraudscan" ACCEPTED.DAT RISK.JSON
 echo "risk report written to var/demo/RISK.JSON"
+
+# An auditor holds K_ledger only - no master key, no K_token - and the
+# anchor TXNGUARD printed.
+umask 077
+printf '%s\n' "$k_ledger" > K_LEDGER.key
+k_ledger=
+k_token=
+entries=$(printf '%s\n' "$seal" | sed -n 's/^ALZ-SEAL|ENTRIES=0*\([0-9][0-9]*\)|HEAD=.*$/\1/p')
+head=$(printf '%s\n' "$seal" | sed -n 's/^ALZ-SEAL|ENTRIES=[0-9]*|HEAD=\([0-9a-f]*\)$/\1/p')
+echo
+echo "== Auditor (K_ledger only, both verifiers, the anchor) ======="
+if command -v node > /dev/null; then
+  node "$root/scripts/verify-ledger.mjs" "$dir" "$job" --ledger-key-file K_LEDGER.key \
+    --entries "$entries" --head "$head" || true
+else
+  echo "(node not found: skipped)"
+fi

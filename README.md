@@ -88,7 +88,16 @@ Rejected records:
 ALZ-LEDGER|STATUS=OK|ENTRIES=000016|HEAD=bb2d92cec5aa9a83...
 Tampering with the amount of entry 2...
 ALZ-LEDGER|STATUS=BROKEN|ENTRIES=000001|SEQ=000002|REASON=MAC-MISMATCH
+...
+== Auditor (K_ledger only, both verifiers, the anchor) =======
+node-openssl   BROKEN at entry 2: MAC-MISMATCH (1 verified before it)
+cobol-fortran  BROKEN at entry 2: MAC-MISMATCH (1 verified before it)
+verdict        BROKEN
 ```
+
+An auditor checks a sealed job the same way, outside Gatehouse and with
+`K_ledger` alone — no master key, no token key:
+`node scripts/verify-ledger.mjs <job-dir> <job-id> --ledger-key-file K_LEDGER.key --entries N --head HEX`.
 
 ## How a transfer is judged
 

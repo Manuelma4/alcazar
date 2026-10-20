@@ -9,7 +9,7 @@
 // run-time checks Alcazar ships with — and Watchtower's scanning speed.
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../gatehouse/src/app.mjs';
@@ -63,8 +63,9 @@ report('TXNGUARD — validate, tokenise, mask and seal 1,000 records (COBOL + Fo
 // The same program without GnuCOBOL's run-time checks (-debug), to price them.
 const unchecked = join(work, 'txnguard-nodebug');
 const gfortranLib = execFileSync('gfortran', [`-print-file-name=libgfortran.${process.platform === 'darwin' ? 'dylib' : 'so'}`]).toString().trim();
-const cobolSources = ['ALZTEXT', 'ALZSANIT', 'ALZIBAN', 'ALZLUHN', 'ALZMASK', 'ALZAMNT', 'ALZDATE', 'ALZCCY']
-  .map((m) => join(ROOT, 'rampart', 'cobol', 'src', `${m}.cob`));
+// Every Rampart module, so the list cannot fall behind the Makefile's.
+const cobolDir = join(ROOT, 'rampart', 'cobol', 'src');
+const cobolSources = readdirSync(cobolDir).filter((f) => f.endsWith('.cob')).sort().map((f) => join(cobolDir, f));
 execFileSync('cobc', ['-x', '-O2', '-fstatic-call', '-I', join(ROOT, 'rampart', 'cobol', 'copybooks'), '-o', unchecked,
   join(ROOT, 'apps', 'txnguard', 'TXNGUARD.cob'), ...cobolSources, join(ROOT, 'build', 'lib', 'librampart_f.a'),
   `-L${join(gfortranLib, '..')}`, '-lgfortran'], { cwd: work });
@@ -79,7 +80,7 @@ for (let i = 0; i < 30; i += 1) scanTimes.push(time(() => run(join(BIN, 'fraudsc
 report('FRAUDSCAN — score the accepted transfers (Fortran)', scanTimes, 'records', JSON.parse(readFileSync(join(work, 'RISK.JSON'), 'utf8')).n);
 const check = [];
 for (let i = 0; i < 30; i += 1) check.push(time(() => run(join(BIN, 'ledgerck'), ['j-bench'], work, KEY)));
-report('LEDGERCK — verify a 1,000-entry HMAC chain (COBOL + Fortran)', check, 'entries', 1000);
+report('LEDGERCK — verify a 1,000-entry ledger and the records it seals (COBOL + Fortran)', check, 'entries', 1000);
 
 // 2. Gatehouse end to end (HTTP, validation, all programs, double verification).
 const config = loadConfig({ ALCAZAR_PORT: '0', ALCAZAR_WORK_DIR: join(work, 'jobs'), ALCAZAR_RATE_CAPACITY: '100000', ALCAZAR_RATE_REFILL: '100000' });

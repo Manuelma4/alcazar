@@ -127,7 +127,7 @@ flowchart LR
    caught.
 
 A 200-transfer batch goes through all four in about **50 ms**, and the
-GnuCOBOL and gfortran run-time checks cost only 6–21 %
+GnuCOBOL and gfortran run-time checks cost only 2–21 %
 ([benchmarks](docs/BENCHMARKS.md)).
 
 ## The Siege

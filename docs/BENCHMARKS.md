@@ -9,21 +9,23 @@ GnuCOBOL 3.2, gfortran 16.2.
 
 | Benchmark | Median | p95 | Throughput |
 |-----------|-------:|----:|-----------:|
-| TXNGUARD — validate, tokenise, mask and seal 1,000 records (COBOL + Fortran HMAC) | 62.8 ms | 70.1 ms | 15,936 records/s |
-| TXNGUARD — same program built without `-debug` run-time checks | 58.8 ms | 69.6 ms | 16,996 records/s |
-| FRAUDSCAN — score the accepted transfers (Fortran) | 11.6 ms | 12.3 ms | 85,371 records/s |
-| LEDGERCK — verify a 1,000-entry HMAC chain (COBOL + Fortran) | 15.8 ms | 18.3 ms | 63,167 entries/s |
-| Gatehouse `POST /api/batch` — 1,000 transfers end to end | 108.5 ms | 119.6 ms | 9,218 transfers/s |
-| SHA-256 of 64 MiB — Fortran kernel as shipped (`-O2 -fcheck=bounds,…`) | 370 ms | | 173 MiB/s |
-| SHA-256 of 64 MiB — same Fortran, `-O3`, no run-time checks | 294 ms | | 218 MiB/s |
-| SHA-256 of 64 MiB — OpenSSL (`openssl dgst -sha256`) | 36 ms | | 1,756 MiB/s |
-| Watchtower — scan 99,251 lines of COBOL | 647.9 ms | 690.1 ms | 153,198 lines/s |
-| Watchtower — scan 98,631 lines of Fortran | 135.7 ms | 185.2 ms | 726,776 lines/s |
+| TXNGUARD — validate, tokenise, mask and seal 1,000 records (COBOL + Fortran HMAC) | 68.1 ms | 70.0 ms | 14,674 records/s |
+| TXNGUARD — same program built without `-debug` run-time checks | 66.9 ms | 68.3 ms | 14,957 records/s |
+| FRAUDSCAN — score the accepted transfers (Fortran) | 14.6 ms | 15.2 ms | 67,692 records/s |
+| LEDGERCK — verify a 1,000-entry ledger and the records it seals (COBOL + Fortran) | 21.6 ms | 22.1 ms | 46,214 entries/s |
+| Gatehouse `POST /api/batch` — 1,000 transfers end to end | 124.3 ms | 135.7 ms | 8,046 transfers/s |
+| SHA-256 of 64 MiB — Fortran kernel as shipped (`-O2 -fcheck=bounds,…`) | 368 ms | | 174 MiB/s |
+| SHA-256 of 64 MiB — same Fortran, `-O3`, no run-time checks | 289 ms | | 221 MiB/s |
+| SHA-256 of 64 MiB — OpenSSL (`openssl dgst -sha256`) | 37 ms | | 1,732 MiB/s |
+| Watchtower — scan 99,251 lines of COBOL | 642.2 ms | 675.7 ms | 154,553 lines/s |
+| Watchtower — scan 98,631 lines of Fortran | 137.5 ms | 180.6 ms | 717,562 lines/s |
+
+The batch figures were stable to within 2 % over three runs.
 
 ## What the numbers say
 
 **Keep the run-time checks on.** GnuCOBOL's `-debug` (every subscript,
-reference modification and numeric field checked) costs about **6 %** in
+reference modification and numeric field checked) costs about **2 %** in
 TXNGUARD; gfortran's `-fcheck=bounds,do,mem,pointer,recursion` costs about
 **21 %** on raw SHA-256 throughput, the most check-heavy loop in the code
 base. Both found or would have found real bugs (see
@@ -31,9 +33,9 @@ base. Both found or would have found real bugs (see
 
 **The batch core is not the bottleneck.** A 1,000-transfer batch is
 validated, pseudonymised, masked, scored, sealed and verified *twice* in
-about a tenth of a second end to end; a quarter of that is TXNGUARD, and much
-of TXNGUARD's time is three HMACs per record (two account tokens and the
-ledger MAC) plus process start-up.
+about an eighth of a second end to end; half of that is TXNGUARD, and much
+of TXNGUARD's time is four HMACs per record (two account tokens, the record
+MAC and the ledger MAC) plus process start-up.
 
 **OpenSSL is ten times faster at bulk hashing** — it uses the ARMv8 SHA-256
 instructions, while the Fortran kernel is portable integer code. That does

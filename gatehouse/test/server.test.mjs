@@ -100,6 +100,12 @@ describe('Gatehouse', { skip: SKIP_REASON }, () => {
     assert.equal(job.ledger.entries.length, 200);
     assert.deepEqual(job.ledger.verification.verifiedBy, ['cobol-fortran', 'node-openssl', 'anchor']);
     assert.equal(job.risk.n, job.summary.accepted);
+    // FRAUDSCAN finds every pattern the sample plants (gatehouse/src/sample.mjs).
+    const signals = new Set(job.risk.transactions.flatMap((t) => t.signals));
+    for (const signal of ['ZSCORE', 'STRUCTURING', 'VELOCITY', 'ENTROPY']) assert.ok(signals.has(signal), `no ${signal} in the sample`);
+    const outlier = job.accepted.find((t) => t.amountCents === '2500000');
+    assert.ok(job.risk.transactions.find((t) => t.id === outlier.id).signals.includes('ZSCORE'));
+    assert.equal(job.risk.transactions.filter((t) => t.signals.includes('STRUCTURING')).length, 3);
     // Nothing raw leaves the core: card numbers only masked, no full IBANs.
     const body = JSON.stringify(job);
     for (const txn of sample.transactions) {

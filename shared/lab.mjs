@@ -301,7 +301,7 @@ export const SCENARIOS = Object.freeze([
     category: 'fraud',
     cwe: null,
     title: 'Structuring (smurfing)',
-    summary: 'Three valid transfers just under the 10,000 reporting threshold.',
+    summary: 'Three valid transfers just under the 10,000.00 EUR reporting threshold.',
     request: { kind: 'batch', transactions: structuringBatch() },
     expected: { layer: 'fortran', id: 'LAB-S002', signal: 'STRUCTURING' },
   },

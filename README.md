@@ -114,8 +114,9 @@ flowchart LR
    input file is deleted as soon as it finishes.
 3. **FRAUDSCAN** (Fortran) scores what was accepted: Benford's law (chi-square
    with p-value, Nigrini MAD), robust z-scores against each sender's own
-   history, structuring just under the 10,000 reporting threshold, velocity
-   bursts and high-entropy memos (exfiltration).
+   history, structuring just under the reporting threshold, velocity bursts
+   and high-entropy memos (exfiltration) — currency by currency, never
+   comparing kronor with euros.
 4. **Seal**: every record, accepted or rejected, is sealed with
    `HMAC-SHA256(K_ledger, entry ‖ record MAC ‖ previous MAC)` — the entry
    binds the whole ACCEPTED or REJECTED record, so not one byte of a decision

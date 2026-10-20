@@ -160,8 +160,7 @@ function normalizeRisk(d) {
     thresholds: {
       z: num(th.z, 3.5),
       zScaleFloor: num(th.zScaleFloor, 0.25),
-      structuringLowCents: num(th.structuringLowCents, 900000),
-      structuringHighCents: num(th.structuringHighCents, 1000000),
+      structuring: arr(th.structuring).map((s) => ({ currency: str(obj(s).currency), lowCents: num(obj(s).lowCents), highCents: num(obj(s).highCents) })),
       velocityCount: num(th.velocityCount, 5),
       velocityWindowS: num(th.velocityWindowS, 600),
       entropyBits: num(th.entropyBits, 4),

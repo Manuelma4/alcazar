@@ -194,6 +194,17 @@ function requireBasis(value) {
   return value;
 }
 
+/** The per-currency structuring bands: [lowCents, highCents) for each currency. */
+function structuringBands(bands, num) {
+  if (!Array.isArray(bands) || bands.length > 64) throw new RecordError('bad structuring bands');
+  return bands.map((s) => {
+    if (typeof s?.currency !== 'string' || !/^[A-Z]{3}$/.test(s.currency)) throw new RecordError('bad structuring currency');
+    const band = { currency: s.currency, lowCents: num(s.lowCents, 'structuring band'), highCents: num(s.highCents, 'structuring band') };
+    if (!(band.lowCents > 0 && band.lowCents < band.highCents)) throw new RecordError('bad structuring band');
+    return band;
+  });
+}
+
 /** Validate FRAUDSCAN's RISK.JSON against the contract before passing it on. */
 export function parseRisk(text) {
   let risk;
@@ -236,10 +247,11 @@ export function parseRisk(text) {
       maxCents: num(risk.amounts.maxCents, 'max'),
       histogram: { log10Edges: nums(h.log10Edges, counts.length + 1, 'edges'), counts },
     },
-    thresholds: Object.fromEntries(
-      ['z', 'zScaleFloor', 'structuringLowCents', 'structuringHighCents', 'velocityCount', 'velocityWindowS', 'entropyBits', 'entropyMinLength']
-        .map((k) => [k, num(risk.thresholds?.[k], k)]),
-    ),
+    thresholds: {
+      ...Object.fromEntries(['z', 'zScaleFloor', 'velocityCount', 'velocityWindowS', 'entropyBits', 'entropyMinLength']
+        .map((k) => [k, num(risk.thresholds?.[k], k)])),
+      structuring: structuringBands(risk.thresholds?.structuring, num),
+    },
     transactions: (Array.isArray(risk.transactions) ? risk.transactions : []).map((t) => {
       if (typeof t?.id !== 'string' || !/^[A-Z0-9-]{1,12}$/.test(t.id)) throw new RecordError('bad risk id');
       if (!Array.isArray(t.signals) || !t.signals.every((s) => SIGNALS.has(s))) throw new RecordError('bad signals');

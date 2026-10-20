@@ -225,8 +225,8 @@ export const STRINGS = Object.freeze({
   'signal.STRUCTURING': 'Structuring',
   'signal.VELOCITY': 'Velocity',
   'signal.ENTROPY': 'High-entropy memo',
-  'signal.ZSCORE.desc': 'Robust z-score of log10(amount) above {z} for the sender (or the batch).',
-  'signal.STRUCTURING.desc': 'Two or more transfers from one sender just under 10,000.00.',
+  'signal.ZSCORE.desc': 'Robust z-score of log10(amount) above {z} for the sender (or the batch), in the same currency.',
+  'signal.STRUCTURING.desc': 'Two or more transfers from one sender, each just under the reporting threshold of its currency (10,000.00 in euros).',
   'signal.VELOCITY.desc': '{count} or more transfers from one sender within {window} seconds.',
   'signal.ENTROPY.desc': 'A {len}+ character token with at least {bits} bits of entropy per character in the memo.',
 

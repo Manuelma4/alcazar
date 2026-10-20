@@ -81,7 +81,7 @@ describe('legacy output parsers', () => {
       benford: { n: 1, counts: [1, 0, 0, 0, 0, 0, 0, 0, 0], observed: [1, 0, 0, 0, 0, 0, 0, 0, 0], expected: Array(9).fill(0.1),
         chi2: 2.3, pValue: 0.97, mad: 0.1, verdict: 'insufficient', verdictBasis: 'none' },
       amounts: { medianCents: 100, madCents: 0, minCents: 100, maxCents: 100, histogram: { log10Edges: [0, 0.25], counts: [1] } },
-      thresholds: { z: 3.5, zScaleFloor: 0.25, structuringLowCents: 900000, structuringHighCents: 1000000, velocityCount: 5,
+      thresholds: { z: 3.5, zScaleFloor: 0.25, structuring: [{ currency: 'EUR', lowCents: 900000, highCents: 1000000 }], velocityCount: 5,
         velocityWindowS: 600, entropyBits: 4, entropyMinLength: 20 },
       transactions: [{ id: 'T-1', score: 0, z: null, entropy: 2.5, signals: [] }],
       flagged: 0,
@@ -91,5 +91,10 @@ describe('legacy output parsers', () => {
     assert.throws(() => parseRisk(JSON.stringify({ ...risk, transactions: [{ ...risk.transactions[0], signals: ['EVIL'] }] })), RecordError);
     assert.throws(() => parseRisk(JSON.stringify({ ...risk, transactions: [{ ...risk.transactions[0], id: '<script>' }] })), RecordError);
     assert.throws(() => parseRisk('{'), RecordError);
+    assert.deepEqual(parseRisk(JSON.stringify(risk)).thresholds.structuring, [{ currency: 'EUR', lowCents: 900000, highCents: 1000000 }]);
+    const band = (s) => JSON.stringify({ ...risk, thresholds: { ...risk.thresholds, structuring: s } });
+    assert.throws(() => parseRisk(band([{ currency: 'eur', lowCents: 1, highCents: 2 }])), RecordError);
+    assert.throws(() => parseRisk(band([{ currency: 'EUR', lowCents: 2, highCents: 1 }])), RecordError);
+    assert.throws(() => parseRisk(band({ EUR: [1, 2] })), RecordError);
   });
 });

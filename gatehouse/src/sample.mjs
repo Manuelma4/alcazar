@@ -111,9 +111,13 @@ export function sampleBatch({ size = 200, seed = 42 } = {}) {
   // Dedicated accounts for the planted patterns, so normal traffic does not
   // blur them.
   const [smurf, burst, quiet] = [newAccount(), newAccount(), newAccount()];
-  const typicalAmount = (level) => {
+  // Roughly how many units of each sample currency one euro buys, so that a
+  // typical amount means about the same in every currency. FRAUDSCAN never
+  // compares amounts across currencies; a realistic batch shows why.
+  const UNITS_PER_EUR = { EUR: 1, GBP: 0.85, CHF: 0.95, USD: 1.1, SEK: 11.5 };
+  const typicalAmount = (level, currency) => {
     const log10 = Math.min(4.6, Math.max(0.3, level + 0.3 * gaussian()));
-    return formatCents(Math.round(10 ** log10 * 100));
+    return formatCents(Math.round(10 ** log10 * (UNITS_PER_EUR[currency] ?? 1) * 100));
   };
   const card = () => luhnComplete(pick(CARD_PREFIXES) + digits(9));
   const start = Date.UTC(2025, 9, 20, 0, 0, 0) / 1000;
@@ -125,13 +129,14 @@ export function sampleBatch({ size = 200, seed = 42 } = {}) {
     let to = fields.to ?? pick(accounts).iban;
     while (to === from) to = pick(accounts).iban;
     const channel = fields.channel ?? weighted(CHANNELS);
+    const currency = fields.currency ?? (rand() < 0.85 ? 'EUR' : pick(['GBP', 'CHF', 'USD', 'SEK']));
     const txn = {
       id: `TX-${String(txns.length + 1).padStart(8, '0')}`,
       timestamp: timestamp(fields.at ?? start + Math.floor(rand() * 86400)),
       from,
       to,
-      amount: fields.amount ?? typicalAmount(sender.level),
-      currency: fields.currency ?? (rand() < 0.85 ? 'EUR' : pick(['GBP', 'CHF', 'USD', 'SEK'])),
+      amount: fields.amount ?? typicalAmount(sender.level, currency),
+      currency,
       channel,
       memo: fields.memo ?? pick(MEMOS),
     };
@@ -148,17 +153,27 @@ export function sampleBatch({ size = 200, seed = 42 } = {}) {
   if (planted) {
     // Fortran layer: structuring, velocity, an outlier with a history, and
     // a high-entropy memo.
+    // In euros: the structuring band and the outlier are euro amounts.
+    const EUR = 'EUR';
     for (let i = 0; i < 3; i += 1) {
-      add({ from: smurf, amount: formatCents(980000 + Math.floor(rand() * 19000)), at: start + 30000 + i * 5400, memo: 'Consulting' });
+      add({ from: smurf, amount: formatCents(980000 + Math.floor(rand() * 19000)), currency: EUR, at: start + 30000 + i * 5400, memo: 'Consulting' });
     }
     for (let i = 0; i < 6; i += 1) {
-      add({ from: burst, amount: formatCents(1500 + Math.floor(rand() * 1500)), at: start + 70000 + i * 45, channel: 'MOB', memo: 'Gift card' });
+      add({ from: burst, amount: formatCents(1500 + Math.floor(rand() * 1500)), currency: EUR, at: start + 70000 + i * 45, channel: 'MOB', memo: 'Gift card' });
     }
     for (let i = 0; i < 6; i += 1) {
-      add({ from: quiet, amount: formatCents(3000 + Math.floor(rand() * 5000)), at: start + i * 12000, memo: 'Groceries' });
+      add({ from: quiet, amount: formatCents(3000 + Math.floor(rand() * 5000)), currency: EUR, at: start + i * 12000, memo: 'Groceries' });
     }
-    add({ from: quiet, amount: '25000.00', at: start + 11520, memo: 'Urgent' });
-    add({ memo: Array.from({ length: 28 }, () => pick(BASE32)).join('') });
+    add({ from: quiet, amount: '25000.00', currency: EUR, at: start + 11520, memo: 'Urgent' });
+    // 28 distinct base32 characters: log2(28) = 4.8 bits per character, above
+    // FRAUDSCAN's 4.0-bit threshold whatever the seed (28 random picks with
+    // repeats can fall below it).
+    const pool = [...BASE32];
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rand() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    add({ memo: pool.slice(0, 28).join('') });
     // COBOL layer: one attack per business rule.
     const victims = txns.slice(0, normal);
     const victim = (index) => victims[index % victims.length];
@@ -173,7 +188,7 @@ export function sampleBatch({ size = 200, seed = 42 } = {}) {
     Object.assign(victim(41), { amount: '19.999' });
     // A replay: the same transfer submitted again under the same id.
     const original = victim(5);
-    add({ amount: original.amount, from: original.from, to: original.to }).id = original.id;
+    add({ amount: original.amount, currency: original.currency, from: original.from, to: original.to }).id = original.id;
   }
   return { seed, transactions: txns.slice(0, size) };
 }

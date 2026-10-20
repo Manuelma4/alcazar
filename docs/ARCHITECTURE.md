@@ -162,13 +162,22 @@ SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED
 
 | Signal | Rule |
 |--------|------|
-| `ZSCORE` | robust z-score of `log10(amount)` > 3.5 (per sender when it has ≥ 5 transfers, otherwise batch-wide), with the scale floored at 0.25 so a transfer must be ~7.5× off the typical amount |
-| `STRUCTURING` | ≥ 2 transfers from the same sender in [9,000.00, 10,000.00) — just under the reporting threshold |
+| `ZSCORE` | robust z-score of `log10(amount)` > 3.5, currency by currency: against the sender's own transfers in that currency when there are ≥ 5, otherwise against all of the batch's transfers in that currency (no score with fewer than 5), with the scale floored at 0.25 so a transfer must be ~7.5× off the typical amount |
+| `STRUCTURING` | ≥ 2 transfers from the same sender, each in [90 %, 100 %) of the reporting threshold of its own currency (`thresholds.structuring`) |
 | `VELOCITY` | ≥ 5 transfers from the same sender within 600 s |
 | `ENTROPY` | memo contains a space-free token ≥ 20 chars with Shannon entropy ≥ 4.0 bits/char (possible exfiltration) |
 
 Score (0–100): ZSCORE 35–60 (grows with |z|), STRUCTURING 30, VELOCITY 20,
 ENTROPY 25, capped at 100. A transaction is *flagged* when it has ≥ 1 signal.
+
+Amounts in different currencies are never compared with each other. The
+reporting thresholds are illustrative and set per currency, in its own units:
+10,000.00 in EUR, USD, GBP, CHF, CAD, AUD and NZD; 100,000.00 in SEK and NOK;
+75,000.00 DKK; 40,000.00 PLN; 250,000.00 CZK; 4,000,000.00 HUF; 50,000.00
+RON — round figures near EUR 10,000. A deployment sets its own.
+`amounts` (median, MAD, range, histogram) describes the whole batch in minor
+units, all currencies together; Benford's law is scale-invariant, so the
+first-digit test holds across currencies.
 
 Benford first-digit test: chi-square (8 d.o.f.) with p-value, and the mean
 absolute deviation (MAD). Nigrini's MAD thresholds — `close` (≤ 0.006),
@@ -279,7 +288,8 @@ interface Risk {
     medianCents: number; madCents: number; minCents: number; maxCents: number;
     histogram: { log10Edges: number[]; counts: number[] };   // edges.length = counts.length + 1
   };
-  thresholds: { z: number; zScaleFloor: number; structuringLowCents: number; structuringHighCents: number;
+  thresholds: { z: number; zScaleFloor: number;
+                structuring: { currency: string; lowCents: number; highCents: number }[];   // [low, high) per currency
                 velocityCount: number; velocityWindowS: number; entropyBits: number; entropyMinLength: number };
   transactions: { id: string; score: number; z: number | null; entropy: number | null; signals: Signal[] }[];
   flagged: number;
@@ -287,9 +297,9 @@ interface Risk {
 
 interface LedgerEntry {
   seq: number; type: 'A' | 'R'; id: string; timestamp: string; code: string;
-  amountCents: string; currency: string; fromMasked: string; panLast4: string;
-  prev: string; mac: string;   // 64 hex
-  raw: string;                 // the exact ledger line
+  sign: '+' | '-' | '?'; amountCents: string; currency: string; fromMasked: string; panLast4: string;
+  recordMac: string; prev: string; mac: string;   // 64 hex
+  raw: string;                 // the exact ledger line, without its line feed
 }
 
 interface Verification {
@@ -297,7 +307,7 @@ interface Verification {
   entries: number;
   head: string | null;
   brokenAt: number | null;     // first bad sequence number
-  reason: null | 'MAC-MISMATCH' | 'CHAIN-BREAK' | 'SEQ-GAP' | 'FORMAT' | 'HEAD-MISMATCH';
+  reason: null | 'MAC-MISMATCH' | 'RECORD-MISMATCH' | 'CHAIN-BREAK' | 'SEQ-GAP' | 'FORMAT' | 'HEAD-MISMATCH';
   verifiedBy: ('cobol-fortran' | 'node-openssl' | 'anchor')[];
   ms: number;
 }

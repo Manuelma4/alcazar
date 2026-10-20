@@ -9,7 +9,10 @@
 !> velocity and memo-entropy signals.
 !>
 !> Money is integer cents end to end; floating point is used only for the
-!> statistics. Malformed input is rejected as a whole (fail closed).
+!> statistics. Amounts in different currencies are never compared with each
+!> other: z-scores are computed currency by currency, and structuring uses
+!> each currency's own reporting threshold. Malformed input is rejected as a
+!> whole (fail closed).
 !> Exit codes, mainframe style: 0 ok, 8 malformed input, 12 limit exceeded,
 !> 16 I/O error.
 program fraudscan
@@ -32,8 +35,17 @@ program fraudscan
   ! means a transfer has to be ~7.5 times off the sender's typical amount.
   real(real64), parameter :: SCALE_FLOOR = 0.25_real64
   integer, parameter :: MIN_GROUP = 5
-  integer(int64), parameter :: STRUCT_LOW = 900000_int64      ! 9,000.00
-  integer(int64), parameter :: STRUCT_HIGH = 1000000_int64    ! 10,000.00
+  ! Reporting thresholds in minor units (every allowlisted currency has two
+  ! decimals), in ALZCCY's order. Illustrative: 10,000 in EUR, USD, GBP,
+  ! CHF, CAD, AUD and NZD, round local figures near EUR 10,000 elsewhere.
+  ! STRUCTURING watches [90 %, 100 %) of the threshold.
+  integer, parameter :: N_THRESHOLDS = 14
+  character(len=3), parameter :: THRESHOLD_CCY(N_THRESHOLDS) = [character(len=3) :: &
+    'EUR', 'USD', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'CAD', 'AUD', 'NZD']
+  integer(int64), parameter :: THRESHOLD_CENTS(N_THRESHOLDS) = [ &
+    1000000_int64, 1000000_int64, 1000000_int64, 1000000_int64, 10000000_int64, 10000000_int64, &
+    7500000_int64, 4000000_int64, 25000000_int64, 400000000_int64, 5000000_int64, 1000000_int64, &
+    1000000_int64, 1000000_int64]
   integer, parameter :: STRUCT_COUNT = 2
   integer, parameter :: VELOCITY_COUNT = 5
   integer(int64), parameter :: VELOCITY_WINDOW = 600_int64    ! seconds
@@ -51,6 +63,7 @@ program fraudscan
   type :: txn_t
     character(len=12) :: id = ''
     character(len=16) :: sender = ''
+    character(len=3) :: currency = ''
     integer(int64) :: cents = 0_int64
     integer(int64) :: epoch = 0_int64
     character(len=40) :: memo = ''
@@ -153,16 +166,19 @@ contains
     integer :: ios
 
     ok = .false.
-    ! LINE SEQUENTIAL output drops trailing blanks: the card number and the
-    ! memo are optional, so a record may end right after the channel.
+    ! Records are written at full width, but a formatted read cannot tell
+    ! trailing blanks from none: the card number and the memo are optional,
+    ! so the text may end right after the channel.
     if (len_trim(line) > REC_LEN .or. len_trim(line) < MIN_LEN) return
     if (.not. is_identifier(line(1:12))) return
     if (.not. all_in(line(13:26), '0123456789')) return
     if (.not. all_in(line(27:42), '0123456789abcdef')) return
     if (.not. all_in(line(127:141), '0123456789')) return
+    if (.not. all_in(line(142:144), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')) return
 
     t%id = line(1:12)
     t%sender = line(27:42)
+    t%currency = line(142:144)
     read (line(127:141), '(i15)', iostat=ios) t%cents
     if (ios /= 0 .or. t%cents <= 0_int64) return
     call epoch_seconds(line(13:26), t%epoch, ok)
@@ -220,35 +236,38 @@ contains
     days = era * 146097_int64 + doe - 719468_int64
   end function days_from_civil
 
-  !> Robust z-score of log10(amount): against the sender's own history when it
-  !> has at least MIN_GROUP transfers, otherwise against the whole batch.
+  !> Robust z-score of log10(amount), currency by currency: against the
+  !> sender's own history in that currency when it has at least MIN_GROUP
+  !> transfers, otherwise against all of the batch's transfers in that
+  !> currency; with fewer than MIN_GROUP of those, no score at all.
   subroutine score_amounts(txns, z, has_z)
     type(txn_t), intent(in) :: txns(:)
     real(real64), intent(out) :: z(:)
     logical, intent(out) :: has_z(:)
-    real(real64) :: logs(size(txns)), center, scale, gcenter, gscale
-    logical :: member(size(txns)), done(size(txns))
+    real(real64) :: logs(size(txns)), center, scale
+    logical :: same_ccy(size(txns)), member(size(txns)), done(size(txns))
     integer :: i
 
     z = 0.0_real64
     has_z = .false.
     if (size(txns) == 0) return
     logs = log10(real(txns%cents, real64) / 100.0_real64)
-    call robust_scale(logs, gcenter, gscale, SCALE_FLOOR)
 
     done = .false.
     do i = 1, size(txns)
       if (done(i)) cycle
-      member = txns%sender == txns(i)%sender
+      same_ccy = txns%currency == txns(i)%currency
+      member = same_ccy .and. txns%sender == txns(i)%sender
       done = done .or. member
       if (count(member) >= MIN_GROUP) then
         call robust_scale(pack(logs, member), center, scale, SCALE_FLOOR)
-        where (member) z = robust_z(logs, center, scale)
-        where (member) has_z = .true.
-      else if (size(txns) >= MIN_GROUP) then
-        where (member) z = robust_z(logs, gcenter, gscale)
-        where (member) has_z = .true.
+      else if (count(same_ccy) >= MIN_GROUP) then
+        call robust_scale(pack(logs, same_ccy), center, scale, SCALE_FLOOR)
+      else
+        cycle
       end if
+      where (member) z = robust_z(logs, center, scale)
+      where (member) has_z = .true.
     end do
   end subroutine score_amounts
 
@@ -304,21 +323,44 @@ contains
     end do
   end subroutine longest_token
 
-  !> Structuring ("smurfing"): repeated transfers just under the reporting
-  !> threshold from the same sender.
+  !> Structuring ("smurfing"): repeated transfers from the same sender, each
+  !> just under the reporting threshold of its own currency. A currency
+  !> without a threshold is not evaluated.
   subroutine flag_structuring(txns, flag)
     type(txn_t), intent(in) :: txns(:)
     logical, intent(out) :: flag(:)
     logical :: under(size(txns))
+    integer(int64) :: limit
     integer :: i
 
-    under = txns%cents >= STRUCT_LOW .and. txns%cents < STRUCT_HIGH
+    do i = 1, size(txns)
+      limit = reporting_threshold(txns(i)%currency)
+      under(i) = limit > 0_int64 .and. txns(i)%cents >= structuring_low(limit) .and. txns(i)%cents < limit
+    end do
     flag = .false.
     do i = 1, size(txns)
       if (.not. under(i)) cycle
       flag(i) = count(under .and. txns%sender == txns(i)%sender) >= STRUCT_COUNT
     end do
   end subroutine flag_structuring
+
+  !> Reporting threshold of a currency in minor units, 0 if none is set.
+  pure integer(int64) function reporting_threshold(currency)
+    character(len=3), intent(in) :: currency
+    integer :: k
+
+    reporting_threshold = 0_int64
+    do k = 1, N_THRESHOLDS
+      if (THRESHOLD_CCY(k) == currency) reporting_threshold = THRESHOLD_CENTS(k)
+    end do
+  end function reporting_threshold
+
+  !> Lower edge of the structuring band: 90 % of the threshold.
+  pure integer(int64) function structuring_low(limit)
+    integer(int64), intent(in) :: limit
+
+    structuring_low = limit / 10_int64 * 9_int64
+  end function structuring_low
 
   !> Velocity: VELOCITY_COUNT or more transfers from one sender within any
   !> VELOCITY_WINDOW seconds; every transfer in such a window is flagged.
@@ -372,8 +414,7 @@ contains
     call write_amounts(unit, txns)
     write (unit, '(a)', iostat=ios) '"thresholds":{"z":' // json_real(Z_THRESHOLD) // &
       ',"zScaleFloor":' // json_real(SCALE_FLOOR) // &
-      ',"structuringLowCents":' // json_int(STRUCT_LOW) // &
-      ',"structuringHighCents":' // json_int(STRUCT_HIGH) // &
+      ',"structuring":' // structuring_json() // &
       ',"velocityCount":' // json_int(int(VELOCITY_COUNT, int64)) // &
       ',"velocityWindowS":' // json_int(VELOCITY_WINDOW) // &
       ',"entropyBits":' // json_real(ENTROPY_BITS) // &
@@ -388,6 +429,20 @@ contains
     close (unit, iostat=ios)
     if (ios == 0) rc = 0
   end subroutine write_report
+
+  !> [{"currency":"EUR","lowCents":900000,"highCents":1000000}, ...]
+  function structuring_json() result(out)
+    character(len=:), allocatable :: out
+    integer :: k
+
+    out = '['
+    do k = 1, N_THRESHOLDS
+      out = out // '{"currency":' // json_string(THRESHOLD_CCY(k)) // &
+        ',"lowCents":' // json_int(structuring_low(THRESHOLD_CENTS(k))) // &
+        ',"highCents":' // json_int(THRESHOLD_CENTS(k)) // '}' // trim(merge(',', ' ', k < N_THRESHOLDS))
+    end do
+    out = out // ']'
+  end function structuring_json
 
   function txn_json(t, z, has_z, bits, has_bits, signal, score) result(out)
     type(txn_t), intent(in) :: t

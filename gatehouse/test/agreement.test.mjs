@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { ROOT } from '../src/config.mjs';
 import { deriveKeys, keyLines, tamperLedger, tamperRecord, verifyLedger } from '../src/ledger.mjs';
-import { ACCEPTED_LENGTH, LEDGER_LENGTH, REJECTED_LENGTH, parseLedgerck, txnInFile } from '../src/records.mjs';
+import { ACCEPTED_LENGTH, LEDGER_LENGTH, REJECTED_LENGTH, parseLedgerck, txnInLines } from '../src/records.mjs';
 import { runLegacy } from '../src/runner.mjs';
 import { sampleBatch } from '../src/sample.mjs';
 import { SKIP_REASON } from './helpers.mjs';
@@ -93,9 +93,11 @@ describe('Seal verifiers agree (LEDGERCK vs Node.js / OpenSSL)', { skip: SKIP_RE
 
   before(async () => {
     dir = await mkdtemp(join(tmpdir(), 'alcazar-agreement-'));
-    await writeFile(join(dir, 'TXNIN.DAT'), txnInFile(sampleBatch({ size: 60, seed: 7 }).transactions));
     const guard = await runLegacy(join(BIN, 'txnguard'), [JOB], {
-      cwd: dir, stdin: keyLines(keys.ledger, keys.token), timeoutMs: 20_000, maxOutputBytes: 65_536,
+      cwd: dir,
+      stdin: Buffer.concat([keyLines(keys.ledger, keys.token), txnInLines(sampleBatch({ size: 60, seed: 7 }).transactions)]),
+      timeoutMs: 20_000,
+      maxOutputBytes: 65_536,
     });
     assert.ok(guard.code === 0 || guard.code === 4, guard.stderr);
     pristine = Object.fromEntries(await Promise.all(FILES.map(async (f) => [f, await readFile(join(dir, f), 'latin1')])));

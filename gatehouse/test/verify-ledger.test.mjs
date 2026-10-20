@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { ROOT } from '../src/config.mjs';
 import { deriveKeys, keyLines, tamperRecord } from '../src/ledger.mjs';
-import { parseSeal, txnInFile } from '../src/records.mjs';
+import { parseSeal, txnInLines } from '../src/records.mjs';
 import { runLegacy } from '../src/runner.mjs';
 import { sampleBatch } from '../src/sample.mjs';
 import { SKIP_REASON } from './helpers.mjs';
@@ -25,9 +25,11 @@ describe('verify-ledger (auditor, K_ledger only)', { skip: SKIP_REASON }, () => 
 
   before(async () => {
     dir = await mkdtemp(join(tmpdir(), 'alcazar-audit-'));
-    await writeFile(join(dir, 'TXNIN.DAT'), txnInFile(sampleBatch({ size: 40, seed: 3 }).transactions));
     const guard = await runLegacy(join(ROOT, 'build', 'bin', 'txnguard'), [JOB], {
-      cwd: dir, stdin: keyLines(keys.ledger, keys.token), timeoutMs: 20_000, maxOutputBytes: 65_536,
+      cwd: dir,
+      stdin: Buffer.concat([keyLines(keys.ledger, keys.token), txnInLines(sampleBatch({ size: 40, seed: 3 }).transactions)]),
+      timeoutMs: 20_000,
+      maxOutputBytes: 65_536,
     });
     assert.ok(guard.code === 0 || guard.code === 4, guard.stderr);
     seal = parseSeal(guard.stdout);

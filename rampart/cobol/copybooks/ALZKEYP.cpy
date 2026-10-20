@@ -10,6 +10,7 @@
       *   CLASS ALZ-HEX      IS "0123456789abcdef"
       *
       * SET ALZ-NEEDS-TOKEN-KEY TO TRUE if the program needs K-token,
+      * and ALZ-INPUT-FOLLOWS if it reads more from stdin after them,
       * PERFORM ALZ-PREPARE-KEYS, then test ALZ-KEYS-READY. Every
       * failure is reported on SYSERR and leaves ALZ-KEYS-FAILED set.
       * PERFORM ALZ-WIPE-KEYS before ending.
@@ -83,7 +84,9 @@
                    " as 64 lower-case hex digits on its own line"
                    UPON SYSERR
            ELSE
-               PERFORM ALZ-CHECK-STDIN-DRAINED
+               IF NOT ALZ-INPUT-FOLLOWS
+                   PERFORM ALZ-CHECK-STDIN-DRAINED
+               END-IF
                IF ALZ-OK AND ALZ-NEEDS-TOKEN-KEY
                    PERFORM ALZ-CHECK-SEPARATION
                END-IF

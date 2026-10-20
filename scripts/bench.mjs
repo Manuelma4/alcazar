@@ -9,12 +9,12 @@
 // run-time checks Alcazar ships with — and Watchtower's scanning speed.
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../gatehouse/src/app.mjs';
 import { ROOT, loadConfig } from '../gatehouse/src/config.mjs';
-import { txnInFile } from '../gatehouse/src/records.mjs';
+import { txnInLines } from '../gatehouse/src/records.mjs';
 import { sampleBatch } from '../gatehouse/src/sample.mjs';
 import { validateBatch } from '../gatehouse/src/schema.mjs';
 import { scan } from '../watchtower/src/index.mjs';
@@ -53,13 +53,10 @@ function run(file, args, cwd, input = '') {
 // 1. The batch programs on a full 1,000-record batch.
 const { transactions } = sampleBatch({ size: 1000, seed: 7 });
 const batch = validateBatch({ transactions }, 1000);
-const input = join(work, 'TXNIN.SRC');
-writeFileSync(input, txnInFile(batch));
+// What Gatehouse writes to TXNGUARD's stdin: the keys, then the batch.
+const input = Buffer.concat([Buffer.from(KEY, 'latin1'), txnInLines(batch)]);
 const guard = [];
-for (let i = 0; i < 30; i += 1) {
-  copyFileSync(input, join(work, 'TXNIN.DAT'));
-  guard.push(time(() => run(join(BIN, 'txnguard'), ['j-bench'], work, KEY)));
-}
+for (let i = 0; i < 30; i += 1) guard.push(time(() => run(join(BIN, 'txnguard'), ['j-bench'], work, input)));
 report('TXNGUARD — validate, tokenise, mask and seal 1,000 records (COBOL + Fortran HMAC)', guard, 'records', 1000);
 
 // The same program without GnuCOBOL's run-time checks (-debug), to price them.
@@ -72,10 +69,7 @@ execFileSync('cobc', ['-x', '-O2', '-fstatic-call', '-I', join(ROOT, 'rampart', 
   join(ROOT, 'apps', 'txnguard', 'TXNGUARD.cob'), ...cobolSources, join(ROOT, 'build', 'lib', 'librampart_f.a'),
   `-L${join(gfortranLib, '..')}`, '-lgfortran'], { cwd: work });
 const fastGuard = [];
-for (let i = 0; i < 30; i += 1) {
-  copyFileSync(input, join(work, 'TXNIN.DAT'));
-  fastGuard.push(time(() => run(unchecked, ['j-bench'], work, KEY)));
-}
+for (let i = 0; i < 30; i += 1) fastGuard.push(time(() => run(unchecked, ['j-bench'], work, input)));
 report('TXNGUARD — same program built without `-debug` run-time checks', fastGuard, 'records', 1000);
 const scanTimes = [];
 for (let i = 0; i < 30; i += 1) scanTimes.push(time(() => run(join(BIN, 'fraudscan'), ['ACCEPTED.DAT', 'RISK.JSON'], work)));

@@ -149,7 +149,6 @@ describe('Least-privilege keys for the legacy programs', { skip: SKIP_REASON }, 
   const run = async (name, stdin) => {
     const dir = await mkdtemp(join(tmpdir(), 'alcazar-keys-'));
     try {
-      await writeFile(join(dir, 'TXNIN.DAT'), '');
       await writeFile(join(dir, 'LEDGER.DAT'), '');
       return await runLegacy(join(ROOT, 'build', 'bin', name), ['j-keys'], { cwd: dir, stdin, timeoutMs: 10_000, maxOutputBytes: 65_536 });
     } finally {
@@ -172,6 +171,19 @@ describe('Least-privilege keys for the legacy programs', { skip: SKIP_REASON }, 
     const result = await run('txnguard', keyLines(keys.ledger, keys.ledger));
     assert.equal(result.code, 12);
     assert.match(result.stderr, /K-ledger and K-token must differ/);
+  });
+
+  it('TXNGUARD reads its batch on stdin, one record per line, and refuses a malformed stream', async () => {
+    const record = `${'T-1'.padEnd(12)}${'20251020101500'}${'FR7630006000011234567890189'.padEnd(34)}${'DE89370400440532013000'.padEnd(34)}`
+      + `${'125.00'.padEnd(18)}EUR${''.padEnd(19)}WEB${'Rent'.padEnd(40)}`.padEnd(200 - 94);
+    assert.equal(record.length, 200);
+    const keysThen = (text) => Buffer.concat([keyLines(keys.ledger, keys.token), Buffer.from(text, 'latin1')]);
+    assert.equal((await run('txnguard', keysThen(`${record}\n`))).code, 0, 'one valid record');
+    assert.equal((await run('txnguard', keysThen(`${record.slice(0, 100)}\n`))).code, 4, 'a short record is judged (E901)');
+    const long = await run('txnguard', keysThen(`${record}X\n`));
+    assert.equal(long.code, 8, 'an over-long line refuses the batch');
+    assert.match(long.stderr, /too long or cut short/);
+    assert.equal((await run('txnguard', keysThen(record))).code, 8, 'a record without its line feed refuses the batch');
   });
 
   it('LEDGERCK refuses to be handed K-token too', async () => {

@@ -9,7 +9,7 @@ import { HttpError } from './http.mjs';
 import { deriveKeys, genesisMac, keyLines, tamperLedger, tamperRecord, trimRecords, verifyLedger } from './ledger.mjs';
 import { reasonText } from './messages.mjs';
 import {
-  RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSeal, parseSummary, txnInFile,
+  RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSeal, parseSummary, txnInLines,
 } from './records.mjs';
 import { Gate } from './gate.mjs';
 import { runLegacy } from './runner.mjs';
@@ -22,6 +22,13 @@ async function readJobFile(dir, name) {
     if (error.code === 'ENOENT') return '';
     throw error;
   }
+}
+
+/** ALZMASK "P": the last 4 digits, and the BIN (first 6) too from 15 digits up. */
+function maskedPan(pan) {
+  if (!pan) return null;
+  const head = pan.length >= 15 ? 6 : 0;
+  return pan.slice(0, head) + '*'.repeat(pan.length - head - 4) + pan.slice(-4);
 }
 
 /** Cents of a submitted amount, as ALZAMNT reads an accepted one (else null). */
@@ -80,7 +87,8 @@ export class Pipeline {
   async execute(jobId, dir, transactions, validationMs) {
     const stages = [];
     const started = performance.now();
-    await writeFile(join(dir, 'TXNIN.DAT'), txnInFile(transactions), { flag: 'wx', mode: 0o600 });
+    // TXNGUARD reads the batch on stdin, right after its keys.
+    const input = Buffer.concat([this.guardKeys, txnInLines(transactions)]);
     stages.push({
       name: 'gatehouse',
       status: 'ok',
@@ -88,9 +96,12 @@ export class Pipeline {
       detail: { in: transactions.length },
     });
 
-    const guard = await this.legacy('txnguard', [jobId], dir, this.guardKeys);
-    // TXNIN.DAT holds raw card numbers: delete it as soon as TXNGUARD is done.
-    await rm(join(dir, 'TXNIN.DAT'), { force: true });
+    let guard;
+    try {
+      guard = await this.legacy('txnguard', [jobId], dir, input);
+    } finally {
+      input.fill(0);
+    }
     if (guard.code !== 0 && guard.code !== 4) {
       throw new HttpError(502, 'P-LEGACY', 'TXNGUARD failed', { legacyRc: guard.code });
     }
@@ -226,7 +237,8 @@ export class Pipeline {
         a += 1;
         if (!record || record.id !== t.id.trimEnd() || record.timestamp !== t.timestamp ||
             record.amountCents !== submittedCents(t.amount) || record.currency !== t.currency || record.channel !== t.channel ||
-            record.memo !== (t.memo ?? '').trimEnd() || record.fromToken !== this.token(t.from) || record.toToken !== this.token(t.to)) {
+            record.memo !== (t.memo ?? '').trimEnd() || record.panMasked !== maskedPan(t.pan ?? '') ||
+            record.fromToken !== this.token(t.from) || record.toToken !== this.token(t.to)) {
           fail();
         }
       } else {

@@ -336,8 +336,8 @@ function clientAddress(req, hops) {
 }
 
 /**
- * Gatehouse owns its work directory: job directories left by a crash (one may
- * still hold a raw TXNIN.DAT with card numbers) are removed at start-up.
+ * Gatehouse owns its work directory: job directories left by a crash are
+ * removed at start-up.
  */
 async function reapOrphans(workDir, log) {
   const entries = await readdir(workDir, { withFileTypes: true });

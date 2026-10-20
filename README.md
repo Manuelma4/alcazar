@@ -104,7 +104,7 @@ An auditor checks a sealed job the same way, outside Gatehouse and with
 ```mermaid
 flowchart LR
   B[Lookout<br/>strict CSP + Trusted Types] -->|JSON| G[Gatehouse<br/>schema · limits · no shell]
-  G -->|fixed-length records<br/>sub-keys on stdin| T[TXNGUARD<br/>COBOL + Rampart]
+  G -->|sub-keys + fixed-length<br/>records on stdin| T[TXNGUARD<br/>COBOL + Rampart]
   T -->|CALL via C ABI| K[(Rampart kernel<br/>SHA-256 · HMAC · CT compare)]
   T -->|pseudonymised| F[FRAUDSCAN<br/>Fortran analytics]
   T -->|every decision| S[Seal<br/>HMAC chain]
@@ -114,15 +114,14 @@ flowchart LR
 ```
 
 1. **Gatehouse** checks structure only — JSON types, lengths, printable ASCII,
-   no unknown keys, at most 1,000 transfers — and writes fixed-length records
-   with no line terminators.
+   no unknown keys, at most 1,000 transfers — and pipes fixed-length records
+   to TXNGUARD's stdin, after its keys: raw card numbers never touch the disk.
 2. **TXNGUARD** (COBOL) re-checks everything and applies the business rules
    with Rampart: IBAN check digits, Luhn, a strict amount grammar that refuses
    to truncate, per-currency transfer limits, an ISO 4217 allowlist, real
    calendar dates, replays, the SEPA character set, spreadsheet-formula
    prefixes, card numbers typed into the memo. Accounts leave it only as
-   HMAC tokens and masked IBANs; card numbers only as BIN + last 4. The raw
-   input file is deleted as soon as it finishes.
+   HMAC tokens and masked IBANs; card numbers only as BIN + last 4.
 3. **FRAUDSCAN** (Fortran) scores what was accepted: Benford's law (chi-square
    with p-value, Nigrini MAD), robust z-scores against each sender's own
    history, structuring just under the reporting threshold, velocity bursts

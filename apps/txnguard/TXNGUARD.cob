@@ -7,10 +7,12 @@
       *            audit ledger (Seal).
       *
       *   stdin  K-ledger, then K-token: one line of 64 lower-case hex
-      *          digits each (the master key stays in Gatehouse)
+      *          digits each (the master key stays in Gatehouse); then
+      *          the batch: one 200-byte record per line. Raw card
+      *          numbers never touch the disk, and no input file sits
+      *          in the job directory for anyone to rewrite.
       *   args   the job id: 1-32 characters from a-z 0-9 -
       *
-      *   in     TXNIN.DAT     fixed-length 200-byte records
       *   out    ACCEPTED.DAT  normalised, pseudonymised transfers
       *          REJECTED.DAT  one line per rejected record
       *          LEDGER.DAT    one HMAC-sealed line per record, which
@@ -37,12 +39,6 @@
            CLASS ALZ-HEX      IS "0123456789abcdef".
        INPUT-OUTPUT SECTION.
        FILE-CONTROL.
-      *    Untrusted input is fixed-length SEQUENTIAL, not LINE
-      *    SEQUENTIAL: GnuCOBOL splits an over-long line into extra
-      *    records, which would let one field inject a whole record.
-           SELECT TXN-IN   ASSIGN TO "TXNIN.DAT"
-                           ORGANIZATION IS SEQUENTIAL
-                           FILE STATUS IS WS-FS-IN.
       *    Sealed outputs are fixed-length records that end in a line
       *    feed: LINE SEQUENTIAL would trim trailing blanks on WRITE,
       *    and its readers see a normalised view of the file, not its
@@ -61,8 +57,6 @@
                            FILE STATUS IS WS-FS-SUMMARY.
        DATA DIVISION.
        FILE SECTION.
-       FD  TXN-IN.
-       COPY ALZTXNIN.
        FD  TXN-OK.
        COPY ALZACCPT.
        FD  TXN-REJ.
@@ -75,6 +69,12 @@
        WORKING-STORAGE SECTION.
        COPY ALZCAPI.
        COPY ALZKEYW.
+      * The record being judged, read from stdin with alz_read_line
+      * (read(2), no stdio copy) and wiped once judged.
+       COPY ALZTXNIN.
+       01  WS-LINE-CAP                 PIC S9(9) COMP-5 VALUE 200.
+       01  WS-LINE-LEN                 PIC S9(9) COMP-5.
+       01  WS-RECORD-LEN               PIC S9(9) COMP-5 VALUE 200.
        COPY ALZLEDG.
        01  WS-MAX-RECORDS              PIC 9(4) VALUE 1000.
       * Single-transfer limits in minor units, per currency:
@@ -105,7 +105,6 @@
        01  WS-DEFAULT-LIMIT            PIC 9(15) VALUE 100000000.
        01  WS-LIMIT-CENTS              PIC 9(15).
        01  WS-FILE-STATUS.
-           05  WS-FS-IN                PIC XX.
            05  WS-FS-OK                PIC XX.
            05  WS-FS-REJ               PIC XX.
            05  WS-FS-LEDGER            PIC XX.
@@ -181,6 +180,7 @@
        0000-MAIN.
            MOVE "TXNGUARD" TO ALZ-PROGRAM-NAME
            SET ALZ-NEEDS-TOKEN-KEY TO TRUE
+           SET ALZ-INPUT-FOLLOWS TO TRUE
            PERFORM ALZ-PREPARE-KEYS
            IF ALZ-KEYS-READY
                MOVE ALZ-GENESIS TO WS-PREV-MAC
@@ -197,21 +197,14 @@
            STOP RUN.
 
        1000-OPEN-FILES.
-           OPEN INPUT TXN-IN
-           IF WS-FS-IN NOT = "00"
-               DISPLAY "TXNGUARD: cannot open TXNIN.DAT, status "
-                   WS-FS-IN UPON SYSERR
+           OPEN OUTPUT TXN-OK TXN-REJ LEDGER SUMMARY
+           SET WS-FILES-OPEN TO TRUE
+           IF WS-FS-OK NOT = "00" OR WS-FS-REJ NOT = "00"
+              OR WS-FS-LEDGER NOT = "00"
+              OR WS-FS-SUMMARY NOT = "00"
+               DISPLAY "TXNGUARD: cannot create the output files"
+                   UPON SYSERR
                MOVE 16 TO WS-RETURN-CODE
-           ELSE
-               OPEN OUTPUT TXN-OK TXN-REJ LEDGER SUMMARY
-               SET WS-FILES-OPEN TO TRUE
-               IF WS-FS-OK NOT = "00" OR WS-FS-REJ NOT = "00"
-                  OR WS-FS-LEDGER NOT = "00"
-                  OR WS-FS-SUMMARY NOT = "00"
-                   DISPLAY "TXNGUARD: cannot create the output files"
-                       UPON SYSERR
-                   MOVE 16 TO WS-RETURN-CODE
-               END-IF
            END-IF.
 
        1100-NOW-IN-UTC.
@@ -232,26 +225,34 @@
                    ADD WS-OFFSET-SECONDS TO WS-NOW-UTC-SECONDS
            END-EVALUATE.
 
+      * One record per line on stdin. A short line keeps the LOW-VALUES
+      * of the pre-fill, which the structural check (E901) rejects. A
+      * line longer than a record, or input that ends inside a line,
+      * means the stream itself is wrong: the whole batch is refused
+      * (8) - the rest of an over-long line must never become a record.
        2000-NEXT-RECORD.
-      *    Pre-fill the record area: GnuCOBOL returns status 00 for a
-      *    short final record and leaves stale bytes of the previous
-      *    record in the rest of the area. With LOW-VALUES there, the
-      *    structural check (E901) rejects the fragment instead.
            MOVE LOW-VALUES TO TXN-IN-REC
-           READ TXN-IN
-           EVALUATE WS-FS-IN
-               WHEN "00"
-               WHEN "04"
-               WHEN "06"
+           CALL "alz_read_line" USING TXN-IN-REC WS-LINE-CAP
+                                      WS-LINE-LEN
+                            RETURNING ALZ-RC
+           EVALUATE TRUE
+               WHEN ALZ-OK
                    PERFORM 2100-JUDGE-RECORD
-               WHEN "10"
+               WHEN ALZ-RC = -4
+                   SET WS-EOF TO TRUE
+               WHEN ALZ-RC = -3 OR ALZ-RC = -6
+                   DISPLAY "TXNGUARD: input line too long or cut short"
+                       UPON SYSERR
+                   MOVE 8 TO WS-RETURN-CODE
                    SET WS-EOF TO TRUE
                WHEN OTHER
-                   DISPLAY "TXNGUARD: read error, status " WS-FS-IN
-                       UPON SYSERR
+                   DISPLAY "TXNGUARD: cannot read stdin" UPON SYSERR
                    MOVE 16 TO WS-RETURN-CODE
                    SET WS-EOF TO TRUE
-           END-EVALUATE.
+           END-EVALUATE
+      *    The record holds a raw card number: wipe it once judged.
+           CALL "alz_zeroize" USING TXN-IN-REC WS-RECORD-LEN
+                          RETURNING ALZ-WIPE-RC.
 
        2100-JUDGE-RECORD.
            ADD 1 TO WS-RECORDS
@@ -697,7 +698,6 @@
                MOVE 4 TO WS-RETURN-CODE
            END-IF
            IF WS-FILES-OPEN
-               CLOSE TXN-IN
                CLOSE TXN-OK
                IF WS-FS-OK NOT = "00"
                    PERFORM 8000-WRITE-FAILED

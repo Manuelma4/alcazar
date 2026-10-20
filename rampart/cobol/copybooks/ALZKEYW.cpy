@@ -12,6 +12,10 @@
       * never reaches a legacy program.
        01  ALZ-KEY-SET                 PIC X VALUE "L".
            88  ALZ-NEEDS-TOKEN-KEY     VALUE "T".
+      * Whether more input follows the keys on stdin (TXNGUARD's
+      * batch). Otherwise anything after them is refused.
+       01  ALZ-STDIN-AFTER-KEYS        PIC X VALUE "N".
+           88  ALZ-INPUT-FOLLOWS       VALUE "Y".
        01  ALZ-KEY-HEX                 PIC X(80).
        01  ALZ-KEY-BIN                 PIC X(32).
        01  ALZ-LEDGER-KEY              PIC X(32).

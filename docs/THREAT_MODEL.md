@@ -46,10 +46,10 @@ flowchart LR
     C[LEDGERCK]
   end
   subgraph Disk[Job directory · 0700, tmpfs in Docker]
-    D[(TXNIN / ACCEPTED / LEDGER)]
+    D[(ACCEPTED / REJECTED / LEDGER)]
   end
   L -- B1: HTTP JSON --> G
-  G -- B2: argv + stdin sub-keys + fixed-width file --> T
+  G -- B2: argv + stdin: sub-keys, then fixed-width records --> T
   T --> D
   D -- B3: legacy outputs parsed as untrusted --> G
   F --> D
@@ -75,10 +75,10 @@ flowchart LR
 | **T**ampering: editing the ledger | Disk | HMAC-SHA256 chain over every entry and the previous MAC, files read as fixed-length records (no reader normalisation); LEDGERCK and an independent OpenSSL implementation must agree | Siege `ledger-tamper`, `ledger-delete`; `agreement.test.mjs` (250 random corruptions, identical verdicts) |
 | **T**ampering: editing a decision record (redirecting a payment, rewriting a rejection) | Disk | Each ledger entry seals an HMAC of its whole ACCEPTED or REJECTED record; records with no entry are refused | Siege `record-tamper`, `ledger.test.mjs` |
 | **T**ampering: truncating the ledger (and its records) | Disk | Head MAC and entry count anchored in Gatehouse memory when the job is sealed, taken from TXNGUARD's stdout (not from a file in the job directory) | Siege `ledger-truncate`, `insider.test.mjs` |
-| **T**ampering: editing input or output files while a job runs | Disk | Sealed files read once and those bytes verified; FRAUDSCAN fed through pipes; one ledger entry per submitted transfer and every accepted record checked against the transfer Gatehouse sent (tokens recomputed with `K_token`); LEDGERCK and Node must agree, so concurrent edits can only yield "broken" | `insider.test.mjs` |
+| **T**ampering: editing input or output files while a job runs | Disk | No input file: the batch is piped to TXNGUARD; sealed files read once and those bytes verified; FRAUDSCAN fed through pipes; one ledger entry per submitted transfer and every accepted record checked against the transfer Gatehouse sent (masked card and tokens recomputed); totals recomputed from the verified records; LEDGERCK and Node must agree, so concurrent edits can only yield "broken" | `insider.test.mjs` |
 | **T**ampering: Trojan Source / hidden code in contributions | Repo | `scripts/check-unicode.mjs` in CI; Watchtower `ALZ-GEN-001/002`, `ALZ-COB-014` | CI |
 | **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id | `ledger.test.mjs` |
-| **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD, and job directories left by a crash removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core; a card number typed into the memo is refused (E803), however it is grouped and whatever digits surround it | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (15 card formats, 8 look-alikes); Siege `pan-in-memo` |
+| **I**nformation disclosure: card numbers | B2, B3 | The raw batch reaches TXNGUARD on stdin and never touches the disk, and job directories left by a crash are removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core; a card number typed into the memo is refused (E803), however it is grouped and whatever digits surround it | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (15 card formats, 8 look-alikes); Siege `pan-in-memo` |
 | **I**nformation disclosure: account identity in analytics | B2 | FRAUDSCAN sees only HMAC tokens (`K_token`), never IBANs | `parseAccepted` tests |
 | **I**nformation disclosure: key exposure | B2 | The master key never leaves Gatehouse; each legacy program gets only its sub-keys (LEDGERCK: `K_ledger` only), on stdin (not argv, not env), read with `read(2)` so no stdio buffer keeps a copy, wiped after use; a program handed more than its keys, or equal sub-keys, refuses to run; key file decoded as bytes and refused if group/world readable | `review.test.mjs`, `ALZKEYP.cpy`, `app.mjs`; memory scan (HARDENING 20) |
 | **I**nformation disclosure: timing side channel on MAC checks | B3 | Constant-time comparison in Fortran (`alz_ct_equal`) and Node (`timingSafeEqual`) | `test_crypto.f90` |

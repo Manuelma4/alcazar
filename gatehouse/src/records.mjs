@@ -38,9 +38,13 @@ export function txnInRecord(txn) {
   return record.padEnd(TXNIN_LENGTH, ' ');
 }
 
-/** The TXNIN file: records back to back, no line terminators. */
-export function txnInFile(transactions) {
-  return Buffer.from(transactions.map(txnInRecord).join(''), 'latin1');
+/**
+ * The batch as TXNGUARD reads it on stdin, after its keys: one 200-byte
+ * record per line. It never becomes a file: raw card numbers stay off the
+ * disk, and no input sits in the job directory for anyone to rewrite.
+ */
+export function txnInLines(transactions) {
+  return Buffer.from(transactions.map((txn) => `${txnInRecord(txn)}\n`).join(''), 'latin1');
 }
 
 export class RecordError extends Error {}

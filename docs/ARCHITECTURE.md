@@ -32,19 +32,20 @@ flowchart LR
 
 1. `POST /api/batch` — Gatehouse validates the JSON structurally (types, lengths,
    printable ASCII only, no unknown keys, ≤ 1000 transactions).
-2. Gatehouse creates a private job directory (`0700`) and writes `TXNIN.DAT`
-   (fixed-width, 200 bytes/record).
+2. Gatehouse creates a private job directory (`0700`) for the outputs.
 3. Gatehouse runs `txnguard <job-id>` with `cwd` = job dir, a minimal environment,
-   no shell, a timeout and resource limits. The sub-keys it needs, `K_ledger`
-   and `K_token`, are sent on **stdin** as two lines of hex (never argv/env);
-   the master key never reaches a legacy program.
+   no shell, a timeout and resource limits. Everything it needs comes on
+   **stdin** (never argv/env): the sub-keys `K_ledger` and `K_token`, two
+   lines of hex — the master key never reaches a legacy program — then the
+   batch, one 200-byte `TXNIN` record per line. Raw card numbers never touch
+   the disk, and there is no input file for anyone to rewrite.
 4. TXNGUARD runs the Fortran crypto power-on self-test, validates every record
    with the Rampart COBOL modules, writes `ACCEPTED.DAT`, `REJECTED.DAT`,
    `LEDGER.DAT`, `SUMMARY.DAT`, prints the seal on stdout
    (`ALZ-SEAL|ENTRIES=nnnnnn|HEAD=<64 hex>`) and returns a mainframe-style
    return code (0 = all accepted, 4 = some rejected, 8 = input error,
-   12 = key/self-test error, 16 = I/O error). `TXNIN.DAT` (raw PANs) is
-   deleted by Gatehouse right after TXNGUARD finishes.
+   12 = key/self-test error, 16 = I/O error). A line longer than a record,
+   or input that ends inside a line, refuses the whole batch (8).
 5. Gatehouse reads the three sealed files **once**; from here on those bytes
    are what is parsed, scored, verified and shown. The anchor (entry count,
    head MAC) is taken from TXNGUARD's stdout, a pipe only Gatehouse holds,
@@ -62,7 +63,8 @@ flowchart LR
 
 ## 2. Record layouts (fixed width, ASCII)
 
-`TXNIN` is a sequence of 200-byte records with no terminators. The three
+`TXNIN` reaches TXNGUARD on stdin, one 200-byte record per line (the
+sample in `examples/batch/` is stored as bare 200-byte records). The three
 sealed outputs — `ACCEPTED`, `REJECTED` and `LEDGER` — are fixed-length
 records that each end in a line feed (`\n`), written with nothing trimmed and
 read back as fixed-length records: the bytes on disk are exactly the bytes
@@ -70,7 +72,7 @@ that were sealed, and a reader never sees a normalised view (trimmed blanks,
 stripped CRs, split lines). Positions below are 1-based and exclude the line
 feed. `SUMMARY` is `KEY=VALUE` lines.
 
-### TXNIN — input, 200 bytes
+### TXNIN — input, 200 bytes + LF on stdin
 | Pos | Len | Field | Content |
 |----:|----:|-------|---------|
 | 1 | 12 | TXN-ID | `[A-Z0-9-]`, left-justified |

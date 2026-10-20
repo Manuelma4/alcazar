@@ -11,7 +11,6 @@ dir="$root/var/demo"
 rm -rf "$dir"
 mkdir -p "$dir"
 chmod 700 "$dir"
-cp "$root/examples/batch/TXNIN.DAT" "$dir/"
 cd "$dir"
 
 # A fresh 256-bit master key. Like Gatehouse, the demo derives one sub-key
@@ -30,14 +29,15 @@ run() { env -i PATH=/usr/bin:/bin "$@"; }
 
 echo "== TXNGUARD (COBOL) =========================================="
 rc=0
-seal=$(printf '%s\n%s\n' "$k_ledger" "$k_token" | run "$bin/txnguard" "$job") || rc=$?
+# The keys, then the batch, on stdin: one 200-byte record per line.
+seal=$({ printf '%s\n%s\n' "$k_ledger" "$k_token"; fold -w 200 "$root/examples/batch/TXNIN.DAT"; echo; } |
+  run "$bin/txnguard" "$job") || rc=$?
 echo "$seal"
 echo "return code $rc (0 all accepted, 4 some rejected)"
 sed -n 's/^/  /p' SUMMARY.DAT
 echo
 echo "Rejected records:"
 sed -n 's/^/  /p' REJECTED.DAT
-rm -f TXNIN.DAT
 
 echo
 echo "== LEDGERCK (COBOL + Fortran HMAC) ==========================="

@@ -24,8 +24,9 @@ extern "C" {
 #define ALZ_E_LENGTH     (-1) /* a length is negative or above ALZ_MAX_LEN */
 #define ALZ_E_HEX        (-2) /* malformed hexadecimal input */
 #define ALZ_E_CAPACITY   (-3) /* output buffer too small, or more input than expected */
-#define ALZ_E_EOF        (-4) /* alz_read_line: input ended before a line feed */
+#define ALZ_E_EOF        (-4) /* alz_read_line: end of input, nothing read */
 #define ALZ_E_IO         (-5) /* alz_read_line, alz_expect_eof: read(2) failed */
+#define ALZ_E_TRUNCATED  (-6) /* alz_read_line: input ended inside a line */
 #define ALZ_E_SELFTEST  (-10) /* a known-answer test failed */
 
 #define ALZ_MAX_LEN      16777216 /* 16 MiB per buffer */

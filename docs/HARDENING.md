@@ -44,9 +44,11 @@ Reading a 20-character line into a 10-byte LINE SEQUENTIAL record, GnuCOBOL
 line comes back as a separate record with status `00`**. If any field of an
 input line is longer than expected, it can inject a whole forged record.
 
-*Defence:* untrusted input (`TXNIN.DAT`) is fixed-length `ORGANIZATION
-SEQUENTIAL` with no line terminators, so a newline in the data is just a byte.
-Gatehouse also refuses control characters before writing a record.
+*Defence:* untrusted input never goes through LINE SEQUENTIAL: TXNGUARD reads
+its batch from stdin with `alz_read_line`, exactly one 200-byte record per
+line, and refuses the whole batch when a line is longer than a record — the
+rest of it never becomes a record. Gatehouse also refuses control characters
+before it sends a record.
 Watchtower flags LINE SEQUENTIAL input whose status is never checked for
 `04`/`06` (rule `ALZ-COB-016`).
 

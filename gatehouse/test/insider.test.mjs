@@ -4,7 +4,7 @@
 // TXNGUARD's input. Pipeline.legacy is wrapped only to act at those
 // moments, exactly as such an insider would.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -77,13 +77,12 @@ describe('An insider inside a running job', { skip: SKIP_REASON }, () => {
     }), NOT_WHAT_WAS_SENT);
   });
 
-  it('raising an amount in TXNIN.DAT before TXNGUARD reads it fails the job', async () => {
-    await assert.rejects(runWith(async (name, dir, when) => {
-      if (name !== 'txnguard' || when !== 'before') return;
-      const input = await read(dir, 'TXNIN.DAT');
-      // AMOUNT is at offset 94, 18 bytes: 125.00 becomes 925.00.
-      await writeFile(join(dir, 'TXNIN.DAT'), `${input.slice(0, 94)}${'925.00'.padEnd(18)}${input.slice(112)}`, 'latin1');
-    }), NOT_WHAT_WAS_SENT);
+  it('finds no input file to rewrite: the batch reaches TXNGUARD on stdin', async () => {
+    const seen = [];
+    await runWith(async (name, dir, when) => {
+      if (name === 'txnguard' && when === 'before') seen.push(...(await readdir(dir)));
+    });
+    assert.deepEqual(seen, [], 'nothing in the job directory before TXNGUARD runs');
   });
 
   it('rewriting a total in SUMMARY.DAT fails the job', async () => {

@@ -23,6 +23,7 @@ module rampart_capi
   integer(c_int32_t), parameter, public :: ALZ_E_CAPACITY = -3
   integer(c_int32_t), parameter, public :: ALZ_E_EOF = -4
   integer(c_int32_t), parameter, public :: ALZ_E_IO = -5
+  integer(c_int32_t), parameter, public :: ALZ_E_TRUNCATED = -6
   integer(c_int32_t), parameter, public :: ALZ_E_SELFTEST = -10
 
   !> Upper bound for any single buffer (16 MiB): bounds the work an untrusted
@@ -199,10 +200,11 @@ contains
   !> One line from standard input, read with read(2) one byte at a time: no
   !> stdio or language run-time buffer ever holds it, so the caller's buffer
   !> is the only copy in the process and wiping it wipes the line. The line
-  !> feed is consumed, not stored. ALZ_OK; ALZ_E_CAPACITY when the line is
-  !> longer than cap, ALZ_E_EOF when input ends before a line feed, ALZ_E_IO
-  !> when read fails - in each of these cases the bytes read are wiped and
-  !> len is 0.
+  !> feed is consumed, not stored. ALZ_OK; ALZ_E_EOF at the end of input
+  !> (nothing read); ALZ_E_TRUNCATED when input ends inside a line, before
+  !> its line feed; ALZ_E_CAPACITY when the line is longer than cap (the rest
+  !> of it stays unread); ALZ_E_IO when read fails. In each of these cases
+  !> the bytes read are wiped and len is 0.
   function capi_read_line(buf, cap, out_len) result(rc) bind(C, name='alz_read_line')
     integer(c_int8_t), intent(inout) :: buf(*)
     integer(c_int32_t), intent(in) :: cap
@@ -217,7 +219,8 @@ contains
     do
       got = posix_read(0_c_int, c_loc(byte), 1_c_size_t)
       if (got /= 1_c_ptrdiff_t) then
-        rc = merge(ALZ_E_EOF, ALZ_E_IO, got == 0_c_ptrdiff_t)
+        rc = ALZ_E_IO
+        if (got == 0_c_ptrdiff_t) rc = merge(ALZ_E_EOF, ALZ_E_TRUNCATED, out_len == 0)
         exit
       end if
       if (byte(1) == 10_c_int8_t) then

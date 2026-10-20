@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  RecordError, parseAccepted, parseLedgerck, parseRejected, parseRisk, parseSummary, txnInFile, txnInRecord,
+  RecordError, parseAccepted, parseLedgerck, parseRejected, parseRisk, parseSummary, txnInLines, txnInRecord,
 } from '../src/records.mjs';
 
 const TXN = {
@@ -21,10 +21,11 @@ describe('TXNIN records', () => {
     assert.equal(record.slice(137, 177).trimEnd(), 'Groceries');
   });
 
-  it('writes records back to back without line terminators', () => {
-    const file = txnInFile([TXN, TXN]);
-    assert.equal(file.length, 400);
-    assert.ok(!file.includes(0x0a));
+  it('sends one 200-byte record per line', () => {
+    const lines = txnInLines([TXN, TXN]);
+    assert.equal(lines.length, 402);
+    assert.deepEqual([lines[200], lines[401]], [0x0a, 0x0a]);
+    assert.equal(lines.indexOf(0x0a), 200);
   });
 
   it('refuses a field that does not fit or is not printable', () => {

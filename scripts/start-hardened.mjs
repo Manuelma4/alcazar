@@ -35,8 +35,16 @@ const flags = [
   '--allow-child-process',
 ];
 if (process.platform === 'linux') flags.push('--allow-fs-read=/usr/bin/prlimit');
+if (process.env.ALCAZAR_EVIDENCE_DIR) {
+  // Durable evidence: created now, like the job directory, so the grant
+  // covers everything below it (HARDENING.md, item 16).
+  mkdirSync(process.env.ALCAZAR_EVIDENCE_DIR, { recursive: true, mode: 0o700 });
+  const evidence = realpathSync(process.env.ALCAZAR_EVIDENCE_DIR);
+  flags.push(`--allow-fs-read=${evidence}`, `--allow-fs-write=${evidence}`);
+}
 
 const env = { ...process.env, ALCAZAR_WORK_DIR: work };
+if (process.env.ALCAZAR_EVIDENCE_DIR) env.ALCAZAR_EVIDENCE_DIR = realpathSync(process.env.ALCAZAR_EVIDENCE_DIR);
 if (process.argv.includes('--demo')) env.ALCAZAR_DEMO ??= '1';
 for (const name of ['ALCAZAR_KEY_FILE', 'ALCAZAR_API_TOKEN_FILE']) {
   if (!process.env[name]) continue;

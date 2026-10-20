@@ -22,7 +22,7 @@ import { validateBatch } from './schema.mjs';
 import { loadStaticFiles } from './static.mjs';
 import { buildWatchtowerReport } from './watchtower.mjs';
 
-const JOB_PATH = /^\/api\/jobs\/(j-[0-9a-f]{24})(\/verify|\/tamper)?$/;
+const JOB_PATH = /^\/api\/jobs\/(j-[0-9a-f]{24})(\/verify|\/tamper|\/anchor)?$/;
 const STATIC_MOUNTS = [
   { dir: 'lookout', url: '/', exclude: ['dev', 'test', 'mock', 'README.md'] },
   { dir: 'shared', url: '/shared/' },
@@ -39,6 +39,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
   await mkdir(config.workDir, { recursive: true, mode: 0o700 });
   await reapOrphans(config.workDir, log);
   const { key: masterKey, source: keySource } = await loadMasterKey(config.keyFile, config.workDir);
+  if (config.evidenceDir) await prepareEvidenceDir(config.evidenceDir, config.workDir);
   const pipeline = new Pipeline({ config, masterKey });
   masterKey.fill(0);
 
@@ -73,6 +74,8 @@ export async function createApp(config, { log = defaultLog } = {}) {
     selftest,
     keySource,
     auth: config.auth,
+    // Public by nature: it verifies anchors and cannot sign them.
+    anchorKey: { algorithm: 'Ed25519', publicKey: pipeline.signer.publicKey, keyId: pipeline.signer.keyId },
     limits: {
       maxTransactions: config.limits.maxTransactions,
       maxBodyBytes: config.limits.maxBodyBytes,
@@ -95,6 +98,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
       rlimits: RLIMITS_AVAILABLE,
       permissionModel: typeof process.permission?.has === 'function',
     },
+    evidence: { signedAnchors: true, exported: Boolean(config.evidenceDir) },
     build: {
       cobol: manifest?.cobol ?? { compiler: 'unknown', flags: [] },
       fortran: manifest?.fortran ?? { compiler: 'unknown', flags: [] },
@@ -175,9 +179,10 @@ export async function createApp(config, { log = defaultLog } = {}) {
   async function jobAction(req, res, id, action) {
     const entry = jobs.get(id);
     if (!entry) throw new HttpError(404, 'P-NOTFOUND', 'No such job (jobs expire after 15 minutes)');
-    if (!action) {
+    if (!action || action === '/anchor') {
       if (req.method !== 'GET' && req.method !== 'HEAD') throw methodNotAllowed('GET');
-      sendJson(res, 200, entry.job);
+      if (action) sendJson(res, 200, entry.job.ledger.anchor, { 'content-disposition': `attachment; filename="${id}.anchor.json"` });
+      else sendJson(res, 200, entry.job);
       return;
     }
     if (req.method !== 'POST') throw methodNotAllowed('POST');
@@ -456,6 +461,19 @@ async function loadMasterKey(file, workDir) {
     return { key, source: 'file' };
   } finally {
     raw.fill(0);
+  }
+}
+
+/** The evidence directory: private, and never inside the job directory (the insider's territory). */
+async function prepareEvidenceDir(evidenceDir, workDir) {
+  await mkdir(evidenceDir, { recursive: true, mode: 0o700 });
+  const [evidence, work] = await Promise.all([realpath(evidenceDir), realpath(workDir)]);
+  if (evidence === work || evidence.startsWith(work + sep) || work.startsWith(evidence + sep)) {
+    throw new Error('ALCAZAR_EVIDENCE_DIR and ALCAZAR_WORK_DIR must not contain one another');
+  }
+  const info = await stat(evidence);
+  if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) {
+    throw new Error(`${evidenceDir} must not be accessible by group or others (chmod 700)`);
   }
 }
 

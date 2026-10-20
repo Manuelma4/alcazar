@@ -3,8 +3,9 @@
 // verification (LEDGERCK + Node/OpenSSL + anchor).
 
 import { createHmac, randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { anchorSigner, signAnchor } from './anchor.mjs';
 import { HttpError } from './http.mjs';
 import { deriveKeys, genesisMac, keyLines, tamperLedger, tamperRecord, trimRecords, verifyLedger } from './ledger.mjs';
 import { reasonText } from './messages.mjs';
@@ -65,6 +66,8 @@ export class Pipeline {
     // caller); each legacy program reads only the sub-keys it needs from
     // stdin — TXNGUARD seals and pseudonymises, LEDGERCK only verifies.
     this.keys = deriveKeys(masterKey);
+    // Signs each job's anchor: auditors get its public key, never K_ledger alone.
+    this.signer = anchorSigner(masterKey);
     this.guardKeys = keyLines(this.keys.ledger, this.keys.token);
     this.checkKeys = keyLines(this.keys.ledger);
     this.gate = new Gate(config.limits.maxProcesses, config.limits.processQueue);
@@ -190,6 +193,9 @@ export class Pipeline {
 
     const state = { jobId, dir, anchor: { entries: seal.entries, head: seal.head } };
     const verification = await this.verify(state, files);
+    // What TXNGUARD reported through its pipe, signed — whatever the files say.
+    const anchor = signAnchor(this.signer, { job: jobId, entries: seal.entries, head: seal.head, sealedAt: new Date().toISOString() });
+    if (this.config.evidenceDir) await this.exportEvidence(jobId, files, anchor);
     stages.push({
       name: 'seal',
       status: verification.valid ? 'ok' : 'error',
@@ -226,11 +232,33 @@ export class Pipeline {
         algorithm: 'HMAC-SHA256',
         genesis: genesisMac(this.keys.ledger, jobId),
         head: seal.head,
+        anchor,
         entries,
         verification,
       },
     };
     return { job, state };
+  }
+
+  /**
+   * Durable evidence (ALCAZAR_EVIDENCE_DIR): the sealed bytes just verified
+   * and the signed anchor, each written once — never overwritten — and left
+   * read-only. Only WORM or object-lock storage under that directory makes
+   * it more than a promise: Gatehouse itself can only refrain from changing it.
+   */
+  async exportEvidence(jobId, files, anchor) {
+    const out = join(this.config.evidenceDir, jobId);
+    try {
+      await mkdir(out, { mode: 0o700 });
+      const write = (name, data) => writeFile(join(out, name), data, { flag: 'wx', mode: 0o400 });
+      await write('LEDGER.DAT', Buffer.from(files.ledger, 'latin1'));
+      await write('ACCEPTED.DAT', Buffer.from(files.accepted, 'latin1'));
+      await write('REJECTED.DAT', Buffer.from(files.rejected, 'latin1'));
+      await write('ANCHOR.json', `${JSON.stringify(anchor, null, 2)}\n`);
+      await chmod(out, 0o500);
+    } catch {
+      throw new HttpError(503, 'P-EVIDENCE', 'The evidence of this job could not be written');
+    }
   }
 
   /**

@@ -24,6 +24,9 @@ export function loadConfig(env = process.env) {
     auth: oneOf(env.ALCAZAR_AUTH ?? 'token', ['token', 'none'], 'ALCAZAR_AUTH'),
     apiToken: env.ALCAZAR_API_TOKEN || null,
     apiTokenFile: env.ALCAZAR_API_TOKEN_FILE ? resolve(env.ALCAZAR_API_TOKEN_FILE) : null,
+    // Where each sealed job's files and signed anchor are kept (WORM storage
+    // in production); without it they live as long as the job (15 minutes).
+    evidenceDir: env.ALCAZAR_EVIDENCE_DIR ? resolve(env.ALCAZAR_EVIDENCE_DIR) : null,
     // Demo mode enables the ledger tamper endpoint used by the Siege lab.
     demo: (env.ALCAZAR_DEMO ?? '0') === '1',
     hsts: env.ALCAZAR_HSTS === '1',

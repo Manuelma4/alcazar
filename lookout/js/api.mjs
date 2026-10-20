@@ -74,6 +74,10 @@ export function normalizeHealth(d) {
     },
     keySource: d.keySource === undefined ? null : str(d.keySource),
     auth: oneOf(d.auth, ['token', 'none'], 'token'),
+    anchorKey: {
+      publicKey: typeof obj(d.anchorKey).publicKey === 'string' && /^[A-Za-z0-9_-]{43}$/.test(obj(d.anchorKey).publicKey) ? obj(d.anchorKey).publicKey : '',
+      keyId: hex(obj(d.anchorKey).keyId),
+    },
     limits: {
       maxTransactions: num(lim.maxTransactions, 1000),
       maxBodyBytes: num(lim.maxBodyBytes, 524288),
@@ -241,9 +245,22 @@ export function normalizeJob(d) {
       algorithm: str(l.algorithm),
       genesis: hex(l.genesis),
       head: hex(l.head),
+      anchor: normalizeAnchor(l.anchor),
       entries: arr(l.entries).map(normalizeEntry),
       verification: normalizeVerification(l.verification),
     },
+  };
+}
+
+function normalizeAnchor(d) {
+  if (d === null || d === undefined) return null;
+  const a = obj(d);
+  return {
+    entries: int(a.entries),
+    head: hex(a.head),
+    sealedAt: str(a.sealedAt),
+    keyId: hex(a.keyId),
+    signature: typeof a.signature === 'string' && /^[A-Za-z0-9_-]*$/.test(a.signature) ? a.signature : '',
   };
 }
 

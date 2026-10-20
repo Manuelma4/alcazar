@@ -3,10 +3,11 @@
 // K_ledger only, outside Gatehouse.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
+import { anchorSigner, signAnchor } from '../src/anchor.mjs';
 import { ROOT } from '../src/config.mjs';
 import { deriveKeys, keyLines, tamperRecord } from '../src/ledger.mjs';
 import { parseSeal, txnInLines } from '../src/records.mjs';
@@ -18,7 +19,9 @@ const JOB = 'j-audit';
 const SCRIPT = join(ROOT, 'scripts', 'verify-ledger.mjs');
 
 describe('verify-ledger (auditor, K_ledger only)', { skip: SKIP_REASON }, () => {
-  const keys = deriveKeys(Buffer.alloc(32, 0x3c));
+  const master = Buffer.alloc(32, 0x3c);
+  const keys = deriveKeys(master);
+  const signer = anchorSigner(master);
   let dir;
   let keyFile;
   let seal;
@@ -47,6 +50,48 @@ describe('verify-ledger (auditor, K_ledger only)', { skip: SKIP_REASON }, () => 
     assert.match(result.stdout, /node-openssl {3}OK, 40 entries/);
     assert.match(result.stdout, /cobol-fortran {2}OK, 40 entries/);
     assert.match(result.stdout, /INTACT, and matches the anchor/);
+  });
+
+  it('will not say INTACT without an anchor', () => {
+    const result = audit();
+    assert.equal(result.status, 3);
+    assert.match(result.stdout, /UNANCHORED: the chain is intact, but without an anchor/);
+  });
+
+  it('calls an empty job directory broken, anchor or not', async () => {
+    const empty = join(dir, 'empty');
+    await mkdir(empty, { recursive: true });
+    const result = spawnSync(process.execPath, [SCRIPT, empty, JOB, '--ledger-key-file', keyFile], { encoding: 'utf8' });
+    assert.equal(result.status, 4);
+    assert.match(result.stdout, /BROKEN: no ledger entries/);
+  });
+
+  it('checks a signed anchor with the public key the auditor brings', async () => {
+    const anchorFile = join(dir, 'ANCHOR.json');
+    const write = (doc) => writeFile(anchorFile, JSON.stringify(doc));
+    const anchor = signAnchor(signer, { job: JOB, entries: seal.entries, head: seal.head, sealedAt: new Date().toISOString() });
+    const withAnchor = (key = signer.publicKey) => audit('--anchor', anchorFile, '--anchor-key', key);
+
+    await write(anchor);
+    let result = withAnchor();
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, new RegExp(`signed by key ${signer.keyId}`));
+    assert.match(result.stdout, /INTACT, and matches the signed anchor/);
+
+    // K_ledger can rewrite a chain; it cannot re-sign the anchor to match.
+    await write({ ...anchor, entries: seal.entries - 1 });
+    result = withAnchor();
+    assert.equal(result.status, 4);
+    assert.match(result.stdout, /NOT AUTHENTIC: the signature does not match/);
+
+    const elsewhere = signAnchor(signer, { job: 'j-another-job', entries: seal.entries, head: seal.head, sealedAt: anchor.sealedAt });
+    await write(elsewhere);
+    assert.match(withAnchor().stdout, /NOT AUTHENTIC: it anchors job j-another-job/);
+
+    await write(anchor);
+    const stranger = anchorSigner(Buffer.alloc(32, 0x99));
+    assert.equal(withAnchor(stranger.publicKey).status, 4, 'a key that did not sign it');
+    assert.equal(audit('--anchor', anchorFile).status, 2, 'never the key a document could name');
   });
 
   it('catches a truncation only with the anchor', () => {

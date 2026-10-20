@@ -294,7 +294,8 @@ More in the [Watchtower README](watchtower/README.md).
   system, all capabilities dropped, `no-new-privileges`, the Node.js
   permission model (read the app, write only the job directory).
 
-Details: [threat model](docs/THREAT_MODEL.md) ·
+Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
+[threat model](docs/THREAT_MODEL.md) ·
 [hardening notes](docs/HARDENING.md) ·
 [architecture and API](docs/ARCHITECTURE.md) · [benchmarks](docs/BENCHMARKS.md) ·
 [security policy](SECURITY.md)

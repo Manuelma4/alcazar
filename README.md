@@ -323,7 +323,7 @@ Details: [walkthrough: hardening a COBOL program](docs/WALKTHROUGH.md) ·
 ## Lessons from the trenches
 
 Building this surfaced real, measurable traps — each now has a defence and a
-test ([all 20](docs/HARDENING.md)):
+test ([all 21](docs/HARDENING.md)):
 
 * GnuCOBOL **splits an over-long LINE SEQUENTIAL line into extra records**,
   **trims the trailing blanks of every record it writes** (so a MAC of the

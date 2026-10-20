@@ -285,6 +285,22 @@ refuse to run when stdin holds more than its own keys — LEDGERCK handed
 K-token too is refused. Gatehouse decodes the master key file byte by byte
 as well; the hex never becomes a JavaScript string.
 
+### 21. A Luhn check is not a card check
+
+One digit string in ten passes Luhn by chance, and some identifiers pass it
+by design: a French SIRET ("552 081 317 00018") and an IMEI
+("352099001761481") are Luhn-valid. A memo scanner that stopped at "13–19
+digits and Luhn" refused 10–16 % of ordinary reference numbers and every
+SIRET it saw; one that skipped tokens glued to capital letters, to spare
+IBANs, missed "VISA4111111111111111" and still flagged lower-case IBANs.
+
+*Defence:* ALZPANSC sets aside only IBANs that ALZIBAN confirms (either
+case), and wants a card network's prefix and an issued length (Visa 4:
+13/16/19, Mastercard 51–55 and 2221–2720: 16, Amex 34/37: 15, ...) as well as
+Luhn. Measured on random look-alikes: IBANs, invoices with dates and phone
+numbers 0 %, references 2–5 %, SIRET 1.7 %; every card format still found.
+COBOL and the reference model agree on 100,000 fuzzed memos.
+
 ### Not a vulnerability, but you will see it
 
 On Debian 13, every GnuCOBOL program prints *"program compiled against libxml

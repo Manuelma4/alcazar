@@ -216,16 +216,63 @@ export function maskPan(pan) {
   return `${digits.slice(0, 6)}${'*'.repeat(digits.length - 10)}${digits.slice(-4)}`;
 }
 
+/** Luhn check digit over a string of digits. */
+function luhnValid(digits) {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i += 1) {
+    let d = digits.charCodeAt(digits.length - 1 - i) - 48;
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
 /**
- * A memo with every card-like run of digits — 12 or more, with up to four
- * characters that are neither letters nor digits between any two (far
- * wider than the joiners ALZPANSC links, so this masks more, never less)
- * — masked down to its last 4, one character for one, so fixed-width
- * records stay aligned. TXNGUARD refuses card numbers in memos (E803), and
- * this page shows the refused ones — and any it missed — masked too.
+ * Could this run of digit groups hold a card number? ALZPANSC's own test,
+ * across far wider joiners: a stretch from a group start to a group end
+ * that passes Luhn and has a card's length for its first digits — 13 to 19
+ * from 3 to 6; 16 or 19 from 2, and 17 or 18 from Mir's 2200-2204. Every
+ * network in ALZPANSC's table fits, so this flags at least what it does.
+ */
+function couldBeCard(run) {
+  const groups = run.match(/\d+/g) ?? [];
+  const digits = groups.join('');
+  const starts = [];
+  let at = 0;
+  for (const group of groups) {
+    starts.push(at);
+    at += group.length;
+  }
+  for (let i = 0; i < groups.length; i += 1) {
+    for (let j = i; j < groups.length; j += 1) {
+      const length = starts[j] + groups[j].length - starts[i];
+      if (length > 19) break;
+      const first = digits[starts[i]];
+      const mir = Number(digits.slice(starts[i], starts[i] + 4));
+      const cardLength = (first >= '3' && first <= '6') ||
+        (first === '2' && (length === 16 || length === 19 || (mir >= 2200 && mir <= 2204)));
+      if (length >= 13 && cardLength && luhnValid(digits.slice(starts[i], starts[i] + length))) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * A memo with every run of digit groups that could hold a card number —
+ * groups up to four non-alphanumeric characters apart, far wider than the
+ * joiners ALZPANSC links, so this masks more, never less — masked down to
+ * its last 4, one character for one, so fixed-width records stay aligned.
+ * Dates, amounts and phone numbers stay readable. TXNGUARD refuses card
+ * numbers in memos (E803), and this page shows the refused ones — and any
+ * it missed between other punctuation — masked too. A card glued to other
+ * digits is missed here as it is there.
  */
 export function maskMemo(memo) {
   return String(memo ?? '').replace(/\d(?:[^0-9A-Za-z]{0,4}\d){11,}/g, (run) => {
+    if (!couldBeCard(run)) return run;
     let keep = 4;
     let out = '';
     for (let i = run.length - 1; i >= 0; i -= 1) {

@@ -251,11 +251,15 @@
                    IF LS-JN <= 2
                        SET LS-JOINS TO TRUE
                    END-IF
+      *            Nested, not ANDed: short-circuit evaluation is not
+      *            promised (HARDENING.md, item 6), and LS-Q + 2 is only
+      *            inside the text when LS-JN is 3.
                    IF LS-JN = 3
-                      AND LK-TEXT(LS-Q:1) = SPACE
-                      AND LK-TEXT(LS-Q + 2:1) = SPACE
-                      AND LK-TEXT(LS-Q + 1:1) NOT = SPACE
-                       SET LS-JOINS TO TRUE
+                       IF LK-TEXT(LS-Q:1) = SPACE
+                          AND LK-TEXT(LS-Q + 2:1) = SPACE
+                          AND LK-TEXT(LS-Q + 1:1) NOT = SPACE
+                           SET LS-JOINS TO TRUE
+                       END-IF
                    END-IF
                END-IF
            END-IF.

@@ -144,9 +144,11 @@ Lookout works under it with no console violations on any view:
   contains them.
 * **Masked data only.** Once a batch is sent the transactions view lets go
   of it, pasted text included, and keeps a masked projection: IBAN first 4 +
-  last 4, PAN BIN + last 4, and every run of 12 or more digits in a memo
-  (at most four non-alphanumeric characters apart) down to its last 4 —
-  the card numbers TXNGUARD refused (E803) and any it missed. Accepted memos and tampered records are shown masked the same way.
+  last 4, PAN BIN + last 4, and down to its last 4 every stretch of digits
+  in a memo that could be a card number — ALZPANSC's test, with groups up
+  to four punctuation characters apart — so the card numbers TXNGUARD
+  refused (E803), and any it missed between other punctuation, are hidden
+  while dates, amounts and phone numbers stay readable. Accepted memos and tampered records are shown masked the same way.
 * **Storage** holds per-viewer conveniences only: theme, last view
   (`localStorage`), and the current job id (`sessionStorage`), all wrapped in
   try/catch. No data leaves for third parties; Defenses verifies this live.

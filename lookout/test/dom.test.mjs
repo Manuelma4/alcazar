@@ -197,9 +197,12 @@ describe('batch: parsing input and keeping only a masked projection', () => {
     assert.ok(!JSON.stringify(row).includes('30006000011234567890'));
   });
 
-  test('masks card-like digits in memos, typed any way, and leaves dates, phones and words alone', () => {
+  test('masks card numbers in memos, typed any way, and leaves dates, amounts, phones and words alone', () => {
     assert.equal(maskMemo('card 4111 1111 1111 1111 exp 12/28'), 'card **** **** **** 1111 exp 12/28');
-    assert.equal(maskMemo('ref 41111111111111111234'), 'ref ****************1234');
+    assert.equal(maskMemo('3782 822463 10005'), '**** ****** *0005', 'Amex, 15 digits');
+    assert.equal(maskMemo('2200 0000 0000 0000 4'), '**** **** **** *000 4', 'Mir, 17 digits: all but the last 4');
+    // Glued to other digits, a card is missed here as ALZPANSC misses it.
+    assert.equal(maskMemo('ref 41111111111111111234'), 'ref 41111111111111111234');
     assert.equal(maskMemo('4111-1111.1111/1111'), '****-****.****/1111');
     // Every joiner ALZPANSC links — and wider ones.
     assert.equal(maskMemo('4111  1111  1111  1111'), '****  ****  ****  1111');
@@ -209,10 +212,13 @@ describe('batch: parsing input and keeping only a masked projection', () => {
     assert.equal(maskMemo('4111,1111,1111,1111'), '****,****,****,1111');
     assert.equal(maskMemo('(4111)(1111)(1111)(1111)'), '(****)(****)(****)(1111)');
     assert.equal(maskMemo("4111'1111+1111:1111"), "****'****+****:1111");
-    for (const memo of ['Rent October', 'tel +33 6 12 34 56 78', 'invoice 2026-10-20 n 0042', '']) assert.equal(maskMemo(memo), memo);
+    for (const memo of ['Rent October', 'tel +33 6 12 34 56 78', 'invoice 2026-10-20 n 0042', '', 'Rent 10/2025, 11/2025, 12/2025',
+      'Paid 20/10/2025 10:15:30', 'Invoices 2025-117, 2025-118, 2025-119', 'Amounts 1,250.00 + 3,400.00', 'tel +33 (0)6 12 34 56 78']) {
+      assert.equal(maskMemo(memo), memo);
+    }
     const [row] = projectInput([{ id: 'X', memo: 'card 4111 1111 1111 1111 exp 12/28' }]);
     assert.equal(row.memo, 'card **** **** **** 1111 exp 12/28');
-    assert.equal(maskMemo('x'.repeat(30) + '4111111111111111').length, 46, 'one character for one');
+    assert.equal(maskMemo('x'.repeat(30) + ' 4111111111111111').length, 47, 'one character for one');
   });
 });
 
@@ -265,9 +271,9 @@ describe('jobmodel: joining a job back into input order', () => {
 });
 
 describe('api: responses are projected onto the contract', () => {
-  test('accepted memos come masked, so a card number TXNGUARD missed is not shown either', () => {
-    const job = normalizeJob({ accepted: [{ id: 'A', memo: 'ref 41111111111111111234' }] });
-    assert.equal(job.accepted[0].memo, 'ref ****************1234');
+  test('accepted memos come masked, so a card number TXNGUARD missed between other punctuation is not shown either', () => {
+    const job = normalizeJob({ accepted: [{ id: 'A', memo: 'card 4111,1111,1111,1111' }] });
+    assert.equal(job.accepted[0].memo, 'card ****,****,****,1111');
   });
 
   test('unknown values are dropped, maps are null-prototype', () => {

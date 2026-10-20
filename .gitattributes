@@ -1,0 +1,4 @@
+* text=auto eol=lf
+# Fixed-length records without line terminators: never touch line endings.
+*.DAT binary
+*.svg text eol=lf

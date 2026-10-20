@@ -1,0 +1,25 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Fixed-format COBOL: code lives in columns 8-72.
+[*.{cob,cbl,cpy}]
+indent_size = 4
+max_line_length = 72
+
+[*.{f90,f95,f03,f08}]
+max_line_length = 132
+
+[Makefile]
+indent_style = tab
+
+# Fixed-length records: no line terminators, trailing blanks are data.
+[*.DAT]
+insert_final_newline = false
+trim_trailing_whitespace = false

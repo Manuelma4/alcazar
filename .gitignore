@@ -1,0 +1,29 @@
+# Build output
+/build/
+*.o
+*.mod
+*.smod
+*.a
+*.so
+*.dylib
+*.dSYM/
+*.c.l.h
+*.c.h
+
+# Runtime data
+/var/
+*.DAT
+!examples/**/*.DAT
+
+# Secrets — never commit keys
+*.key
+.env
+.env.*
+
+# Tooling
+node_modules/
+coverage/
+.DS_Store
+
+# Local agent / editor configuration
+/.claude/

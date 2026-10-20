@@ -5,8 +5,13 @@
 // as untrusted data too.
 
 export const TXNIN_LENGTH = 200;
-export const LEDGER_LENGTH = 246;
-export const LEDGER_MAC_INPUT = 181;
+// Sealed outputs: fixed-length records, each followed by a line feed.
+export const ACCEPTED_LENGTH = 206;
+export const REJECTED_LENGTH = 64;
+// Ledger format v2: MAC = HMAC(K_ledger, first 247 bytes), RECORD-MAC and
+// PREV-MAC included.
+export const LEDGER_LENGTH = 312;
+export const LEDGER_MAC_INPUT = 247;
 
 const TXNIN_LAYOUT = [
   ['id', 12],
@@ -40,6 +45,28 @@ export function txnInFile(transactions) {
 
 export class RecordError extends Error {}
 
+/**
+ * Cut a file into fixed-length records that each end in a line feed,
+ * exactly as LEDGERCK reads it: a short or unterminated chunk is kept, with
+ * `complete: false`, so a verifier can say where the file breaks.
+ * @returns {{ data: string, complete: boolean }[]}
+ */
+export function fixedRecords(text, length) {
+  const out = [];
+  for (let at = 0; at < text.length; at += length + 1) {
+    const chunk = text.slice(at, at + length + 1);
+    out.push({ data: chunk.slice(0, length), complete: chunk.length === length + 1 && chunk.endsWith('\n') });
+  }
+  return out;
+}
+
+function strictRecords(text, length, what) {
+  return fixedRecords(text, length).map(({ data, complete }) => {
+    if (!complete || !/^[\x20-\x7e]*$/.test(data)) throw new RecordError(`bad ${what} record`);
+    return data;
+  });
+}
+
 function lines(text) {
   if (text === '') return [];
   if (!text.endsWith('\n')) throw new RecordError('missing final newline');
@@ -55,11 +82,9 @@ function requirePattern(value, pattern, what) {
   return value;
 }
 
-/** ACCEPTED.DAT (206 bytes, trailing blanks trimmed by LINE SEQUENTIAL). */
+/** ACCEPTED.DAT: 206-byte records. */
 export function parseAccepted(text) {
-  return lines(text).map((raw) => {
-    if (raw.length < 147 || raw.length > 206 || !/^[\x20-\x7e]*$/.test(raw)) throw new RecordError('bad accepted record');
-    const line = raw.padEnd(206, ' ');
+  return strictRecords(text, ACCEPTED_LENGTH, 'accepted').map((line) => {
     const pan = field(line, 147, 19).trimEnd();
     return {
       id: requirePattern(field(line, 0, 12).trimEnd(), /^[A-Z0-9-]{1,12}$/, 'id'),
@@ -77,11 +102,9 @@ export function parseAccepted(text) {
   });
 }
 
-/** REJECTED.DAT (64 bytes). */
+/** REJECTED.DAT: 64-byte records. */
 export function parseRejected(text) {
-  return lines(text).map((raw) => {
-    if (raw.length < 22 || raw.length > 64 || !/^[\x20-\x7e]*$/.test(raw)) throw new RecordError('bad rejected record');
-    const line = raw.padEnd(64, ' ');
+  return strictRecords(text, REJECTED_LENGTH, 'rejected').map((line) => {
     return {
       line: Number(requirePattern(field(line, 0, 6), /^\d{6}$/, 'line number')),
       legacyId: field(line, 6, 12).trimEnd(),
@@ -92,28 +115,36 @@ export function parseRejected(text) {
   });
 }
 
-/** LEDGER.DAT (246 bytes, `|`-separated fixed fields). */
+/** LEDGER.DAT, format v2: 312-byte `|`-separated records. */
 export function parseLedger(text) {
-  return lines(text).map(parseLedgerLine);
+  return strictRecords(text, LEDGER_LENGTH, 'ledger').map(parseLedgerLine);
 }
 
+const LEDGER_SEPARATORS = [6, 8, 21, 36, 41, 58, 62, 97, 117, 182, 247];
+
+/**
+ * One ledger entry, checked exactly as LEDGERCK checks its format: every
+ * separator in place, printable ASCII, numeric fields numeric, the three
+ * MACs 64 lower-case hex digits. The other fields are covered by the MAC.
+ */
 export function parseLedgerLine(raw) {
-  if (raw.length !== LEDGER_LENGTH || !/^[\x20-\x7e]*$/.test(raw)) throw new RecordError('bad ledger line');
-  const parts = raw.split('|');
-  if (parts.length !== 11) throw new RecordError('bad ledger separators');
-  const [seq, type, id, timestamp, code, amount, currency, fromMasked, panLast4, prev, mac] = parts;
+  if (raw.length !== LEDGER_LENGTH || !/^[\x20-\x7e]*$/.test(raw) || LEDGER_SEPARATORS.some((at) => raw[at] !== '|')) {
+    throw new RecordError('bad ledger line');
+  }
   return {
-    seq: Number(requirePattern(seq, /^\d{6}$/, 'sequence')),
-    type: requirePattern(type, /^[AR]$/, 'entry type'),
-    id: id.trimEnd(),
-    timestamp,
-    code: requirePattern(code, /^(A000|E\d{3})$/, 'code'),
-    amountCents: String(BigInt(requirePattern(amount, /^\d{15}$/, 'amount'))),
-    currency: currency.trimEnd(),
-    fromMasked: fromMasked.trimEnd(),
-    panLast4: panLast4.trimEnd(),
-    prev: requirePattern(prev, /^[0-9a-f]{64}$/, 'previous MAC'),
-    mac: requirePattern(mac, /^[0-9a-f]{64}$/, 'MAC'),
+    seq: Number(requirePattern(field(raw, 0, 6), /^\d{6}$/, 'sequence')),
+    type: requirePattern(field(raw, 7, 1), /^[AR]$/, 'entry type'),
+    id: field(raw, 9, 12).trimEnd(),
+    timestamp: field(raw, 22, 14),
+    code: field(raw, 37, 4),
+    sign: requirePattern(field(raw, 42, 1), /^[+?-]$/, 'sign'),
+    amountCents: String(BigInt(requirePattern(field(raw, 43, 15), /^\d{15}$/, 'amount'))),
+    currency: field(raw, 59, 3).trimEnd(),
+    fromMasked: field(raw, 63, 34).trimEnd(),
+    panLast4: field(raw, 98, 19).trimEnd(),
+    recordMac: requirePattern(field(raw, 118, 64), /^[0-9a-f]{64}$/, 'record MAC'),
+    prev: requirePattern(field(raw, 183, 64), /^[0-9a-f]{64}$/, 'previous MAC'),
+    mac: requirePattern(field(raw, 248, 64), /^[0-9a-f]{64}$/, 'MAC'),
     raw,
   };
 }
@@ -150,7 +181,7 @@ export function parseLedgerck(stdout) {
   const line = stdout.trim();
   let m = /^ALZ-LEDGER\|STATUS=OK\|ENTRIES=(\d{6})\|HEAD=([0-9a-f]{64})$/.exec(line);
   if (m) return { valid: true, entries: Number(m[1]), head: m[2], brokenAt: null, reason: null };
-  m = /^ALZ-LEDGER\|STATUS=BROKEN\|ENTRIES=(\d{6})\|SEQ=(\d{6})\|REASON=([A-Z-]{1,12})$/.exec(line);
+  m = /^ALZ-LEDGER\|STATUS=BROKEN\|ENTRIES=(\d{6})\|SEQ=(\d{6})\|REASON=([A-Z-]{1,16})$/.exec(line);
   if (m) return { valid: false, entries: Number(m[1]), head: null, brokenAt: Number(m[2]), reason: m[3] };
   throw new RecordError('unexpected LEDGERCK output');
 }

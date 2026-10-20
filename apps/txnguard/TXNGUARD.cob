@@ -6,13 +6,16 @@
       *            accounts and seal every decision in the HMAC-chained
       *            audit ledger (Seal).
       *
-      *   stdin  the 256-bit master key, 64 lower-case hex digits
+      *   stdin  K-ledger, then K-token: one line of 64 lower-case hex
+      *          digits each (the master key stays in Gatehouse)
       *   args   the job id: 1-32 characters from a-z 0-9 -
       *
       *   in     TXNIN.DAT     fixed-length 200-byte records
       *   out    ACCEPTED.DAT  normalised, pseudonymised transfers
       *          REJECTED.DAT  one line per rejected record
-      *          LEDGER.DAT    one HMAC-sealed line per record
+      *          LEDGER.DAT    one HMAC-sealed line per record, which
+      *                        also seals its ACCEPTED or REJECTED
+      *                        record (ledger format v2)
       *          SUMMARY.DAT   KEY=VALUE run summary
       *
       *   Return codes   0 all accepted      4 some rejected
@@ -37,14 +40,18 @@
            SELECT TXN-IN   ASSIGN TO "TXNIN.DAT"
                            ORGANIZATION IS SEQUENTIAL
                            FILE STATUS IS WS-FS-IN.
+      *    Sealed outputs are fixed-length records that end in a line
+      *    feed: LINE SEQUENTIAL would trim trailing blanks on WRITE,
+      *    and its readers see a normalised view of the file, not its
+      *    bytes. These files hold exactly the bytes that were MACed.
            SELECT TXN-OK   ASSIGN TO "ACCEPTED.DAT"
-                           ORGANIZATION IS LINE SEQUENTIAL
+                           ORGANIZATION IS SEQUENTIAL
                            FILE STATUS IS WS-FS-OK.
            SELECT TXN-REJ  ASSIGN TO "REJECTED.DAT"
-                           ORGANIZATION IS LINE SEQUENTIAL
+                           ORGANIZATION IS SEQUENTIAL
                            FILE STATUS IS WS-FS-REJ.
            SELECT LEDGER   ASSIGN TO "LEDGER.DAT"
-                           ORGANIZATION IS LINE SEQUENTIAL
+                           ORGANIZATION IS SEQUENTIAL
                            FILE STATUS IS WS-FS-LEDGER.
            SELECT SUMMARY  ASSIGN TO "SUMMARY.DAT"
                            ORGANIZATION IS LINE SEQUENTIAL
@@ -58,7 +65,7 @@
        FD  TXN-REJ.
        COPY ALZREJ.
        FD  LEDGER.
-       01  LEDGER-RECORD               PIC X(246).
+       01  LEDGER-RECORD               PIC X(313).
        FD  SUMMARY.
        01  SUMMARY-RECORD              PIC X(80).
 
@@ -500,6 +507,10 @@
                                     BY REFERENCE TI-PAN TA-PAN-MASKED
            END-IF
            MOVE TI-MEMO TO TA-MEMO
+           MOVE X"0A" TO TA-EOL
+           MOVE TA-DATA TO ALZ-REC-DATA
+           MOVE 206 TO ALZ-REC-LEN
+           PERFORM 4800-RECORD-MAC
            WRITE TXN-OK-REC
            IF WS-FS-OK NOT = "00"
                PERFORM 8000-WRITE-FAILED
@@ -552,11 +563,25 @@
            MOVE WS-REASON TO TR-CODE
            MOVE WS-FIELD TO TR-FIELD
            MOVE WS-DETAIL TO TR-DETAIL
+           MOVE X"0A" TO TR-EOL
+           MOVE TR-DATA TO ALZ-REC-DATA
+           MOVE 64 TO ALZ-REC-LEN
+           PERFORM 4800-RECORD-MAC
            WRITE TXN-REJ-REC
            IF WS-FS-REJ NOT = "00"
                PERFORM 8000-WRITE-FAILED
            END-IF
            ADD 1 TO WS-REJECTED.
+
+      * The record MAC goes into this record's ledger entry: editing
+      * the record later breaks the link even though the chain holds.
+       4800-RECORD-MAC.
+           PERFORM ALZ-RECORD-MAC
+           IF NOT ALZ-OK
+               DISPLAY "TXNGUARD: record MAC failed" UPON SYSERR
+               MOVE 12 TO WS-RETURN-CODE
+               SET WS-EOF TO TRUE
+           END-IF.
 
       * Every record, accepted or rejected, is sealed: the MAC covers
       * the entry and the previous MAC, so editing, deleting or
@@ -575,9 +600,13 @@
            MOVE TI-TS TO LG-TS
            CALL "ALZSANIT" USING BY CONTENT "D" BY REFERENCE LG-TS
            MOVE WS-REASON TO LG-CODE
+      *    The sign is sealed too: "-500.00" is recorded as an attempt
+      *    to move -500.00, not 500.00.
            IF WS-AMOUNT-RC = 0
+               MOVE WS-SIGN TO LG-SIGN
                MOVE WS-CENTS TO LG-AMOUNT-CENTS
            ELSE
+               MOVE "?" TO LG-SIGN
                MOVE 0 TO LG-AMOUNT-CENTS
            END-IF
            MOVE TI-CURRENCY TO LG-CURRENCY
@@ -591,9 +620,10 @@
            CALL "ALZSANIT" USING BY CONTENT "D" BY REFERENCE WS-WORK
            CALL "ALZMASK" USING BY CONTENT "L"
                                 BY REFERENCE WS-WORK LG-PAN-LAST4
+           MOVE ALZ-REC-MAC TO LG-RECORD-MAC
            MOVE WS-PREV-MAC TO LG-PREV-MAC
            MOVE 32 TO ALZ-KEY-LEN
-           MOVE 181 TO ALZ-MSG-LEN
+           MOVE 247 TO ALZ-MSG-LEN
            CALL "alz_hmac_sha256_hex" USING ALZ-LEDGER-KEY ALZ-KEY-LEN
                                             LG-MAC-INPUT ALZ-MSG-LEN
                                             LG-MAC

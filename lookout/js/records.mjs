@@ -11,14 +11,15 @@ export const ACCEPTED_LAYOUT = Object.freeze([
 export const REJECTED_LAYOUT = Object.freeze([
   ['LINE-NO', 6, '9'], ['TXN-ID', 12, 'x'], ['CODE', 4, 'x'], ['FIELD', 12, 'x'], ['DETAIL', 30, 'x'],
 ]);
+/** Ledger format v2. AMOUNT is the sign ("+", "-", or "?" when it did not parse) and 15 digits of cents. */
 export const LEDGER_LAYOUT = Object.freeze([
   ['SEQ', 6, '9'], ['T', 1, 'x'], ['TXN-ID', 12, 'x'], ['TS', 14, '9'], ['CODE', 4, 'x'],
-  ['AMOUNT-CENTS', 15, '9'], ['CCY', 3, 'x'], ['FROM-MASKED', 34, 'x'], ['PAN-LAST4', 19, 'x'],
-  ['PREV-MAC', 64, 'x'], ['MAC', 64, 'x'],
+  ['AMOUNT', 16, 'x'], ['CCY', 3, 'x'], ['FROM-MASKED', 34, 'x'], ['PAN-LAST4', 19, 'x'],
+  ['RECORD-MAC', 64, 'x'], ['PREV-MAC', 64, 'x'], ['MAC', 64, 'x'],
 ]);
-export const LEDGER_LENGTH = 246;
-/** MAC = HMAC-SHA256(K_ledger, first 181 bytes): everything before the final "|". */
-export const LEDGER_MAC_INPUT = 181;
+export const LEDGER_LENGTH = 312;
+/** MAC = HMAC-SHA256(K_ledger, first 247 bytes): everything before the final "|", RECORD-MAC and PREV-MAC included. */
+export const LEDGER_MAC_INPUT = 247;
 
 export function layoutWidth(layout, separator = '') {
   return layout.reduce((sum, [, len]) => sum + len, 0) + separator.length * (layout.length - 1);

@@ -14,7 +14,7 @@ import {
 } from '../js/format.mjs';
 import { STRINGS, t } from '../js/strings.mjs';
 import {
-  ACCEPTED_LAYOUT, LEDGER_LAYOUT, LEDGER_LENGTH, REJECTED_LAYOUT, acceptedRecord, diffRanges, layoutWidth, ledgerSegments,
+  ACCEPTED_LAYOUT, LEDGER_LAYOUT, LEDGER_LENGTH, LEDGER_MAC_INPUT, REJECTED_LAYOUT, acceptedRecord, diffRanges, layoutWidth, ledgerSegments,
   rejectedRecord, ruler,
 } from '../js/records.mjs';
 import { parseBatchText, projectInput } from '../js/batch.mjs';
@@ -157,13 +157,15 @@ describe('records: fixed-width layouts from ARCHITECTURE §2', () => {
   });
 
   test('cuts a real ledger line into its fields', () => {
-    const raw = '000001|A|TX-00000001 |20251020031757|A000|000000000000589|EUR|PT63*****************2070         |************8474   |aab577afb6d288b6e8b2f0ad4a45226a35a4cf502704d63862e7a89e0e0dc74f|a92d04eb57c27dea2598ca99d97519f2a6efa8ed0de7d57b4a04b56e9889ba79';
-    assert.equal(raw.length, 246);
+    const raw = '000001|A|TX-0001     |20251020101500|A000|+000000000012500|EUR|FR76*******************0189       |                   |be7ff1b952683e31d0af582d6cc0928ecb1fcf0a5ae9c324c4d7bdfc8035733c|efcdc5e78127afd1ccf2b144135f697b733d1060a94f38e36936cc6c6ef03f73|6a0b3914f84974087f6762fc621dff29d9f41e91a3577300b0eae6c81c1dfe21';
+    assert.equal(raw.length, LEDGER_LENGTH);
     const fields = ledgerSegments(raw).filter((s) => !s.separator);
-    assert.equal(fields.length, 11);
+    assert.equal(fields.length, 12);
     assert.equal(fields.find((f) => f.name === 'CODE').text, 'A000');
-    assert.equal(fields.find((f) => f.name === 'MAC').start, 182);
-    assert.equal(raw.lastIndexOf('|'), 181, 'MAC input is the first 181 bytes');
+    assert.equal(fields.find((f) => f.name === 'AMOUNT').text, '+000000000012500');
+    assert.equal(fields.find((f) => f.name === 'RECORD-MAC').start, 118);
+    assert.equal(fields.find((f) => f.name === 'MAC').start, 248);
+    assert.equal(raw.lastIndexOf('|'), LEDGER_MAC_INPUT, 'MAC input is the first 247 bytes');
   });
 
   test('3270 ruler and diffs', () => {

@@ -193,4 +193,4 @@ Do not let the web talk to the batch program directly. Put a gate in front
 of it that never uses a shell, passes secrets on stdin, writes fixed-length
 records it validated, parses the outputs as untrusted data, and verifies the
 audit trail independently. That is what [Gatehouse](../gatehouse/README.md)
-does — and the [Siege](../README.md#the-siege) proves it against 28 attacks.
+does — and the [Siege](../README.md#the-siege) proves it against 29 attacks.

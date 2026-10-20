@@ -6,13 +6,23 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError } from './http.mjs';
-import { deriveKeys, genesisMac, keyLines, tamperLedger, verifyLedger } from './ledger.mjs';
+import { deriveKeys, genesisMac, keyLines, tamperLedger, tamperRecord, trimRecords, verifyLedger } from './ledger.mjs';
 import { reasonText } from './messages.mjs';
 import {
   RecordError, parseAccepted, parseLedger, parseLedgerck, parseRejected, parseRisk, parseSummary, txnInFile,
 } from './records.mjs';
 import { Gate } from './gate.mjs';
 import { runLegacy } from './runner.mjs';
+
+/** A file the job should have; missing reads as empty (the verifiers then say what is gone). */
+async function readJobFile(dir, name) {
+  try {
+    return await readFile(join(dir, name), 'latin1');
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  }
+}
 
 export class Pipeline {
   /**
@@ -82,18 +92,18 @@ export class Pipeline {
     let summary;
     let accepted;
     let rejected;
-    let ledgerText;
+    let entries;
     try {
       summary = parseSummary(await readFile(join(dir, 'SUMMARY.DAT'), 'latin1'));
       accepted = parseAccepted(await readFile(join(dir, 'ACCEPTED.DAT'), 'latin1'));
       rejected = parseRejected(await readFile(join(dir, 'REJECTED.DAT'), 'latin1'));
-      ledgerText = await readFile(join(dir, 'LEDGER.DAT'), 'latin1');
+      entries = parseLedger(await readFile(join(dir, 'LEDGER.DAT'), 'latin1'));
     } catch (error) {
       if (error instanceof RecordError) throw new HttpError(502, 'P-LEGACY', 'TXNGUARD produced malformed output');
       throw error;
     }
     if (summary.job !== jobId || summary.records !== transactions.length || summary.accepted !== accepted.length ||
-        summary.rejected !== rejected.length) {
+        summary.rejected !== rejected.length || summary.ledgerEntries !== entries.length) {
       throw new HttpError(502, 'P-LEGACY', 'TXNGUARD output is inconsistent');
     }
     stages.push({
@@ -130,7 +140,6 @@ export class Pipeline {
       detail: { entries: verification.entries, verifiers: verification.verifiedBy.length },
     });
 
-    const entries = parseLedger(ledgerText);
     const job = {
       job: jobId,
       createdAt: new Date().toISOString(),
@@ -168,13 +177,15 @@ export class Pipeline {
   }
 
   /**
-   * Verify a job's ledger three ways: LEDGERCK (COBOL + Fortran HMAC), an
-   * independent Node.js / OpenSSL implementation, and the anchor (entry
-   * count and head MAC recorded when the job was sealed).
+   * Verify a job's ledger — the chain and every ACCEPTED / REJECTED record
+   * it seals — three ways: LEDGERCK (COBOL + Fortran HMAC), an independent
+   * Node.js / OpenSSL implementation, and the anchor (entry count and head
+   * MAC recorded when the job was sealed).
    */
   async verify(state) {
     const started = performance.now();
-    const text = await readFile(join(state.dir, 'LEDGER.DAT'), 'latin1');
+    const text = await readJobFile(state.dir, 'LEDGER.DAT');
+    const records = { accepted: await readJobFile(state.dir, 'ACCEPTED.DAT'), rejected: await readJobFile(state.dir, 'REJECTED.DAT') };
     const check = await this.legacy('ledgerck', [state.jobId], state.dir, this.checkKeys);
     if (check.code !== 0 && check.code !== 4) {
       throw new HttpError(502, 'P-LEGACY', 'LEDGERCK failed', { legacyRc: check.code });
@@ -185,7 +196,7 @@ export class Pipeline {
     } catch {
       throw new HttpError(502, 'P-LEGACY', 'LEDGERCK produced malformed output');
     }
-    const node = verifyLedger(text, this.keys.ledger, state.jobId);
+    const node = verifyLedger(text, this.keys.ledger, state.jobId, records);
     const agree = cobol.valid === node.valid && cobol.entries === node.entries && cobol.reason === node.reason &&
       cobol.brokenAt === node.brokenAt && cobol.head === node.head;
     if (!agree) {
@@ -207,12 +218,28 @@ export class Pipeline {
     return { ...result, ms: Math.round(performance.now() - started) };
   }
 
-  /** Demo only: rewrite the job's ledger file as an insider would. */
+  /**
+   * Demo only: rewrite the job's files as an insider would — the ledger
+   * itself, or (mode "record") the decision record behind an entry.
+   */
   async tamper(state, seq, mode) {
-    const path = join(state.dir, 'LEDGER.DAT');
-    const changed = tamperLedger(await readFile(path, 'latin1'), seq, mode);
-    await writeFile(path, changed.text, { encoding: 'latin1', mode: 0o600 });
-    return { entries: parseLedger(changed.text), before: changed.before, after: changed.after };
+    const write = (name, text) => writeFile(join(state.dir, name), text, { encoding: 'latin1', mode: 0o600 });
+    const ledgerText = await readJobFile(state.dir, 'LEDGER.DAT');
+    const records = { accepted: await readJobFile(state.dir, 'ACCEPTED.DAT'), rejected: await readJobFile(state.dir, 'REJECTED.DAT') };
+    if (mode === 'record') {
+      const changed = tamperRecord(ledgerText, records, seq);
+      await write(changed.file, changed.text);
+      return { entries: parseLedger(ledgerText), file: changed.file, before: changed.before, after: changed.after };
+    }
+    const changed = tamperLedger(ledgerText, seq, mode);
+    await write('LEDGER.DAT', changed.text);
+    if (mode === 'truncate') {
+      // The records go too: what is left is a valid, shorter ledger.
+      const trimmed = trimRecords(changed.text, records);
+      await write('ACCEPTED.DAT', trimmed.accepted);
+      await write('REJECTED.DAT', trimmed.rejected);
+    }
+    return { entries: parseLedger(changed.text), file: 'LEDGER.DAT', before: changed.before, after: changed.after };
   }
 
   /** Overwrite the key material held by this pipeline (on shutdown). */

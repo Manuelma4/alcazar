@@ -37,7 +37,7 @@ ledger MAC) plus process start-up.
 
 **OpenSSL is ten times faster at bulk hashing** — it uses the ARMv8 SHA-256
 instructions, while the Fortran kernel is portable integer code. That does
-not matter for 181-byte ledger entries, but it is the reason the roadmap
+not matter for 247-byte ledger entries, but it is the reason the roadmap
 lists a pluggable crypto backend behind the same `alz.h` ABI.
 
 **Watchtower is fast enough to run on every keystroke**, which is what

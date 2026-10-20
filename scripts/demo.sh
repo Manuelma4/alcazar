@@ -43,7 +43,7 @@ echo "== LEDGERCK (COBOL + Fortran HMAC) ==========================="
 printf '%s\n' "$k_ledger" | run "$bin/ledgerck" "$job" || true
 echo
 echo "Tampering with the amount of entry 2..."
-awk 'NR == 2 { $0 = substr($0, 1, 42) "000000099999999" substr($0, 58) } { print }' \
+awk 'NR == 2 { $0 = substr($0, 1, 43) "000000099999999" substr($0, 59) } { print }' \
   LEDGER.DAT > LEDGER.TMP && mv LEDGER.TMP LEDGER.DAT
 printf '%s\n' "$k_ledger" | run "$bin/ledgerck" "$job" || true
 

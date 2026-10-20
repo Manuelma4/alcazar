@@ -103,8 +103,9 @@ ivory `#FFFCF5`, ink `#1B2236`.
   Reduced motion draws the final state at once.
 * **Seal chain** — tiles joined by gold links; verification classifies every
   entry, the broken one cracks, later ones dim as unverifiable, missing entries
-  (delete, truncate) appear as ghost tiles. The inspector shows the 246-byte line
-  under a 3270 ruler with the 181-byte MAC-input boundary marked.
+  (delete, truncate) appear as ghost tiles. The inspector shows the 312-byte line
+  under a 3270 ruler with the 247-byte MAC-input boundary marked; a rewritten
+  ACCEPTED or REJECTED record is shown in its own layout, before and after.
 * **Siege** — cards resolve to a shield in the containing layer's colour
   ("Contained by COBOL · E403") or fail loudly; the full siege ends in a wax
   seal ringed with one dot per scenario.

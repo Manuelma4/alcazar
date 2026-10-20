@@ -120,12 +120,12 @@
                MOVE 0 TO ALZ-RC
            END-IF.
 
-      * Genesis MAC for this job:
-      *   HMAC-SHA256(K-ledger, "alcazar/genesis|" || job id).
+      * Genesis MAC for this job (ledger format v2):
+      *   HMAC-SHA256(K-ledger, "alcazar/genesis/v2|" || job id).
        ALZ-DERIVE-GENESIS.
            MOVE SPACES TO ALZ-KDF-INFO
            MOVE 1 TO ALZ-KDF-LEN
-           STRING "alcazar/genesis|" ALZ-JOB-ID(1:ALZ-JOB-LEN)
+           STRING "alcazar/genesis/v2|" ALZ-JOB-ID(1:ALZ-JOB-LEN)
                DELIMITED BY SIZE
                INTO ALZ-KDF-INFO WITH POINTER ALZ-KDF-LEN
            SUBTRACT 1 FROM ALZ-KDF-LEN
@@ -138,6 +138,16 @@
                DISPLAY ALZ-PROGRAM-NAME ": genesis MAC failed"
                    UPON SYSERR
            END-IF.
+
+      * Record MAC: binds an ACCEPTED or REJECTED record to its
+      * ledger entry. Set ALZ-REC-DATA and ALZ-REC-LEN first.
+       ALZ-RECORD-MAC.
+           ADD 15 TO ALZ-REC-LEN GIVING ALZ-MSG-LEN
+           MOVE 32 TO ALZ-KEY-LEN
+           CALL "alz_hmac_sha256_hex" USING ALZ-LEDGER-KEY ALZ-KEY-LEN
+                                            ALZ-REC-INPUT ALZ-MSG-LEN
+                                            ALZ-REC-MAC
+                                  RETURNING ALZ-RC.
 
        ALZ-WIPE-KEYS.
            MOVE 32 TO ALZ-KEY-LEN

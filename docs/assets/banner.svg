@@ -247,7 +247,7 @@
     <text x="474" y="258" fill="#E8ECF6" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" opacity="0.92">Security for the legacy code that still runs the world.</text>
     <g font-family="ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace" font-size="19" fill="#8B95AE">
       <text x="474" y="318"><tspan fill="#22B8A7">COBOL</tspan>  ·  <tspan fill="#F2A93B">Fortran</tspan>  ·  <tspan fill="#4C7DFF">hardened gateway</tspan>  ·  <tspan fill="#D9B45A">HMAC ledger</tspan>  ·  <tspan fill="#9B7BFF">SAST</tspan></text>
-      <text x="474" y="352">zero dependencies · strict CSP · 28 attacks contained</text>
+      <text x="474" y="352">zero dependencies · strict CSP · 29 attacks contained</text>
     </g>
   </g>
   <rect x="1" y="1" width="1278" height="418" rx="27" fill="none" stroke="#D9B45A" stroke-opacity="0.35" stroke-width="2"/>

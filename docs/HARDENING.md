@@ -237,9 +237,14 @@ then `KLMNOPQRST` (06), then a phantom `T` (00), then end of file. Combined
 with CR stripping, a LINE SEQUENTIAL reader verifies a *normalised* view of
 the file, not its bytes.
 
-*Defence:* the Seal ledger is read as fixed-length records whose last byte
-must be a line feed (see the ledger format v2 below), and the Node verifier
-rejects a missing final newline the same way.
+*Defence:* TXNGUARD writes the ledger and the records it seals (`ACCEPTED`,
+`REJECTED`) as fixed-length records that end in a line feed — nothing
+trimmed — and LEDGERCK reads them back as fixed-length records whose last
+byte must be that line feed (ledger format v2, [ARCHITECTURE.md](ARCHITECTURE.md#2-record-layouts-fixed-width-ascii)).
+The Node verifier cuts the files the same way, and
+`gatehouse/test/agreement.test.mjs` damages them at random (bytes flipped,
+inserted and deleted, CRs, NULs, records duplicated, dropped and swapped):
+the two verifiers must return the same verdict every time.
 
 ### Not a vulnerability, but you will see it
 

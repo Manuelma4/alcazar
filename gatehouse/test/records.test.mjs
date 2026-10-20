@@ -34,23 +34,27 @@ describe('TXNIN records', () => {
 });
 
 describe('legacy output parsers', () => {
-  it('parses ACCEPTED lines whose trailing blanks were trimmed', () => {
+  it('parses fixed-length ACCEPTED records', () => {
     const line = 'TX-0015     20251020102900' + '23183b3f60a528b1' + '8916d2ad45793711' +
       'ES91****************1332'.padEnd(34) + 'DE89**************3000'.padEnd(34) + '000000004800000EURMOB';
-    const [txn] = parseAccepted(`${line}\n`);
+    const [txn] = parseAccepted(`${line.padEnd(206)}\n`);
     assert.equal(txn.amountCents, '4800000');
     assert.equal(txn.panMasked, null);
     assert.equal(txn.memo, '');
   });
 
-  it('rejects malformed ACCEPTED data', () => {
+  it('rejects malformed ACCEPTED data, trimmed records included', () => {
+    const line = 'TX-0015     20251020102900' + '23183b3f60a528b1' + '8916d2ad45793711' +
+      'ES91****************1332'.padEnd(34) + 'DE89**************3000'.padEnd(34) + '000000004800000EURMOB';
+    assert.throws(() => parseAccepted(`${line}\n`), RecordError);
     assert.throws(() => parseAccepted('short\n'), RecordError);
-    assert.throws(() => parseAccepted('no final newline'), RecordError);
+    assert.throws(() => parseAccepted(line.padEnd(206)), RecordError);
   });
 
-  it('parses REJECTED lines', () => {
-    const [r] = parseRejected('000013A??? -?? ?  E101TXN-ID      POS=002\n');
+  it('parses fixed-length REJECTED records', () => {
+    const [r] = parseRejected(`${'000013A??? -?? ?  E101TXN-ID      POS=002'.padEnd(64)}\n`);
     assert.deepEqual(r, { line: 13, legacyId: 'A??? -?? ?', code: 'E101', field: 'TXN-ID', detail: 'POS=002' });
+    assert.throws(() => parseRejected('000013A??? -?? ?  E101TXN-ID      POS=002\n'), RecordError);
   });
 
   it('parses SUMMARY files and their per-currency totals', () => {

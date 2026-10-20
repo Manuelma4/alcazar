@@ -12,7 +12,7 @@ import { href } from '../router.mjs';
 import { runDemo, tamperLedger, verifyLedger } from '../actions.mjs';
 import { chainStates } from '../ledgerstate.mjs';
 import { formatInt, formatMoney, formatMs, formatTimestamp, shortHash } from '../format.mjs';
-import { LEDGER_LAYOUT, LEDGER_MAC_INPUT, diffRanges } from '../records.mjs';
+import { ACCEPTED_LAYOUT, LEDGER_LAYOUT, LEDGER_MAC_INPUT, REJECTED_LAYOUT, diffRanges } from '../records.mjs';
 import { recordView } from '../recordview.mjs';
 import {
   banner, button, card, chip, copyButton, emptyState, errorBanner, preserveFocus, segmented, setBusy, statusLine, viewHeader,
@@ -21,7 +21,14 @@ import { toast } from '../live.mjs';
 
 const WINDOW = 40;
 const VERIFIERS = ['cobol-fortran', 'node-openssl', 'anchor'];
-const MODES = ['amount', 'delete', 'truncate'];
+const MODES = ['amount', 'record', 'delete', 'truncate'];
+const MODE_ICONS = { amount: 'pen', record: 'file', delete: 'minus-circle', truncate: 'scissors' };
+/** The layout of the file a tamper rewrote. */
+const FILE_LAYOUTS = {
+  'LEDGER.DAT': [LEDGER_LAYOUT, '|'],
+  'ACCEPTED.DAT': [ACCEPTED_LAYOUT, ''],
+  'REJECTED.DAT': [REJECTED_LAYOUT, ''],
+};
 
 /** Per-view state that survives navigation. */
 const ui = { selectedSeq: null, start: 0, entry: null, mode: 'amount', job: null, notice: null };
@@ -226,7 +233,7 @@ function tamperCard(job, demoAction) {
     name: 'tamper-mode',
     legend: t('seal.tamper.mode'),
     value: ui.mode,
-    options: MODES.map((m) => ({ value: m, label: t(`seal.mode.${m}`), icon: m === 'amount' ? 'pen' : m === 'delete' ? 'minus-circle' : 'scissors' })),
+    options: MODES.map((m) => ({ value: m, label: t(`seal.mode.${m}`), icon: MODE_ICONS[m] })),
     onChange: (m) => {
       ui.mode = m;
       desc.textContent = t(`seal.mode.${m}.desc`);
@@ -258,19 +265,21 @@ function tamperCard(job, demoAction) {
 function diffCard(last) {
   const ranges = last.before && last.after ? diffRanges(last.before, last.after) : [];
   const seq = last.entrySeq ?? last.seq;
+  const file = FILE_LAYOUTS[last.file] ? last.file : 'LEDGER.DAT';
+  const [layout, separator] = FILE_LAYOUTS[file];
   return card({
     title: t('seal.diff.title'),
-    sub: `${t(`seal.mode.${last.mode}`)} \u{00B7} ${t('seal.tamper.entry')} ${seq}`,
+    sub: `${t(`seal.mode.${last.mode}`)} \u{00B7} ${t('seal.tamper.entry')} ${seq} \u{00B7} ${file}`,
     className: 'diff-card',
     body: h('div', { class: 'grid grid-2' },
       h('div', { class: 'stack' },
         h('p', { class: 'eyebrow' }, t('seal.diff.before')),
-        last.before ? recordView(last.before, LEDGER_LAYOUT, { separator: '|', changed: ranges, caption: t('seal.diff.before') }) : null),
+        last.before ? recordView(last.before, layout, { separator, changed: ranges, caption: `${file} \u{00B7} ${t('seal.diff.before')}` }) : null),
       h('div', { class: 'stack' },
         h('p', { class: 'eyebrow ink-danger' }, t('seal.diff.after')),
         last.after
-          ? recordView(last.after, LEDGER_LAYOUT, { separator: '|', changed: ranges, caption: t('seal.diff.after') })
-          : banner({ tone: 'danger', icon: last.mode === 'truncate' ? 'scissors' : 'minus-circle', title: t('seal.diff.removed') }))),
+          ? recordView(last.after, layout, { separator, changed: ranges, caption: `${file} \u{00B7} ${t('seal.diff.after')}` })
+          : banner({ tone: 'danger', icon: MODE_ICONS[last.mode] ?? 'minus-circle', title: t('seal.diff.removed') }))),
   });
 }
 
@@ -400,7 +409,8 @@ function entryTile(entry, state, selected) {
         h('span', { class: 'sr-only' }, typeLabel)),
       h('span', { class: 'tile-code mono' }, entry.code)),
     h('span', { class: 'tile-id mono' }, entry.id),
-    h('span', { class: 'tile-amt' }, entry.currency ? formatMoney(entry.amountCents || '0', entry.currency) : '\u{2014}'),
+    h('span', { class: 'tile-amt' }, entry.currency && entry.sign !== '?'
+      ? formatMoney(`${entry.sign === '-' ? '-' : ''}${entry.amountCents || '0'}`, entry.currency) : '\u{2014}'),
     stateLabel ? h('span', { class: 'sr-only' }, `, ${stateLabel}`) : null),
   h('span', { class: 'tile-mac' },
     h('span', { class: 'tile-mac-label' }, t('seal.tile.mac')),
@@ -424,7 +434,8 @@ function crack() {
 
 // ---------- inspector ----------
 function inspectorCard(entry, state, lastTamper) {
-  const changed = lastTamper && lastTamper.after && lastTamper.after === entry.raw && lastTamper.before
+  const changed = lastTamper && lastTamper.file !== 'ACCEPTED.DAT' && lastTamper.file !== 'REJECTED.DAT' &&
+    lastTamper.after && lastTamper.after === entry.raw && lastTamper.before
     ? diffRanges(lastTamper.before, lastTamper.after) : [];
   return card({
     title: t('seal.inspect.title', { seq: entry.seq }),
@@ -441,6 +452,7 @@ function inspectorCard(entry, state, lastTamper) {
         caption: t('seal.inspect.title', { seq: entry.seq }),
       }),
       h('dl', { class: 'kv' },
+        h('dt', null, 'RECORD-MAC'), h('dd', null, hashLine(entry.recordMac, 'RECORD-MAC')),
         h('dt', null, 'PREV-MAC'), h('dd', null, hashLine(entry.prev, 'PREV-MAC')),
         h('dt', null, 'MAC'), h('dd', null, hashLine(entry.mac, 'MAC'))),
     ],

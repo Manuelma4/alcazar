@@ -8,10 +8,11 @@
 export const STAGES = Object.freeze(['gatehouse', 'txnguard', 'fraudscan', 'seal']);
 export const SIGNALS = Object.freeze(['ZSCORE', 'STRUCTURING', 'VELOCITY', 'ENTROPY']);
 export const VERIFIERS = Object.freeze(['cobol-fortran', 'node-openssl', 'anchor']);
-export const LEDGER_REASONS = Object.freeze(['MAC-MISMATCH', 'CHAIN-BREAK', 'SEQ-GAP', 'FORMAT', 'HEAD-MISMATCH']);
+export const LEDGER_REASONS = Object.freeze(['MAC-MISMATCH', 'RECORD-MISMATCH', 'CHAIN-BREAK', 'SEQ-GAP', 'FORMAT', 'HEAD-MISMATCH']);
 export const VERDICTS = Object.freeze(['close', 'acceptable', 'marginal', 'nonconforming', 'insufficient']);
 export const SEVERITIES = Object.freeze(['critical', 'high', 'medium', 'low', 'info']);
-export const TAMPER_MODES = Object.freeze(['amount', 'delete', 'truncate']);
+export const TAMPER_MODES = Object.freeze(['amount', 'record', 'delete', 'truncate']);
+export const TAMPER_FILES = Object.freeze(['LEDGER.DAT', 'ACCEPTED.DAT', 'REJECTED.DAT']);
 
 export class ApiError extends Error {
   constructor({ status = 0, code = 'NETWORK', message = '', field = null, index = null, retryAfter = null, layer = null } = {}) {
@@ -109,10 +110,12 @@ function normalizeEntry(e) {
     id: str(x.id),
     timestamp: str(x.timestamp),
     code: str(x.code),
+    sign: oneOf(x.sign, ['+', '-', '?'], '?'),
     amountCents: str(x.amountCents),
     currency: str(x.currency),
     fromMasked: str(x.fromMasked),
     panLast4: str(x.panLast4),
+    recordMac: hex(x.recordMac),
     prev: hex(x.prev),
     mac: hex(x.mac),
     raw: str(x.raw),
@@ -243,6 +246,7 @@ function normalizeTamper(d) {
     tampered: bool(d.tampered),
     seq: num(d.seq),
     mode: oneOf(d.mode, TAMPER_MODES, str(d.mode)),
+    file: oneOf(d.file, TAMPER_FILES, 'LEDGER.DAT'),
     before: d.before === null || d.before === undefined ? null : str(d.before),
     after: d.after === null || d.after === undefined ? null : str(d.after),
   };

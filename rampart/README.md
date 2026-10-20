@@ -82,7 +82,7 @@ COBOL uses — usable from C, Python (`ctypes`), Rust or Go too. Every argument
 is passed by reference; every function returns an `int32_t` status.
 
 ```c
-int32_t keylen = 32, msglen = 181;
+int32_t keylen = 32, msglen = 247;
 char mac[64];
 if (alz_hmac_sha256_hex(key, &keylen, line, &msglen, mac) != ALZ_OK) abort();
 ```

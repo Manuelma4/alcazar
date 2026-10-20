@@ -27,7 +27,7 @@ is still standing — and still in use. Like the code it protects.
 | ![](https://img.shields.io/badge/-%20-D9B45A) | **Seal** | An HMAC-SHA256-chained audit ledger, verified twice (COBOL + Fortran, and OpenSSL) plus an external anchor | COBOL, Fortran |
 | ![](https://img.shields.io/badge/-%20-9B7BFF) | **[Watchtower](watchtower/)** | A static analyzer for the vulnerabilities specific to COBOL and Fortran, with SARIF output for GitHub code scanning | JavaScript |
 | ![](https://img.shields.io/badge/-%20-4C7DFF) | **[Gatehouse](gatehouse/)** | The only door: a hardened gateway that runs the legacy programs without a shell, with an allow-listed environment and resource limits | Node.js, zero dependencies |
-| ![](https://img.shields.io/badge/-%20-E5484D) | **Siege** | 28 attacks, each contained by a named layer — in the dashboard *and* in CI | Shared JavaScript |
+| ![](https://img.shields.io/badge/-%20-E5484D) | **Siege** | 29 attacks, each contained by a named layer — in the dashboard *and* in CI | Shared JavaScript |
 | ![](https://img.shields.io/badge/-%20-8B95AE) | **[Lookout](lookout/)** | The dashboard: watch batches flow through the fortress, tamper with the ledger, launch the Siege, scan code in the browser | HTML, CSS, JS — strict CSP, Trusted Types |
 
 <p align="center">
@@ -36,8 +36,8 @@ is still standing — and still in use. Like the code it protects.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/lookout-siege.png" alt="Siege: 28 of 28 attacks contained, stopped by Gatehouse, COBOL, Fortran and the Seal"><br><sub><b>Siege</b> — 28 real attacks against the live gateway, each contained by the layer that claims it.</sub></td>
-    <td width="50%"><img src="docs/assets/lookout-seal-chain.png" alt="Seal: the HMAC chain broken at entry 5 after an insider edited the amount, with the record shown byte for byte"><br><sub><b>Seal</b> — edit one byte of the ledger and the chain cracks exactly there.</sub></td>
+    <td width="50%"><img src="docs/assets/lookout-siege.png" alt="Siege: 29 of 29 attacks contained, stopped by Gatehouse, COBOL, Fortran and the Seal"><br><sub><b>Siege</b> — 29 real attacks against the live gateway, each contained by the layer that claims it.</sub></td>
+    <td width="50%"><img src="docs/assets/lookout-seal-chain.png" alt="Seal: the HMAC chain broken at entry 5 after an insider edited the amount, with the record shown byte for byte"><br><sub><b>Seal</b> — edit one byte of the ledger, or of a record it seals, and the chain cracks exactly there.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/assets/lookout-transactions.png" alt="Transactions: rejection reasons from TXNGUARD and the highest-risk transfers scored by FRAUDSCAN"><br><sub><b>Transactions</b> — why COBOL rejected each transfer, and what Fortran flagged.</sub></td>
@@ -117,9 +117,13 @@ flowchart LR
    history, structuring just under the 10,000 reporting threshold, velocity
    bursts and high-entropy memos (exfiltration).
 4. **Seal**: every record, accepted or rejected, is sealed with
-   `HMAC-SHA256(K_ledger, entry ‖ previous MAC)`. Gatehouse verifies the chain
-   with LEDGERCK *and* with Node's OpenSSL, and compares the head with the
-   anchor it kept — so even a truncated ledger is caught.
+   `HMAC-SHA256(K_ledger, entry ‖ record MAC ‖ previous MAC)` — the entry
+   binds the whole ACCEPTED or REJECTED record, so not one byte of a decision
+   (beneficiary, channel, memo) can change unseen. Gatehouse verifies the
+   ledger with LEDGERCK *and* with Node's OpenSSL — a differential test feeds
+   both hundreds of corrupted files and they must agree every time — and
+   compares the head with the anchor it kept, so even a truncated ledger is
+   caught.
 
 A 200-transfer batch goes through all four in about **50 ms**, and the
 GnuCOBOL and gfortran run-time checks cost only 6–21 %
@@ -160,8 +164,9 @@ defence the tests do not prove.
 | 24 | Account-takeover outlier | FRAUDSCAN (Fortran) | `ZSCORE` signal | AML typology |
 | 25 | Data exfiltration via memo | FRAUDSCAN (Fortran) | `ENTROPY` signal | [CWE-200](https://cwe.mitre.org/data/definitions/200.html) |
 | 26 | Insider edits the ledger | Seal | `MAC-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
-| 27 | Deleted audit entry | Seal | `SEQ-GAP` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
-| 28 | Truncated ledger | Seal | `HEAD-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
+| 27 | Redirected payment (record edited, ledger untouched) | Seal | `RECORD-MISMATCH` | [CWE-353](https://cwe.mitre.org/data/definitions/353.html) |
+| 28 | Deleted audit entry | Seal | `SEQ-GAP` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
+| 29 | Truncated ledger | Seal | `HEAD-MISMATCH` | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) |
 
 ## Watchtower
 

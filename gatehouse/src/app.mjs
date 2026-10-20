@@ -167,7 +167,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
       throw error;
     }
     entry.job.ledger.entries = changed.entries;
-    sendJson(res, 200, { tampered: true, seq, mode, before: changed.before, after: changed.after });
+    sendJson(res, 200, { tampered: true, seq, mode, file: changed.file, before: changed.before, after: changed.after });
   }
 
   async function route(req, res) {
@@ -350,8 +350,8 @@ function validateTamper(value) {
   if (!Number.isInteger(value.seq) || value.seq < 1 || value.seq > 1000) {
     throw new HttpError(400, 'P-SCHEMA', '"seq" must be an integer between 1 and 1000', { field: 'seq' });
   }
-  if (!['amount', 'delete', 'truncate'].includes(value.mode)) {
-    throw new HttpError(400, 'P-SCHEMA', '"mode" must be amount, delete or truncate', { field: 'mode' });
+  if (!['amount', 'delete', 'truncate', 'record'].includes(value.mode)) {
+    throw new HttpError(400, 'P-SCHEMA', '"mode" must be amount, delete, truncate or record', { field: 'mode' });
   }
   return { seq: value.seq, mode: value.mode };
 }

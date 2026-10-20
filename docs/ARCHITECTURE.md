@@ -44,11 +44,20 @@ flowchart LR
    error, 16 = I/O error). `TXNIN.DAT` (raw PANs) is deleted by Gatehouse right
    after TXNGUARD finishes.
 5. Gatehouse runs `fraudscan` (reads `ACCEPTED.DAT`, writes `RISK.JSON`).
-6. Gatehouse runs `ledgerck` (COBOL verifier) **and** re-verifies the chain with
-   Node's OpenSSL HMAC — two independent implementations must agree.
+6. Gatehouse runs `ledgerck` (COBOL verifier) **and** re-verifies the ledger
+   with Node's OpenSSL HMAC — the chain and every `ACCEPTED` / `REJECTED`
+   record it seals; two independent implementations must agree.
 7. The job (masked data only) is kept in memory for 15 minutes (max 40 jobs).
 
-## 2. Record layouts (fixed width, LINE SEQUENTIAL, ASCII)
+## 2. Record layouts (fixed width, ASCII)
+
+`TXNIN` is a sequence of 200-byte records with no terminators. The three
+sealed outputs — `ACCEPTED`, `REJECTED` and `LEDGER` — are fixed-length
+records that each end in a line feed (`\n`), written with nothing trimmed and
+read back as fixed-length records: the bytes on disk are exactly the bytes
+that were sealed, and a reader never sees a normalised view (trimmed blanks,
+stripped CRs, split lines). Positions below are 1-based and exclude the line
+feed. `SUMMARY` is `KEY=VALUE` lines.
 
 ### TXNIN — input, 200 bytes
 | Pos | Len | Field | Content |
@@ -64,7 +73,7 @@ flowchart LR
 | 138 | 40 | MEMO | SEPA basic Latin character set |
 | 178 | 23 | FILLER | spaces |
 
-### ACCEPTED — normalized, 206 bytes
+### ACCEPTED — normalized, 206 bytes + LF
 | Pos | Len | Field |
 |----:|----:|-------|
 | 1 | 12 | TXN-ID |
@@ -79,7 +88,7 @@ flowchart LR
 | 148 | 19 | PAN-MASKED (BIN + last 4, e.g. `411111******1111`) or spaces |
 | 167 | 40 | MEMO |
 
-### REJECTED — 64 bytes
+### REJECTED — 64 bytes + LF
 | Pos | Len | Field |
 |----:|----:|-------|
 | 1 | 6 | LINE-NO |
@@ -88,13 +97,30 @@ flowchart LR
 | 23 | 12 | FIELD |
 | 35 | 30 | DETAIL |
 
-### LEDGER — 246 bytes, `|`-separated fixed-width fields
+### LEDGER — format v2, 312 bytes + LF, `|`-separated fixed-width fields
 ```
-SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED(34)|PAN-LAST4(19)|PREV-MAC(64)|MAC(64)
+SEQ(6)|T(1)|TXN-ID(12)|TS(14)|CODE(4)|SIGN(1)AMOUNT-CENTS(15)|CCY(3)|FROM-MASKED(34)|PAN-LAST4(19)|RECORD-MAC(64)|PREV-MAC(64)|MAC(64)
 ```
-* `MAC = HMAC-SHA256(K_ledger, first 181 bytes of the line)` — everything
-  before the final `|`, which includes `PREV-MAC`. Hex, lowercase.
-* Genesis `PREV-MAC` of entry 1 = `HMAC-SHA256(K_ledger, "alcazar/genesis|" + JOB-ID)`.
+* One entry per input record, accepted (`T` = `A`) or rejected (`R`), in input
+  order. `SIGN` is `+` or `-`, or `?` when the amount did not parse (then the
+  cents are zero).
+* `RECORD-MAC = HMAC-SHA256(K_ledger, "alcazar/record|" + record)`, where
+  `record` is the entry's `ACCEPTED` (206 bytes) or `REJECTED` (64 bytes)
+  record: the n-th `A` entry seals the n-th `ACCEPTED` record, the n-th `R`
+  entry the n-th `REJECTED` record. The ledger alone stays verifiable, and so
+  does every field of every decision — beneficiary, channel, memo included.
+* `MAC = HMAC-SHA256(K_ledger, first 247 bytes of the line)` — everything
+  before the final `|`, which includes `RECORD-MAC` and `PREV-MAC`. Hex,
+  lowercase.
+* Genesis `PREV-MAC` of entry 1 = `HMAC-SHA256(K_ledger, "alcazar/genesis/v2|" + JOB-ID)`
+  — the version is bound into the chain.
+* Verification, in this order, entry by entry: `FORMAT` (separators, line feed,
+  numeric fields, hex MACs, printable ASCII), `SEQ-GAP`, `CHAIN-BREAK`,
+  `MAC-MISMATCH` (constant-time), `RECORD-MISMATCH` (the next record of the
+  entry's type is missing, unterminated or does not match `RECORD-MAC`). A
+  record left over after the last entry is a `RECORD-MISMATCH` at the next
+  sequence number. Gatehouse then compares the head MAC and entry count with
+  the anchor it recorded at sealing (`HEAD-MISMATCH`).
 * Sub-keys are derived from the master key by Gatehouse (key separation):
   `K_ledger = HMAC(K_master, "alcazar/ledger/v1" || 0x01)`,
   `K_token = HMAC(K_master, "alcazar/token/v1" || 0x01)`. TXNGUARD receives

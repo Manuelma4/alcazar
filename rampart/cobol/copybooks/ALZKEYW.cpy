@@ -22,3 +22,11 @@
        01  ALZ-JOB-ID                  PIC X(32).
        01  ALZ-JOB-LEN                 PIC S9(9) COMP-5.
        01  ALZ-GENESIS                 PIC X(64).
+      * Record MAC input: the label, then the ACCEPTED (206 bytes) or
+      * REJECTED (64 bytes) record; ALZ-REC-LEN is the record length.
+       01  ALZ-REC-INPUT.
+           05  ALZ-REC-LABEL           PIC X(15)
+                                       VALUE "alcazar/record|".
+           05  ALZ-REC-DATA            PIC X(206).
+       01  ALZ-REC-LEN                 PIC S9(9) COMP-5.
+       01  ALZ-REC-MAC                 PIC X(64).

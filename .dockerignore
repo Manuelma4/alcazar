@@ -1,0 +1,16 @@
+.git
+.github
+.claude
+build
+var
+node_modules
+mirador
+lookout/dev
+lookout/test
+watchtower/test
+gatehouse/test
+**/*.o
+**/*.mod
+**/*.dSYM
+*.key
+.env*

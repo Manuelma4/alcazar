@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: Apache-2.0
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test (GnuCOBOL 3.2, gfortran 14, Node 24)
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+    steps:
+      - name: Install the legacy toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gnucobol3 gfortran make git ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Trojan Source guard (bidirectional / invisible characters)
+        run: node scripts/check-unicode.mjs
+      - name: Build the core (every compiler warning is an error)
+        run: make all
+      - name: COBOL and Fortran test suites
+        run: make test
+      - name: Node.js tests (Gatehouse, Siege, Watchtower, Lookout)
+        run: node --test
+      - name: Watchtower self-scan (no finding of any severity allowed)
+        run: node watchtower/bin/watchtower.mjs scan rampart apps --fail-on low
+      - name: Watchtower must still catch every rule in the vulnerable examples
+        run: |
+          if node watchtower/bin/watchtower.mjs scan examples/vulnerable --fail-on low > /dev/null; then
+            echo "Watchtower found nothing in examples/vulnerable" >&2
+            exit 1
+          fi
+
+  container:
+    name: Container image + Siege against it
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Build (the core is compiled and tested inside the image build)
+        run: docker build --tag alcazar:ci .
+      - name: Run hardened, as in compose.yaml
+        run: |
+          docker run --detach --name alcazar \
+            --read-only --tmpfs /tmp:size=64m,mode=1777,noexec,nosuid,nodev \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 128 --memory 512m \
+            --publish 127.0.0.1:8080:8080 alcazar:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health > health.json; then break; fi
+            sleep 1
+          done
+          cat health.json
+          grep -q '"status":"ok"' health.json
+      - name: Siege against the container
+        env:
+          ALCAZAR_SIEGE_URL: http://127.0.0.1:8080
+        run: node --test gatehouse/test/siege.test.mjs
+      - name: Container logs
+        if: always()
+        run: docker logs alcazar
+
+  code-scanning:
+    name: Watchtower SARIF to code scanning
+    # Code scanning needs a public repository (or GitHub Advanced Security).
+    if: github.event.repository.visibility == 'public'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Scan the production COBOL and Fortran
+        run: node watchtower/bin/watchtower.mjs scan rampart apps --format sarif --output watchtower.sarif --fail-on none
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: watchtower.sarif
+          category: watchtower

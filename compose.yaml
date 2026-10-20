@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# docker compose up --build   ->   http://localhost:8080/
+services:
+  alcazar:
+    build: .
+    image: alcazar:0.1.0
+    ports:
+      # Published on the loopback interface only.
+      - "127.0.0.1:8080:8080"
+    environment:
+      ALCAZAR_DEMO: "1"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    restart: unless-stopped

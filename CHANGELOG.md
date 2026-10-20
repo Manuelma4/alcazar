@@ -9,9 +9,11 @@ First public version.
   PCI DSS masking, strict amount parsing, calendar dates, currency allowlist,
   card numbers in free text) and a Fortran 2018 kernel (SHA-256,
   HMAC-SHA256, constant-time comparison, secure wiping, hex, robust
-  statistics, safe JSON) with a C ABI (`alz.h`) and power-on self-tests.
+  statistics, safe JSON, secrets read from stdin without stdio buffers)
+  with a C ABI (`alz.h`) and power-on self-tests.
 * **TXNGUARD / LEDGERCK / FRAUDSCAN** — the demo batch core: validation and
-  pseudonymisation in COBOL with per-currency transfer limits; the Seal, an
+  pseudonymisation in COBOL with per-currency transfer limits, the batch
+  read from stdin so raw card numbers never touch the disk; the Seal, an
   HMAC-chained audit ledger (format v2) whose every entry also seals the full
   accepted or rejected record; Benford, robust z-score, structuring, velocity
   and entropy analytics in Fortran, currency by currency.
@@ -21,8 +23,10 @@ First public version.
   never reaches them), double ledger verification (COBOL/Fortran and
   OpenSSL, held to identical verdicts by a differential test) plus an
   external anchor, Node.js permission model.
-* **Watchtower** — static analyzer for COBOL and Fortran with text, JSON and
-  SARIF output, also usable as a GitHub Action.
+* **Watchtower** — static analyzer for COBOL and Fortran (34 rules) with
+  text, JSON and SARIF output, also usable as a GitHub Action.
+* **`scripts/verify-ledger.mjs`** — an auditor's check of a sealed job with
+  `K_ledger` alone, both verifiers and the anchor.
 * **Lookout** — dashboard with the Siege attack lab (29 attacks), ledger and
   record tampering demo and in-browser code scanning.
 * Docker image with the core compiled and tested at build time, hardened

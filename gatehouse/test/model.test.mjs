@@ -155,27 +155,60 @@ function expectedCode(t, seen, nowUtcSeconds) {
   return 'A000';
 }
 
-/** ALZPANSC: 13-19 digits (single space/hyphen separators), 2-6 first, Luhn. */
+/**
+ * ALZPANSC. Digit groups joined by one or two spaces, hyphens, dots or
+ * slashes form a chain; a chain glued to a capital letter (IBAN, RF
+ * reference) is skipped; inside a chain only groups of 3+ digits link up;
+ * any stretch from a group start to a group end of 13-19 digits that
+ * starts with 2-6 and passes Luhn is a card number.
+ */
 function memoHasPan(memo) {
-  const field = memo.padEnd(40, ' ');
-  let run = '';
-  const endRun = () => {
-    const found = run.length >= 13 && run.length <= 19 && '23456'.includes(run[0]) && luhnValid(run);
-    run = '';
-    return found;
-  };
-  for (let i = 0; i < field.length; i += 1) {
-    const ch = field[i];
+  const text = memo.padEnd(40, ' ');
+  const groups = [];
+  let digits = '';
+  let joiner = 0;
+  let gap = true;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
     if (ch >= '0' && ch <= '9') {
-      run += ch;
-    } else if ((ch === ' ' || ch === '-') && run.length > 0) {
-      const next = field[i + 1] ?? ' ';
-      if (!(next >= '0' && next <= '9') && endRun()) return true;
-    } else if (endRun()) {
-      return true;
+      const last = groups.at(-1);
+      if (last && !gap && joiner === 0) {
+        last.len += 1;
+      } else {
+        const joined = Boolean(last) && !gap && joiner <= 2;
+        groups.push({ start: digits.length, len: 1, joined, glued: !joined && i > 0 && text[i - 1] >= 'A' && text[i - 1] <= 'Z' });
+      }
+      digits += ch;
+      joiner = 0;
+      gap = false;
+    } else if (' -./'.includes(ch)) {
+      joiner += 1;
+    } else {
+      gap = true;
+      joiner = 0;
     }
   }
-  return endRun();
+  for (let a = 0; a < groups.length;) {
+    let z = a;
+    while (z + 1 < groups.length && groups[z + 1].joined) z += 1;
+    if (!groups[a].glued) {
+      for (let c = a; c <= z;) {
+        let b = c;
+        while (b < z && groups[b].len >= 3 && groups[b + 1].len >= 3) b += 1;
+        for (let i = c; i <= b; i += 1) {
+          for (let j = i; j <= b; j += 1) {
+            const start = groups[i].start;
+            const length = groups[j].start + groups[j].len - start;
+            if (length > 19) break;
+            if (length >= 13 && '23456'.includes(digits[start]) && luhnValid(digits.slice(start, start + length))) return true;
+          }
+        }
+        c = b + 1;
+      }
+    }
+    a = z + 1;
+  }
+  return false;
 }
 
 function maskIban(iban) {
@@ -294,7 +327,11 @@ function generator(seed, { chaos = false } = {}) {
         () => '          ',
         () => `${t.memo}  `.slice(0, 40),
         () => pick(['card 4111 1111 1111 1111', 'ref 5555-5555-5555-4444 ok', '378282246310005', 'Invoice 4111111111111112',
-          'ref 1111111111111117', '4111  1111 1111 1111', `pay ${luhnComplete(`4${digits(14)}`)}`, `x ${digits(19)} y`]),
+          'ref 1111111111111117', '4111  1111 1111 1111', `pay ${luhnComplete(`4${digits(14)}`)}`, `x ${digits(19)} y`,
+          '4111 1111 1111 1111 123', 'card 4111 1111 1111 1111 12/28', '12/28 4111 1111 1111 1111', '4111.1111.1111.1111',
+          '4111/1111/1111/1111', '4111-1111-1111-1111-1228', '4111   1111 1111 1111', 'DE08 2789 2536 2826 0240 19',
+          'ref 2789 2536 2826 0240', 'Inv 5234-567 05.10.2025 qty 12', `${digits(4)} ${digits(4)} ${digits(4)} ${digits(4)}`,
+          `${digits(3)}.${digits(4)}/${digits(4)}-${digits(4)}`, `n ${digits(2)} ${digits(4)} ${digits(4)} ${digits(4)} ${digits(3)}`]),
       ])();
     },
   };

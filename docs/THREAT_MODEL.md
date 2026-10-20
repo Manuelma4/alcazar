@@ -75,7 +75,7 @@ flowchart LR
 | **T**ampering: truncating the ledger (and its records) | Disk | Head MAC and entry count anchored in Gatehouse memory when the job is sealed | Siege `ledger-truncate` |
 | **T**ampering: Trojan Source / hidden code in contributions | Repo | `scripts/check-unicode.mjs` in CI; Watchtower `ALZ-GEN-001/002`, `ALZ-COB-014` | CI |
 | **R**epudiation: "that transfer was never submitted" | B2 | Every record — accepted *or rejected* — is sealed in the ledger, bound to the job id | `ledger.test.mjs` |
-| **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD, and job directories left by a crash removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` |
+| **I**nformation disclosure: card numbers | B2, B3 | Raw input deleted right after TXNGUARD, and job directories left by a crash removed at start-up; only BIN + last 4 (ACCEPTED) or last 4 (ledger) ever leave the core; a card number typed into the memo is refused (E803), however it is grouped and whatever digits surround it | `server.test.mjs` asserts no raw PAN in responses; `review.test.mjs` (15 card formats, 8 look-alikes); Siege `pan-in-memo` |
 | **I**nformation disclosure: account identity in analytics | B2 | FRAUDSCAN sees only HMAC tokens (`K_token`), never IBANs | `parseAccepted` tests |
 | **I**nformation disclosure: key exposure | B2 | The master key never leaves Gatehouse; each legacy program gets only its sub-keys (LEDGERCK: `K_ledger` only), on stdin (not argv, not env), wiped after use; equal sub-keys refused; key file refused if group/world readable | `review.test.mjs`, `ALZKEYP.cpy`, `app.mjs` |
 | **I**nformation disclosure: timing side channel on MAC checks | B3 | Constant-time comparison in Fortran (`alz_ct_equal`) and Node (`timingSafeEqual`) | `test_crypto.f90` |
@@ -109,6 +109,12 @@ flowchart LR
 * **Demo mode** (`ALCAZAR_DEMO=1`, the default for the showcase) exposes the
   ledger *tamper* endpoint for the Siege lab. It only rewrites the job's own
   files, but production deployments must set `ALCAZAR_DEMO=0`.
+* **Finding a card number in free text is a heuristic.** ALZPANSC catches the
+  ways people type cards (groups, separators, an expiry date or CVV next to
+  it) but not a number glued to other digits with no separator, spelled out
+  in words or deliberately encoded; and about one 13–19-digit reference in
+  ten that starts with 2–6 passes Luhn and is refused as a card. Deliberate
+  exfiltration through the memo is FRAUDSCAN's ENTROPY signal's job.
 * **Watchtower is a heuristic analyzer**, not a sound verifier: it has no
   full data-flow analysis and does not read EBCDIC sources. Absence of
   findings is not proof of absence of bugs.

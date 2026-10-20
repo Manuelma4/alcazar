@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import { ROOT } from '../src/config.mjs';
 import { Gate } from '../src/gate.mjs';
 import { HttpError } from '../src/http.mjs';
@@ -178,5 +178,42 @@ describe('Least-privilege keys for the legacy programs', { skip: SKIP_REASON }, 
     const result = await run('ledgerck', keyLines(keys.ledger));
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stdout, /^ALZ-LEDGER\|STATUS=OK\|ENTRIES=000000\|/);
+  });
+});
+
+// Written from the ways people type card numbers, not from ALZPANSC's
+// algorithm: the reference model mirrors that algorithm and could share
+// its blind spots.
+describe('TXNGUARD finds card numbers however they are typed', { skip: SKIP_REASON }, () => {
+  let gh;
+  before(async () => {
+    gh = await startGatehouse();
+  });
+  after(() => gh.stop());
+
+  const CARDS = [
+    'card 4111 1111 1111 1111', '4111-1111-1111-1111', '4111.1111.1111.1111', '4111/1111/1111/1111',
+    '4111111111111111', '4111 1111 1111 1111 123', 'card 4111 1111 1111 1111 12/28', '12/28 4111 1111 1111 1111',
+    '4111-1111-1111-1111-1228', 'cvv 737 5105 1051 0510 5100', 'amex 3782 822463 10005', '6011 1111 1111 1117',
+    'card4111 1111 1111 1111', '4111  1111 1111 1111', 'Ref 99 / 4111 1111 1111 1111',
+  ];
+  const ORDINARY = [
+    'Invoice 2025-117', 'Inv 5234-567 05.10.2025 qty 12', 'Order 523456 2025-10-12', 'tel 06 12 34 56 78',
+    'Refund DE89 3704 0044 0532 0130 00', 'DE08 2789 2536 2826 0240 19', 'RF18 5390 0754 7034', 'Total 1.234.567,89',
+  ];
+
+  it('refuses every card number with E803 and lets ordinary memos through', async () => {
+    const memos = [...CARDS, ...ORDINARY];
+    const transactions = memos.map((memo, i) => ({ ...VALID, id: `M-${i + 1}`, memo }));
+    const res = await postJson(gh.base, '/api/batch', { transactions });
+    assert.equal(res.status, 200);
+    const job = await res.json();
+    const codes = new Map(job.rejections.map((r) => [r.id, r.code]));
+    memos.forEach((memo, i) => {
+      const expected = i < CARDS.length ? 'E803' : undefined;
+      assert.equal(codes.get(`M-${i + 1}`), expected, `memo ${JSON.stringify(memo)}`);
+    });
+    // And no full card number in what Gatehouse returns.
+    assert.ok(!JSON.stringify(job).includes('4111111111111111'));
   });
 });

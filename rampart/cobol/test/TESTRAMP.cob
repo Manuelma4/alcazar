@@ -399,11 +399,58 @@
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "ref 5555-5555-5555-4444" TO T-TEXT
            MOVE "PAN with hyphens" TO T-NAME
+           MOVE 1 TO T-EXPECT
            MOVE 5 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "378282246310005" TO T-TEXT
            MOVE "Amex PAN, 15 digits" TO T-NAME
+           MOVE 1 TO T-EXPECT
            MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "3782 822463 10005" TO T-TEXT
+           MOVE "Amex in groups 4-6-5" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111 1111 1111 1111 123" TO T-TEXT
+           MOVE "PAN followed by a CVV" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "card 4111 1111 1111 1111 12/28" TO T-TEXT
+           MOVE "PAN followed by an expiry date" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 6 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "12/28 4111 1111 1111 1111" TO T-TEXT
+           MOVE "PAN after an expiry date" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 7 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111-1111-1111-1111-1228" TO T-TEXT
+           MOVE "PAN and expiry, hyphens" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111.1111.1111.1111" TO T-TEXT
+           MOVE "PAN with dots" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111/1111/1111/1111" TO T-TEXT
+           MOVE "PAN with slashes" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "4111  1111 1111 1111" TO T-TEXT
+           MOVE "two spaces still join groups" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 1 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "card4111 1111 1111 1111" TO T-TEXT
+           MOVE "PAN glued to a lower-case word" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 5 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "Invoice 2025-117 order 88412" TO T-TEXT
            MOVE "ordinary numbers are not cards" TO T-NAME
@@ -412,12 +459,50 @@
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "4111 1111 1111 1112" TO T-TEXT
            MOVE "Luhn-invalid run is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
            MOVE "ref 1111111111111117" TO T-TEXT
            MOVE "run starting with 1 is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN
-           MOVE "4111  1111 1111 1111" TO T-TEXT
-           MOVE "a double space ends the run" TO T-NAME
+           MOVE "4111   1111 1111 1111" TO T-TEXT
+           MOVE "three spaces break the chain" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "DE89 3704 0044 0532 0130 00" TO T-TEXT
+           MOVE "an IBAN is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+      *    Its digits 2789...0240 pass Luhn: only the capital letters
+      *    glued to the first group say it is an IBAN.
+           MOVE "DE08 2789 2536 2826 0240 19" TO T-TEXT
+           MOVE "an IBAN with a Luhn-valid stretch" TO T-NAME
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "ref 2789 2536 2826 0240" TO T-TEXT
+           MOVE "the same digits outside an IBAN" TO T-NAME
+           MOVE 1 TO T-EXPECT
+           MOVE 5 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           MOVE "RF18 5390 0754 7034" TO T-TEXT
+           MOVE "an RF reference is not a card" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "Inv 5234-567 05.10.2025 qty 12" TO T-TEXT
+           MOVE "dates never join a number" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
+           PERFORM 8390-RUN-PAN-SCAN
+           MOVE "tel 06 12 34 56 78 90 12 34" TO T-TEXT
+           MOVE "2-digit groups never join" TO T-NAME
+           MOVE 0 TO T-EXPECT
+           MOVE 0 TO T-EXPECT-POS
            PERFORM 8390-RUN-PAN-SCAN.
 
        8390-RUN-PAN-SCAN.

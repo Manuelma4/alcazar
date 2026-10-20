@@ -20,10 +20,13 @@ const GROUPS = [
  */
 export async function buildWatchtowerReport(root) {
   let watchtower;
+  let copybooks = null;
   try {
     watchtower = await import(pathToFileURL(join(root, 'watchtower', 'src', 'index.mjs')).href);
+    // Same COPY resolution as the CLI, so both report exactly the same.
+    ({ copybookResolver: copybooks } = await import(pathToFileURL(join(root, 'watchtower', 'src', 'node', 'files.mjs')).href));
   } catch {
-    return null;
+    if (!watchtower) return null;
   }
   const groups = [];
   const examples = [];
@@ -33,7 +36,7 @@ export async function buildWatchtowerReport(root) {
       for (const path of await sourceFiles(join(root, dir))) {
         const source = await readFile(path, 'utf8');
         const file = relative(root, path).split(sep).join('/');
-        results.push({ file, ...watchtower.scan(source, { filename: file }) });
+        results.push({ file, ...watchtower.scan(source, { filename: file, resolveCopybook: copybooks?.(path) }) });
         if (group.name !== 'production') {
           const language = results.at(-1).language;
           examples.push({ name: file.split('/').at(-1), group: group.name, language, path: file, source });

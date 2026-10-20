@@ -34,7 +34,9 @@ export function loadConfig(env = process.env) {
       maxBodyBytes: 512 * 1024,
       jobTimeoutMs: integer(env.ALCAZAR_JOB_TIMEOUT_MS ?? '10000', 1000, 120000, 'ALCAZAR_JOB_TIMEOUT_MS'),
       jobTtlMs: 15 * 60 * 1000,
-      maxJobs: 20,
+      // Room for a full Siege (~23 small jobs) without evicting the user's
+      // batch; bounded, and well within a 64 MB tmpfs.
+      maxJobs: 40,
       maxConcurrentJobs: 2,
       maxOutputBytes: 4 * 1024 * 1024,
       rateCapacity: integer(env.ALCAZAR_RATE_CAPACITY ?? '120', 1, 100000, 'ALCAZAR_RATE_CAPACITY'),

@@ -197,3 +197,25 @@ describe('Gatehouse request targets', { skip: SKIP_REASON }, () => {
     }
   });
 });
+
+describe('Gatehouse HTTP parser errors', { skip: SKIP_REASON }, () => {
+  it('answers malformed and oversized requests with the right status', async () => {
+    const gh = await startGatehouse();
+    try {
+      const { connect } = await import('node:net');
+      const url = new URL(gh.base);
+      const raw = (payload) => new Promise((resolve, reject) => {
+        const socket = connect(Number(url.port), url.hostname, () => socket.end(payload));
+        let data = '';
+        socket.on('data', (chunk) => { data += chunk; });
+        socket.on('end', () => resolve(data.split('\r\n')[0]));
+        socket.on('error', reject);
+      });
+      assert.equal(await raw('NONSENSE\r\n\r\n'), 'HTTP/1.1 400 Bad Request');
+      assert.equal(await raw(`GET / HTTP/1.1\r\nHost: localhost\r\nX-Big: ${'a'.repeat(20000)}\r\n\r\n`), 'HTTP/1.1 431 Request Header Fields Too Large');
+      assert.equal((await fetch(`${gh.base}/api/health`)).status, 200);
+    } finally {
+      await gh.stop();
+    }
+  });
+});

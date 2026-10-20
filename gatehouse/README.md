@@ -22,7 +22,7 @@ npm run start:dev  # plain node, static files re-read on every page request
 | Ledger | Verified by LEDGERCK (COBOL + Fortran HMAC) and by Node/OpenSSL (`ledger.mjs`) — they must agree — and checked against the anchor taken when the job was sealed. |
 | Static files | Loaded once into an in-memory map; a URL is never turned into a file path. |
 | Headers | Strict CSP with Trusted Types, COOP/COEP/CORP, `nosniff`, `DENY` framing, `no-referrer`, a restrictive Permissions-Policy, optional HSTS — on every response, errors included. |
-| Abuse | Token-bucket rate limit per client, 2 concurrent jobs, bounded job store (20 jobs, 15-minute TTL), header and request timeouts. |
+| Abuse | Token-bucket rate limit per client, 2 concurrent jobs, bounded job store (40 jobs, 15-minute TTL), header and request timeouts. |
 | Start-up | Power-on self-test: the Fortran known-answer tests, then a real two-transfer batch whose ledger and tokens must match OpenSSL. If anything fails, the batch endpoints answer 503. |
 
 ## Configuration

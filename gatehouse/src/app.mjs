@@ -3,7 +3,7 @@
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rm, stat } from 'node:fs/promises';
-import { createServer } from 'node:http';
+import { STATUS_CODES, createServer } from 'node:http';
 import { join } from 'node:path';
 import { ROOT, VERSION } from './config.mjs';
 import {
@@ -22,7 +22,8 @@ const JOB_PATH = /^\/api\/jobs\/(j-[0-9a-f]{24})(\/verify|\/tamper)?$/;
 const STATIC_MOUNTS = [
   { dir: 'lookout', url: '/', exclude: ['dev', 'test', 'mock', 'README.md'] },
   { dir: 'shared', url: '/shared/' },
-  { dir: 'watchtower/src', url: '/watchtower/src/' },
+  // The browser-safe analyzer only: src/node/ needs Node.js APIs.
+  { dir: 'watchtower/src', url: '/watchtower/src/', exclude: ['node'] },
 ];
 
 /**
@@ -68,6 +69,7 @@ export async function createApp(config, { log = defaultLog } = {}) {
       maxBodyBytes: config.limits.maxBodyBytes,
       jobTimeoutMs: config.limits.jobTimeoutMs,
       jobTtlMs: config.limits.jobTtlMs,
+      maxJobs: config.limits.maxJobs,
     },
   });
 
@@ -259,8 +261,18 @@ export async function createApp(config, { log = defaultLog } = {}) {
   server.requestTimeout = 30_000;
   server.keepAliveTimeout = 5_000;
   server.maxHeadersCount = 64;
-  server.on('clientError', (_error, socket) => {
-    if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+  // Requests the HTTP parser refuses never reach the handler above: answer
+  // them with the right status (timeouts and oversized headers included) and
+  // log the reason, so they are never silent.
+  server.on('clientError', (error, socket) => {
+    const code = String(error?.code ?? 'UNKNOWN').slice(0, 40);
+    if (code === 'ECONNRESET' || !socket.writable) {
+      socket.destroy();
+      return;
+    }
+    const status = code === 'ERR_HTTP_REQUEST_TIMEOUT' ? 408 : code === 'HPE_HEADER_OVERFLOW' ? 431 : 400;
+    log('warn', 'client error', { code, status });
+    socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   });
 
   return {

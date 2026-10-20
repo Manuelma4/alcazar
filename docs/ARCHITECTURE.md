@@ -321,8 +321,13 @@ interface Ledger {
 }
 
 // POST /api/jobs/:job/verify                         → 200 Verification
-// POST /api/jobs/:job/tamper { seq, mode }           → 200 { tampered: true, seq, mode, before, after }
-//      mode: 'amount' | 'delete' | 'truncate'        (only when demo = true, else 403 P-DEMO)
+// POST /api/jobs/:job/tamper { seq, mode }           → 200 { tampered: true, seq, mode, file, before, after }
+//      (only when demo = true, else 403 P-DEMO); seq is a line position in LEDGER.DAT
+//      mode 'amount'   +1,000.00 in that ledger line, old MAC kept       file 'LEDGER.DAT'
+//      mode 'record'   rewrites the ACCEPTED record behind it (another beneficiary)
+//                      or the REJECTED one (another reason code)    file 'ACCEPTED.DAT' | 'REJECTED.DAT'
+//      mode 'delete'   removes the line                                  file 'LEDGER.DAT', after = null
+//      mode 'truncate' cuts the line, every later one and their records file 'LEDGER.DAT', after = null
 
 // GET /api/posture → security posture shown in the dashboard
 interface Posture {

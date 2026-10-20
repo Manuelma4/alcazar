@@ -86,6 +86,14 @@ describe('An insider inside a running job', { skip: SKIP_REASON }, () => {
     }), NOT_WHAT_WAS_SENT);
   });
 
+  it('rewriting a total in SUMMARY.DAT fails the job', async () => {
+    await assert.rejects(runWith(async (name, dir, when) => {
+      if (name !== 'txnguard' || when !== 'after') return;
+      const summary = await read(dir, 'SUMMARY.DAT');
+      await writeFile(join(dir, 'SUMMARY.DAT'), summary.replace(/^TOTAL-EUR=\d+$/m, 'TOTAL-EUR=12500'), 'latin1');
+    }), NOT_WHAT_WAS_SENT);
+  });
+
   it('an edit made while LEDGERCK runs is never reported valid', async () => {
     const { state } = await runWith(async () => {});
     pipeline.legacy = async (name, args, dir, stdin) => {

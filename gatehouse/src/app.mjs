@@ -159,9 +159,10 @@ export async function createApp(config, { log = defaultLog } = {}) {
       try {
         verification = await pipeline.verify(entry.state);
       } catch (error) {
-        // A verifier that failed or timed out proves nothing: the job must
-        // stop showing its last "valid". (A busy gate is not a verdict.)
-        if (error instanceof HttpError && (error.code === 'P-LEGACY' || error.code === 'P-TIMEOUT')) {
+        // A verification that did not complete proves nothing: the job must
+        // stop showing its last "valid" — whatever failed (a verifier, a
+        // timeout, an unreadable file). Only a busy gate is not about the job.
+        if (!(error instanceof HttpError && error.code === 'P-BUSY')) {
           entry.job.ledger.verification = { valid: false, entries: 0, head: null, brokenAt: null, reason: null, verifiedBy: [], ms: 0 };
         }
         throw error;

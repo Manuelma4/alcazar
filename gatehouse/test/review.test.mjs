@@ -4,7 +4,7 @@
 // leftover card numbers, backslash targets, shutdown, eviction).
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -250,6 +250,29 @@ describe('Master key file', { skip: SKIP_REASON }, () => {
       await assert.rejects(startGatehouse({ ALCAZAR_KEY_FILE: file }, { workDir: join(dir, 'work') }), /chmod 600/);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('A verification that cannot complete', { skip: SKIP_REASON }, () => {
+  it('leaves the job "not verified", never its last "valid"', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'alcazar-unverified-'));
+    const gh = await startGatehouse({}, { workDir: work });
+    try {
+      const res = await postJson(gh.base, '/api/batch', { transactions: [VALID] });
+      const job = await res.json();
+      assert.equal(job.ledger.verification.valid, true);
+      // The job's directory, from outside: the ledger becomes unreadable.
+      const [dir] = (await readdir(work)).filter((name) => name.startsWith('job-'));
+      await rm(join(work, dir, 'LEDGER.DAT'));
+      await mkdir(join(work, dir, 'LEDGER.DAT'));
+      const verify = await postJson(gh.base, `/api/jobs/${job.job}/verify`, {});
+      assert.ok(verify.status >= 500, `status ${verify.status}`);
+      const after = await (await fetch(`${gh.base}/api/jobs/${job.job}`)).json();
+      assert.deepEqual([after.ledger.verification.valid, after.ledger.verification.reason, after.ledger.verification.verifiedBy], [false, null, []]);
+    } finally {
+      await gh.stop();
+      await rm(work, { recursive: true, force: true });
     }
   });
 });

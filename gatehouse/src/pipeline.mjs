@@ -119,8 +119,16 @@ export class Pipeline {
       if (error instanceof RecordError) throw new HttpError(502, 'P-LEGACY', 'TXNGUARD produced malformed output');
       throw error;
     }
+    // Totals are recomputed from the accepted records — the bytes that are
+    // verified — and SUMMARY.DAT, which nothing seals, must agree with them.
+    const totalsByCurrency = Object.create(null);
+    for (const record of accepted) {
+      totalsByCurrency[record.currency] = String(BigInt(totalsByCurrency[record.currency] ?? '0') + BigInt(record.amountCents));
+    }
+    const sameTotals = (a, b) => Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((ccy) => a[ccy] === b[ccy]);
     if (summary.job !== jobId || summary.records !== transactions.length || summary.accepted !== accepted.length ||
-        summary.rejected !== rejected.length || summary.ledgerEntries !== seal.entries || summary.ledgerHead !== seal.head) {
+        summary.rejected !== rejected.length || summary.ledgerEntries !== seal.entries || summary.ledgerHead !== seal.head ||
+        !sameTotals(totalsByCurrency, summary.totalsByCurrency)) {
       throw new HttpError(502, 'P-LEGACY', 'TXNGUARD output is inconsistent');
     }
     this.matchInput(transactions, entries, accepted, rejected, seal);
@@ -169,7 +177,7 @@ export class Pipeline {
         accepted: accepted.length,
         rejected: rejected.length,
         flagged: risk.flagged,
-        totalsByCurrency: summary.totalsByCurrency,
+        totalsByCurrency,
       },
       // Gatehouse joins rejections to the submitted ids by line number;
       // legacyId is TXNGUARD's sanitized copy.

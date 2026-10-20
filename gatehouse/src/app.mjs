@@ -81,6 +81,8 @@ export async function createApp(config, { log = defaultLog } = {}) {
       shell: false,
       minimalEnv: true,
       secretsOnStdin: true,
+      verifiedBytes: true,
+      outputMatchesInput: true,
       timeoutMs: config.limits.jobTimeoutMs,
       maxOutputBytes: config.limits.maxOutputBytes,
       rlimits: RLIMITS_AVAILABLE,

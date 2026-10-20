@@ -37,7 +37,7 @@ export function evaluateCsp(csp) {
   };
 }
 
-const SANDBOX_KEYS = ['shell', 'minimalEnv', 'secretsOnStdin', 'timeoutMs', 'maxOutputBytes', 'rlimits', 'permissionModel'];
+const SANDBOX_KEYS = ['shell', 'minimalEnv', 'secretsOnStdin', 'verifiedBytes', 'outputMatchesInput', 'timeoutMs', 'maxOutputBytes', 'rlimits', 'permissionModel'];
 
 function flagInfo(flag) {
   if (t.has(`flag.${flag}`)) return t(`flag.${flag}`);

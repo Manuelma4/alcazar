@@ -346,7 +346,8 @@ interface Ledger {
 // GET /api/posture → security posture shown in the dashboard
 interface Posture {
   headers: Record<string, string>;       // the security headers Gatehouse sends
-  sandbox: { shell: false; minimalEnv: true; timeoutMs: number; maxOutputBytes: number; rlimits: boolean; permissionModel: boolean };
+  sandbox: { shell: false; minimalEnv: true; secretsOnStdin: true; verifiedBytes: true; outputMatchesInput: true;
+             timeoutMs: number; maxOutputBytes: number; rlimits: boolean; permissionModel: boolean };
   build: { cobol: { compiler: string; flags: string[] }; fortran: { compiler: string; flags: string[] } };
   dependencies: { runtime: number; dev: number };   // npm packages — both 0
 }

@@ -47,6 +47,12 @@ npm run start:dev   # Gatehouse on http://localhost:8080 with live static reload
 * `CALL "LITERAL"` only (compiled with `-fstatic-call`); calls into the
   Fortran kernel always use `RETURNING`.
 * Character classes list their members explicitly (EBCDIC-safe).
+* Secrets are never read with `ACCEPT` (stdio and the run time keep copies
+  no one can wipe): use `alz_read_line` into a field you zeroize, and
+  `alz_expect_eof` to refuse input beyond what the program needs.
+* A file that is sealed or hashed is ORGANIZATION SEQUENTIAL with an
+  explicit line feed, never LINE SEQUENTIAL (it trims trailing blanks on
+  WRITE and normalises what it reads).
 
 ### Fortran
 
@@ -56,6 +62,7 @@ npm run start:dev   # Gatehouse on http://localhost:8080 with live static reload
   length argument.
 * Module names (`rampart_*`) must never equal a C binding label (`alz_*`).
 * Evaluate checks into variables before combining them with `.and.`.
+* Never compare amounts across currencies.
 
 ### JavaScript
 

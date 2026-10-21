@@ -1,10 +1,24 @@
 .git
 .github
-.claude
 build
 var
 node_modules
-mirador
+# AI assistants' files never enter the image (see .gitignore)
+.claude
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.gemini
+.cursor
+.cursorrules
+.windsurf
+.windsurfrules
+.aider*
+.continue
+.codeium
+*.ai.md
+ai
 lookout/dev
 lookout/test
 watchtower/test

@@ -26,5 +26,21 @@ node_modules/
 coverage/
 .DS_Store
 
-# Local agent / editor configuration
-/.claude/
+# AI assistants: their settings, instructions, notes and transcripts, and
+# any document an assistant wrote for you (name it *.ai.md, or put it in ai/)
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.gemini/
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.aider*
+.continue/
+.codeium/
+.github/copilot-instructions.md
+*.ai.md
+/ai/

@@ -89,7 +89,7 @@ flowchart LR
 | **D**enial of service: a runaway legacy program | B2 | SIGKILL after the timeout, bounded stdout/stderr, prlimit CPU / memory / file size / no core dumps (Linux) | `runner.mjs` |
 | **E**levation: path traversal | B1 | Static files served from an in-memory map; no URL becomes a path | Siege `path-traversal` |
 | **E**levation: hijacking the legacy runtime | B2 | `-fstatic-call`, allow-listed environment (no `COB_LIBRARY_PATH`, `DD_*`, `LD_PRELOAD`), no shell | `runner.mjs` |
-| **E**levation: compromised dependency | Supply chain | Zero npm dependencies (runtime and dev), base images pinned by digest, GitHub Actions pinned by commit SHA, Dependabot | CI, `package.json` |
+| **E**levation: compromised dependency | Supply chain | Zero npm dependencies (runtime and dev), base images pinned by digest, GitHub Actions pinned by commit SHA, Dependabot alerts; every bump is a reviewed commit | CI, `package.json` |
 | **E**levation: compromised Gatehouse code reading the host | Host | Node.js permission model (read: the application, the job and evidence directories and the two secret files; write: the job and evidence directories) for Gatehouse's own file access — not for the programs it may start (`--allow-child-process`, see the residual risks); non-root user, read-only root FS, all capabilities dropped, `no-new-privileges` | `Dockerfile`, `compose.yaml`, `review.test.mjs` |
 
 ## Residual risks and non-goals

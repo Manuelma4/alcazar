@@ -311,8 +311,8 @@ More in the [Watchtower README](watchtower/README.md).
 ## Security design, in one screen
 
 * **Zero dependencies.** No npm packages (runtime *or* dev), base images
-  pinned by digest, GitHub Actions pinned by commit SHA, Dependabot on all
-  three.
+  pinned by digest, GitHub Actions pinned by commit SHA; Dependabot alerts
+  watch them, and every bump is a reviewed commit.
 * **No shell, ever.** Legacy programs are spawned with an argv array, an
   allow-listed environment (`PATH` and `LC_ALL`; under the permission model
   Node adds its own `NODE_OPTIONS`), a wall-clock timeout, bounded

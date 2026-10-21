@@ -397,8 +397,8 @@ health check noticed.
 
 *Defence:* the launcher adds `--allow-net` when the Node that runs it knows
 the flag (`process.allowedNodeEnvironmentFlags`) — Node 24 would refuse an
-unknown flag — and CI runs the Siege against the image on every pull
-request, Dependabot's included.
+unknown flag — and CI runs the Siege against the image on every push and
+pull request.
 
 ### Not a vulnerability, but you will see it
 

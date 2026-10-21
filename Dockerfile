@@ -6,7 +6,8 @@
 # Gatehouse under the Node.js permission model.
 #
 # Base images are pinned by digest (and no `# syntax=` frontend image is
-# pulled); Dependabot keeps the digests current.
+# pulled). Dependabot alerts flag a vulnerable one; every bump is a reviewed
+# commit like any other.
 
 # ---- build ---------------------------------------------------------------
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS build

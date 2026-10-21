@@ -21,7 +21,7 @@ COPY apps/ apps/
 RUN make all && make test
 
 # ---- runtime -------------------------------------------------------------
-FROM node:24-trixie-slim@sha256:7f486cabe892bff8fef04c0f7da8dba84a560be3e4e2740b7a86afc57ebec315
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libcob4t64 libgfortran5 \
  && rm -rf /var/lib/apt/lists/* \

@@ -35,6 +35,9 @@ const flags = [
   '--allow-child-process',
 ];
 if (process.platform === 'linux') flags.push('--allow-fs-read=/usr/bin/prlimit');
+// From Node 25 the permission model covers the network too, and Gatehouse
+// must listen. Only a Node that knows the flag gets it: Node 24 refuses it.
+if (process.allowedNodeEnvironmentFlags.has('--allow-net')) flags.push('--allow-net');
 if (process.env.ALCAZAR_EVIDENCE_DIR) {
   // Durable evidence: created now, like the job directory, so the grant
   // covers everything below it (HARDENING.md, item 16).

@@ -386,6 +386,20 @@ deployment's part. Evidence also needs a master key that outlives the
 process (`ALCAZAR_KEY_FILE`): sealed with a key generated per run, it would
 outlive every key that could check it, and Gatehouse refuses to start.
 
+### 28. A new Node puts the network under the permission model
+
+Dependabot's first pull request moved the image from Node 24 to Node 26, and
+the container stopped at start-up: `ERR_ACCESS_DENIED ... Use --allow-net`.
+From Node 25 the permission model covers the network as well, so a server
+started with `--permission` and the old grants cannot even listen. The image
+built, the unit tests (on Node 24) passed, and only the container job's
+health check noticed.
+
+*Defence:* the launcher adds `--allow-net` when the Node that runs it knows
+the flag (`process.allowedNodeEnvironmentFlags`) — Node 24 would refuse an
+unknown flag — and CI runs the Siege against the image on every pull
+request, Dependabot's included.
+
 ### Not a vulnerability, but you will see it
 
 On Debian 13, every GnuCOBOL program prints *"program compiled against libxml

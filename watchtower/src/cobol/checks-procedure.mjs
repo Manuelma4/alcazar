@@ -203,8 +203,8 @@ function checkDisplay(ctx, statement) {
     const token = tokens[k];
     if (token.type === 'word' && DISPLAY_STOPS.has(token.upper)) break;
     const operand = readOperand(tokens, k, statement.end);
-    // A reference-modified operand (WS-PAN(1:6)) is the usual masking idiom.
-    if (operand.kind === 'identifier' && !operand.refMod) reportSensitive(ctx, operand.token);
+    // Only a statically bounded partial reference can use the masking exemption.
+    if (operand.kind === 'identifier' && !partialDisplayReference(ctx, operand)) reportSensitive(ctx, operand.token);
     else if (operand.kind === 'function' && !LENGTH_FUNCTIONS.has(operand.name ?? '')) {
       for (let j = operand.argsStart ?? 0; j < (operand.argsEnd ?? 0); j++) {
         const arg = tokens[j];
@@ -216,6 +216,33 @@ function checkDisplay(ctx, statement) {
     }
     k = operand.next;
   }
+}
+
+/**
+ * @param {CobolContext} ctx
+ * @param {Operand} operand
+ * @returns {boolean}
+ */
+function partialDisplayReference(ctx, operand) {
+  if (!operand.refMod) return false;
+  const item = ctx.symbols.resolve({ name: operand.name ?? operand.token.upper, qualifiers: operand.qualifiers });
+  const size = item?.length;
+  if (!Number.isSafeInteger(size) || size <= 0) return false;
+  const { tokens } = ctx;
+  const end = operand.next;
+  let start;
+  let length;
+  if (isPunct(tokens[end - 5], '(') && tokens[end - 4]?.type === 'number'
+    && isPunct(tokens[end - 3], ':') && tokens[end - 2]?.type === 'number' && isPunct(tokens[end - 1], ')')) {
+    start = Number(tokens[end - 4].value);
+    length = Number(tokens[end - 2].value);
+  } else if (isPunct(tokens[end - 4], '(') && tokens[end - 3]?.type === 'number'
+    && isPunct(tokens[end - 2], ':') && isPunct(tokens[end - 1], ')')) {
+    start = Number(tokens[end - 3].value);
+    length = size - start + 1;
+  }
+  return Number.isSafeInteger(start) && Number.isSafeInteger(length)
+    && start >= 1 && length >= 1 && length < size && start + length - 1 <= size;
 }
 
 /**

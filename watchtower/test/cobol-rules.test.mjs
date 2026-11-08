@@ -105,6 +105,16 @@ describe('ALZ-COB-004 hard-coded credentials', () => {
 });
 
 describe('ALZ-COB-005 sensitive DISPLAY', () => {
+  for (const span of ['1:16', '1:', '1:99', '13:8', '0:4', 'WS-START:WS-LENGTH']) {
+    it(`flags full or unproven sensitive spans (${span})`, () => {
+      const found = hits({
+        data: ['01  WS-PAN PIC X(16).', '01  WS-START PIC 99.', '01  WS-LENGTH PIC 99.'],
+        procedure: [`    DISPLAY WS-PAN(${span})`],
+      }, 'ALZ-COB-005');
+      assert.equal(found.length, 1);
+    });
+  }
+
   it('flags card numbers, CVV, PIN, IBAN, passwords and tokens', () => {
     const found = hits({
       data: ['01  WS-PAN PIC X(16).', '01  WS-CARD-NUM PIC X(16).', '01  WS-CVV2 PIC 999.', '01  WS-PIN PIC 9(4).', '01  EMP-IBAN PIC X(34).', '01  WS-AUTH-TOKEN PIC X(32).'],
@@ -117,7 +127,8 @@ describe('ALZ-COB-005 sensitive DISPLAY', () => {
     const found = hits({
       data: ['01  WS-PAN-MASKED PIC X(16).', '01  WS-PAN PIC X(16).', '01  WS-SPINDLE PIC X.', '01  WS-COMPANY PIC X(20).', '01  WS-PIN-TRIES PIC 9.'],
       procedure: ['    DISPLAY "ENTER PIN" WS-PAN-MASKED', '    DISPLAY FUNCTION LENGTH(WS-PAN)', '    DISPLAY WS-SPINDLE WS-COMPANY WS-PIN-TRIES',
-        '    DISPLAY LENGTH OF WS-PAN', '    DISPLAY WS-PAN(1:6) "******" WS-PAN(13:4)'],
+        '    DISPLAY LENGTH OF WS-PAN', '    DISPLAY WS-PAN(1:6) "******" WS-PAN(13:4)',
+        '    DISPLAY WS-PAN(13:)'],
     }, 'ALZ-COB-005');
     assert.equal(found.length, 0);
   });

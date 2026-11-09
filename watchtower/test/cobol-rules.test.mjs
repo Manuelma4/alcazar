@@ -195,6 +195,8 @@ describe('ALZ-COB-009 monetary arithmetic without ON SIZE ERROR', () => {
     '01  WS-AMT PIC 9(6)V99.',
     '01  WS-PAY PIC 9(4)V99.',
     '01  WS-FEE PIC 9V99.',
+    '01  WS-TAX PIC 9P.',
+    '01  WS-PRICE PIC P9.',
   ];
 
   for (const [expression, expected] of [
@@ -205,6 +207,11 @@ describe('ALZ-COB-009 monetary arithmetic without ON SIZE ERROR', () => {
     ['WS-AMT BY 2 GIVING WS-AMT REMAINDER WS-FEE', 0],
     ['1999999 BY 200 GIVING WS-PAY', 0],
     ['1999999 BY 200 GIVING WS-PAY ROUNDED', 1],
+    ['95 BY 1 GIVING WS-TAX ROUNDED', 1],
+    ['95 BY 1 GIVING WS-TAX', 0],
+    ['90 BY 1 GIVING WS-TAX ROUNDED', 0],
+    ['0.1 BY 1 GIVING WS-PRICE', 1],
+    ['0.09 BY 1 GIVING WS-PRICE ROUNDED', 0],
   ]) {
     it(`checks quotient capacity for DIVIDE ${expression}`, () => {
       const found = hits({ data: divisionData, procedure: [`    DIVIDE ${expression}`] }, 'ALZ-COB-009');

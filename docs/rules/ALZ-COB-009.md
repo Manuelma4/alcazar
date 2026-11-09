@@ -16,6 +16,8 @@ Arithmetic into a monetary field can overflow and has no ON SIZE ERROR phrase.
 
 Watchtower skips the finding when it can prove that the result fits. For example, it bounds `COMPUTE WS-CENTS = WS-INT * 100 + WS-DEC` from the operand PICTUREs. For `DIVIDE` by a nonzero literal it compares the quotient to the receiving PICTURE, with a conservative capacity check when `ROUNDED` could carry into the integer part. A `REMAINDER` field is outside this quotient check. ALZ-COB-010 covers divisors that may be zero, and ALZ-COB-011 covers floating-point receivers.
 
+Scaling positions affect the limit. A `PIC 9P` receiver can store up to 90 in steps of ten, so a quotient of 95 fits with truncation and overflows with ordinary rounding. A `PIC P9` receiver can store up to 0.09 in steps of 0.01.
+
 ## Why it matters in legacy systems
 
 When a result does not fit, COBOL keeps the low-order digits (or, with some options, leaves the receiver unchanged) and continues. Totals that overflow at year end, balances that wrap at 99,999.99, interest accruals that silently drop millions: these are found by reconciliation weeks later, if at all.

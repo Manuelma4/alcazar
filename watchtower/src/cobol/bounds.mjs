@@ -115,14 +115,17 @@ export function quotientFits(dividend, divisor, receiver, rounded) {
   if (!dividend || !divisor || divisor.num === 0n || !receiver) return false;
   const { intDigits, decDigits } = receiver;
   if (intDigits === null || decDigits === null || intDigits + decDigits > MAX_DIGITS) return false;
-  const numerator = dividend.num * 10n ** BigInt(divisor.scale);
+  const storedDigits = receiver.pic?.category === 'numeric' ? receiver.pic.length : intDigits + decDigits;
+  if (storedDigits <= 0 || storedDigits > intDigits + decDigits) return false;
+  // Leading P positions increase the scale without storing digits. Trailing P
+  // positions increase the unit of the least significant stored digit.
+  const unit = 10n ** BigInt(Math.max(0, intDigits - storedDigits));
+  const limit = 10n ** BigInt(storedDigits) * unit;
+  const numerator = dividend.num * 10n ** BigInt(divisor.scale + decDigits);
   const denominator = divisor.num * 10n ** BigInt(dividend.scale);
-  if (!rounded) return numerator < denominator * 10n ** BigInt(intDigits);
-  // A rounding mode can carry into the integer part. A quotient at or below
-  // the maximum representable magnitude fits regardless of the mode.
-  const units = 10n ** BigInt(decDigits);
-  const capacity = 10n ** BigInt(intDigits + decDigits) - 1n;
-  return numerator * units <= denominator * capacity;
+  if (!rounded) return numerator < denominator * limit;
+  // A quotient at or below the maximum representable magnitude fits regardless of the rounding mode.
+  return numerator <= denominator * (limit - unit);
 }
 
 /**

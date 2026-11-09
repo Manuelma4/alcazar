@@ -191,6 +191,35 @@ describe('ALZ-COB-008 alphanumeric truncation', () => {
 });
 
 describe('ALZ-COB-009 monetary arithmetic without ON SIZE ERROR', () => {
+  const divisionData = [
+    '01  WS-AMT PIC 9(6)V99.',
+    '01  WS-PAY PIC 9(4)V99.',
+    '01  WS-FEE PIC 9V99.',
+  ];
+
+  for (const [expression, expected] of [
+    ['WS-AMT BY 2 GIVING WS-PAY', 1],
+    ['2 INTO WS-AMT GIVING WS-PAY', 1],
+    ['0.5 INTO WS-PAY', 1],
+    ['2 INTO WS-PAY', 0],
+    ['WS-AMT BY 2 GIVING WS-AMT REMAINDER WS-FEE', 0],
+    ['1999999 BY 200 GIVING WS-PAY', 0],
+    ['1999999 BY 200 GIVING WS-PAY ROUNDED', 1],
+  ]) {
+    it(`checks quotient capacity for DIVIDE ${expression}`, () => {
+      const found = hits({ data: divisionData, procedure: [`    DIVIDE ${expression}`] }, 'ALZ-COB-009');
+      assert.equal(found.length, expected);
+    });
+  }
+
+  it('accepts a guarded DIVIDE that can overflow its quotient', () => {
+    const found = hits({
+      data: divisionData,
+      procedure: ['    DIVIDE WS-AMT BY 2 GIVING WS-PAY', '        ON SIZE ERROR CONTINUE', '    END-DIVIDE'],
+    }, 'ALZ-COB-009');
+    assert.equal(found.length, 0);
+  });
+
   it('flags ADD / SUBTRACT / MULTIPLY / COMPUTE into money fields', () => {
     const found = hits({
       data: ['01  WS-BAL PIC S9(7)V99.', '01  WS-AMT PIC S9(7)V99.', '01  WS-TOTAL PIC 9(7)V99.', '01  WS-FEE PIC 9(5)V99.'],

@@ -7,7 +7,7 @@
 import { cobolMoneyStrength, isCobolSecretName, isCobolSensitiveName } from '../names.mjs';
 import { escapeInvisible } from '../text.mjs';
 import {
-  addBounds, expressionBound, fitsIntegerDigits, itemBound, literalBound, multiplyBounds, parseNumericLiteral,
+  addBounds, expressionBound, fitsIntegerDigits, itemBound, literalBound, multiplyBounds, parseNumericLiteral, quotientFits,
 } from './bounds.mjs';
 import { FIGURATIVES } from './symbols.mjs';
 import {
@@ -391,6 +391,8 @@ function checkStringLiteralMove(ctx, literal, receiver, to) {
  * @property {string} divisor          text of the (first unsafe) divisor
  * @property {boolean} multiplies
  * @property {boolean} [exponent]      '**' (decimals of the result are unbounded)
+ * @property {{ dividend: Operand|null|undefined, divisor: import('./bounds.mjs').Bound|null,
+ *   quotients: Operand[] } | null} [division]  null dividend means an in-place quotient
  * @property {import('./bounds.mjs').Bound|null} result  bound of the stored value, when the
  *   receiver is not itself an operand (GIVING, COMPUTE); null when unknown
  */
@@ -411,8 +413,8 @@ function checkArithmetic(ctx, statement) {
     const into = shape.receivers.length > 0 ? ` into ${nameOf(shape.receivers[0])}` : '';
     ctx.sink.addAt('ALZ-COB-010', verbToken,
       `${statement.verb}${into} divides by ${escapeInvisible(shape.divisor)} without ON SIZE ERROR: a zero divisor abends the job or leaves the receiver unchanged and processing continues.`);
-  } else if (!sizeError && statement.verb !== 'DIVIDE' && monetary.length > 0) {
-    const receiver = monetary.find((r) => !fitsIntegerDigits(shape.result, resolveOperand(ctx, r)?.intDigits ?? null));
+  } else if (!sizeError && monetary.length > 0) {
+    const receiver = monetary.find((r) => !fitsArithmeticReceiver(ctx, shape, r));
     if (receiver) {
       const item = resolveOperand(ctx, receiver);
       const capacity = item && item.picture ? ` (PIC ${item.picture})` : '';
@@ -432,6 +434,21 @@ function checkArithmetic(ctx, statement) {
       `${nameOf(receiver)} (${describeItem(item)}) receives a ${what} without ROUNDED: `
       + 'fractions of a cent are truncated instead of rounded, a systematic loss ("salami slicing").');
   }
+}
+
+/**
+ * @param {CobolContext} ctx
+ * @param {ArithmeticShape} shape
+ * @param {Operand} receiver
+ * @returns {boolean}
+ */
+function fitsArithmeticReceiver(ctx, shape, receiver) {
+  const item = resolveOperand(ctx, receiver);
+  if (!shape.division) return fitsIntegerDigits(shape.result, item?.intDigits ?? null);
+  if (!shape.division.quotients.includes(receiver)) return true;
+  const dividend = shape.division.dividend === null ? receiver : shape.division.dividend;
+  return quotientFits(dividend ? operandBound(ctx, dividend) : null, shape.division.divisor,
+    item, receiver.rounded === true);
 }
 
 /**
@@ -528,6 +545,7 @@ function verbShape(ctx, statement) {
   /** @type {Operand[]} */
   let sources = [...first];
   let divisorOperand = null;
+  let division = null;
   if (verb === 'ADD') receivers = giving ? giving.operands : find('TO')?.operands ?? [];
   else if (verb === 'SUBTRACT') receivers = giving ? giving.operands : find('FROM')?.operands ?? [];
   else if (verb === 'MULTIPLY') {
@@ -539,6 +557,11 @@ function verbShape(ctx, statement) {
     const by = find('BY');
     divisorOperand = into ? first[0] : by?.operands[0];
     receivers = giving ? giving.operands : into?.operands ?? [];
+    division = {
+      dividend: giving ? (into ? into.operands[0] : first[0]) : null,
+      divisor: divisorOperand?.kind === 'number' ? literalBound(divisorOperand.token.value) : null,
+      quotients: receivers,
+    };
     if (remainder) receivers = [...receivers, ...remainder.operands];
   }
   receivers = receivers.filter((r) => r.kind === 'identifier');
@@ -557,6 +580,7 @@ function verbShape(ctx, statement) {
     unsafeDivision,
     divisor: divisorOperand ? divisorOperand.token.value : 'the divisor',
     multiplies: verb === 'MULTIPLY',
+    division,
     result,
   };
 }

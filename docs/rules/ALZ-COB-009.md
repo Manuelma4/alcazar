@@ -8,11 +8,13 @@
 | **Precision** | Medium |
 | **SARIF name** | `ArithmeticWithoutSizeError` |
 
-ADD, SUBTRACT, MULTIPLY or COMPUTE into a monetary field has no ON SIZE ERROR phrase.
+Arithmetic into a monetary field can overflow and has no ON SIZE ERROR phrase.
 
 ## What Watchtower detects
 
-`ADD`, `SUBTRACT`, `MULTIPLY` and `COMPUTE` into a receiver whose name looks monetary, when the statement (from the verb to the next verb, scope terminator or period) contains no `SIZE ERROR` phrase. Strong money words (AMT, AMOUNT, BAL, BALANCE, PRICE, FEE, INTEREST, PAY, SALARY, TAX, CREDIT, DEBIT, CENTS) always count; TOTAL, SUM, RATE and LIMIT count only for fields with decimal places, because a `TOTAL` or `SUM` without cents is usually a counter or a check digit sum. No finding is raised when the result provably fits: for `COMPUTE` and `GIVING` forms Watchtower bounds the result from the operand PICTUREs (for example `COMPUTE WS-CENTS = WS-INT * 100 + WS-DEC` with 9(13), 99 and 9(15)). A division whose divisor may be zero is ALZ-COB-010's concern (one by a non-zero literal is checked here like any other arithmetic), and floating-point receivers are ALZ-COB-011's.
+`ADD`, `SUBTRACT`, `MULTIPLY`, `DIVIDE` and `COMPUTE` into a receiver whose name looks monetary, when the statement (from the verb to the next verb, scope terminator or period) contains no `SIZE ERROR` phrase. Strong money words (AMT, AMOUNT, BAL, BALANCE, PRICE, FEE, INTEREST, PAY, SALARY, TAX, CREDIT, DEBIT, CENTS) always count. TOTAL, SUM, RATE and LIMIT count only for fields with decimal places, because a `TOTAL` or `SUM` without cents is usually a counter or a check digit sum.
+
+Watchtower skips the finding when it can prove that the result fits. For example, it bounds `COMPUTE WS-CENTS = WS-INT * 100 + WS-DEC` from the operand PICTUREs. For `DIVIDE` by a nonzero literal it compares the quotient to the receiving PICTURE, with a conservative capacity check when `ROUNDED` could carry into the integer part. A `REMAINDER` field is outside this quotient check. ALZ-COB-010 covers divisors that may be zero, and ALZ-COB-011 covers floating-point receivers.
 
 ## Why it matters in legacy systems
 

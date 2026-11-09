@@ -104,6 +104,28 @@ export function fitsIntegerDigits(bound, intDigits) {
 }
 
 /**
+ * Check the quotient without approximating a recurring decimal.
+ * @param {Bound|null} dividend
+ * @param {Bound|null} divisor
+ * @param {DataItem|null} receiver
+ * @param {boolean} rounded
+ * @returns {boolean}
+ */
+export function quotientFits(dividend, divisor, receiver, rounded) {
+  if (!dividend || !divisor || divisor.num === 0n || !receiver) return false;
+  const { intDigits, decDigits } = receiver;
+  if (intDigits === null || decDigits === null || intDigits + decDigits > MAX_DIGITS) return false;
+  const numerator = dividend.num * 10n ** BigInt(divisor.scale);
+  const denominator = divisor.num * 10n ** BigInt(dividend.scale);
+  if (!rounded) return numerator < denominator * 10n ** BigInt(intDigits);
+  // A rounding mode can carry into the integer part. A quotient at or below
+  // the maximum representable magnitude fits regardless of the mode.
+  const units = 10n ** BigInt(decDigits);
+  const capacity = 10n ** BigInt(intDigits + decDigits) - 1n;
+  return numerator * units <= denominator * capacity;
+}
+
+/**
  * Bound of the arithmetic expression tokens[start, end); null when it
  * cannot be bounded (division, exponentiation, functions, unknown items).
  * @param {(operand: Operand) => DataItem|null} resolve

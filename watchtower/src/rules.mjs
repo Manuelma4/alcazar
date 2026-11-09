@@ -135,7 +135,7 @@ export const RULES = Object.freeze([
     cwe: 'CWE-190',
     language: 'cobol',
     precision: 'medium',
-    summary: 'ADD, SUBTRACT, MULTIPLY or COMPUTE into a monetary field has no ON SIZE ERROR phrase.',
+    summary: 'Arithmetic into a monetary field can overflow and has no ON SIZE ERROR phrase.',
     rationale: 'When a result does not fit the receiver, COBOL truncates the high-order digits (or leaves the receiver unchanged, depending on compiler options) and carries on. Overflowed totals and balances post silently: 99,999.99 + 0.02 can become 0.01.',
     fix: 'Add ON SIZE ERROR (and NOT ON SIZE ERROR) with explicit handling (reject the transaction, alert, set a return code), and size receivers for the largest expected value.',
   }),

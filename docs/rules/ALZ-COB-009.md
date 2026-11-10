@@ -36,6 +36,48 @@ When a result does not fit, COBOL keeps the low-order digits (or, with some opti
            END-ADD
 ```
 
+## Check a guarded division
+
+This program divides the same amount into two receivers. The first stores
+multiples of ten, so rounding the quotient of 95 requires 100, beyond its
+capacity of 90. The second stores units and can represent 95 exactly.
+Both statements handle a size error explicitly.
+
+Save this fixed-format example as `scaled-tax.cob` in a temporary directory.
+Keep the leading spaces.
+
+```cobol
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. SCALED-TAX.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-ROUNDED-TAX PIC 9P.
+       01 WS-UNIT-TAX    PIC 99.
+       PROCEDURE DIVISION.
+           DIVIDE 95 BY 1 GIVING WS-ROUNDED-TAX ROUNDED
+               ON SIZE ERROR DISPLAY "TENS: SIZE ERROR"
+               NOT ON SIZE ERROR DISPLAY "TENS: STORED"
+           END-DIVIDE
+           DIVIDE 95 BY 1 GIVING WS-UNIT-TAX ROUNDED
+               ON SIZE ERROR DISPLAY "UNITS: SIZE ERROR"
+               NOT ON SIZE ERROR DISPLAY "UNITS: " WS-UNIT-TAX
+           END-DIVIDE
+           STOP RUN.
+```
+
+From the repository root, set `example` to the absolute path of that temporary
+directory. Use GnuCOBOL for the runtime check and Node.js for Watchtower.
+
+```sh
+cobc -x -fixed -o "$example/scaled-tax" "$example/scaled-tax.cob"
+"$example/scaled-tax"
+node watchtower/bin/watchtower.mjs scan "$example/scaled-tax.cob" --fail-on info
+```
+
+The program prints `TENS: SIZE ERROR` and `UNITS: 95`. The scan reports
+no findings for this guarded program. The runtime check confirms which
+branch each receiver takes.
+
 ## How to fix
 
 Add ON SIZE ERROR (and NOT ON SIZE ERROR) with explicit handling (reject the transaction, alert, set a return code), and size receivers for the largest expected value.

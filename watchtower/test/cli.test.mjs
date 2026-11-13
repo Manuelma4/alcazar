@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -146,6 +146,7 @@ describe('CLI file handling', () => {
 
   it('writes only the --output file', async () => {
     const out = join(dir, 'report.sarif');
+    writeFileSync(out, 'old report'.repeat(20_000));
     const { code, stdout } = await run(['scan', 'src', '--format', 'sarif', '--output', out, '--fail-on', 'none'], { cwd: dir });
     assert.equal(code, 0);
     assert.equal(stdout, '');
@@ -158,6 +159,17 @@ describe('CLI file handling', () => {
     symlinkSync(target, join(dir, 'report-link.txt'));
     const { code } = await run(['scan', 'src', '--output', join(dir, 'report-link.txt')], { cwd: dir });
     assert.equal(code, 2);
+    assert.equal(readFileSync(target, 'utf8'), 'keep');
+  });
+
+  it('preserves the target of a hard-linked report destination', async () => {
+    const target = join(dir, 'report-original.txt');
+    const alias = join(dir, 'report-alias.txt');
+    writeFileSync(target, 'keep');
+    linkSync(target, alias);
+    const { code, stderr } = await run(['scan', 'src', '--output', alias, '--fail-on', 'none'], { cwd: dir });
+    assert.equal(code, 2);
+    assert.match(stderr, /cannot write/);
     assert.equal(readFileSync(target, 'utf8'), 'keep');
   });
 

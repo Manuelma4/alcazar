@@ -12,7 +12,7 @@
  * The CLI reads source files and writes only the --output file; it never
  * executes anything and never follows symbolic links.
  */
-import { closeSync, constants, openSync, writeSync } from 'node:fs';
+import { closeSync, constants, fstatSync, ftruncateSync, openSync, writeSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 import {
@@ -131,15 +131,18 @@ function warn(message) {
 }
 
 /**
- * Write the report without following a symbolic link at the destination.
+ * Write the report only to a regular, single-link file.
  * @param {string} path
  * @param {string} data
  */
 function writeReport(path, data) {
-  const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0);
+  const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0);
   const bytes = new TextEncoder().encode(data);
   const fd = openSync(path, flags, 0o644);
   try {
+    const stats = fstatSync(fd);
+    if (!stats.isFile() || stats.nlink !== 1) throw new Error('expected a regular file with one hard link');
+    ftruncateSync(fd, 0);
     let offset = 0;
     while (offset < bytes.length) offset += writeSync(fd, bytes, offset, bytes.length - offset);
   } finally {

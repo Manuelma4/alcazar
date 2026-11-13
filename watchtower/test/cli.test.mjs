@@ -173,6 +173,37 @@ describe('CLI file handling', () => {
     assert.equal(readFileSync(target, 'utf8'), 'keep');
   });
 
+  it('preserves a scanned source used as the output path', async () => {
+    const source = join(dir, 'src', 'MEDIUM.cbl');
+    const original = readFileSync(source);
+    const alias = join(dir, 'source-alias');
+    symlinkSync(join(dir, 'src'), alias);
+    for (const output of [source, join(alias, 'MEDIUM.cbl')]) {
+      const { code, stderr } = await run(['scan', source, '--output', output, '--fail-on', 'none'], { cwd: dir });
+      assert.deepEqual(readFileSync(source), original);
+      assert.equal(code, 2);
+      assert.match(stderr, /report would overwrite a scan input/);
+    }
+  });
+
+  it('preserves a resolved copybook used as the output path', async () => {
+    const source = join(dir, 'USES-COPY.cbl');
+    const copybook = join(dir, 'FIELDDATA.cpy');
+    const original = '       01 FIELD-DATA PIC X(8).\n';
+    writeFileSync(source, cobolProgram({
+      data: ['COPY FIELDDATA.', '01 SHORT-FIELD PIC X.'],
+      procedure: ['    MOVE FIELD-DATA TO SHORT-FIELD'],
+    }));
+    writeFileSync(copybook, original);
+    const control = await run(['scan', source, '--format=json', '--fail-on=none'], { cwd: dir });
+    assert.equal(control.code, 0);
+    assert.ok(JSON.parse(control.stdout).results[0].findings.some((finding) => finding.ruleId === 'ALZ-COB-008'));
+    const { code, stderr } = await run(['scan', source, '--output', copybook, '--fail-on', 'none'], { cwd: dir });
+    assert.equal(readFileSync(copybook, 'utf8'), original);
+    assert.equal(code, 2);
+    assert.match(stderr, /cannot write/);
+  });
+
   it('colours only on a TTY and never with --no-color or NO_COLOR', async () => {
     const plain = await run(['scan', 'src', '--fail-on', 'none'], { cwd: dir });
     assert.doesNotMatch(plain.stdout, new RegExp(String.fromCharCode(27)));

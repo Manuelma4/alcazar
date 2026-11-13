@@ -18,7 +18,7 @@ import process from 'node:process';
 import {
   RULES, SEVERITIES, SOURCE_EXTENSIONS, VERSION, countAtOrAbove, formatText, scan, summarize, toSarif,
 } from '../src/index.mjs';
-import { collectFiles, copybookResolver, readSourceFile } from '../src/node/files.mjs';
+import { collectFiles, copybookResolver, fileIdentity, readSourceFile } from '../src/node/files.mjs';
 
 const EXIT_OK = 0;
 const EXIT_FINDINGS = 1;
@@ -131,17 +131,19 @@ function warn(message) {
 }
 
 /**
- * Write the report only to a regular, single-link file.
+ * Write the report to a regular, single-link file outside the scan inputs.
  * @param {string} path
  * @param {string} data
+ * @param {Set<string>} inputs
  */
-function writeReport(path, data) {
+function writeReport(path, data, inputs) {
   const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0);
   const bytes = new TextEncoder().encode(data);
   const fd = openSync(path, flags, 0o644);
   try {
-    const stats = fstatSync(fd);
-    if (!stats.isFile() || stats.nlink !== 1) throw new Error('expected a regular file with one hard link');
+    const stats = fstatSync(fd, { bigint: true });
+    if (!stats.isFile() || stats.nlink !== 1n) throw new Error('expected a regular file with one hard link');
+    if (inputs.has(fileIdentity(stats))) throw new Error('report would overwrite a scan input');
     ftruncateSync(fd, 0);
     let offset = 0;
     while (offset < bytes.length) offset += writeSync(fd, bytes, offset, bytes.length - offset);
@@ -165,21 +167,22 @@ function runScan(argv) {
   }
   let ioError = false;
   const results = [];
+  const inputs = new Set();
   for (const file of collected.files) {
     let source;
     try {
-      source = readSourceFile(file.path);
+      source = readSourceFile(file.path, inputs);
     } catch (error) {
       warn(`error: cannot read ${file.rel}: ${/** @type {Error} */ (error).message}`);
       ioError = true;
       continue;
     }
-    const result = scan(source, { filename: file.rel, resolveCopybook: copybookResolver(file.path) });
+    const result = scan(source, { filename: file.rel, resolveCopybook: copybookResolver(file.path, inputs) });
     results.push({ file: file.rel, ...result });
   }
   const report = render(results, args);
   try {
-    if (args.output) writeReport(resolve(cwd, args.output), report);
+    if (args.output) writeReport(resolve(cwd, args.output), report, inputs);
     else process.stdout.write(report);
   } catch (error) {
     warn(`error: cannot write ${args.output}: ${/** @type {NodeJS.ErrnoException} */ (error).code ?? /** @type {Error} */ (error).message}`);

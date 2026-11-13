@@ -67,7 +67,9 @@ Files and safety:
   (`--exclude 'examples/**'`).
 - Symbolic links are never followed (files are opened with `O_NOFOLLOW`), files larger than 2 MB are
   skipped with a warning, and reports go only to regular `--output` files with a single hard link.
-  Watchtower checks the open destination before truncating an existing report. Nothing is executed.
+  Watchtower checks the open destination before truncating an existing report.
+  An output that refers to an opened source file or copybook is refused.
+  Nothing is executed.
 - COBOL `COPY name.` members are resolved from the directory of the including file (no paths, no
   links, size-limited, recursion-guarded) to type the data items they declare. Findings are never
   reported inside a copybook from the including program; scan the copybook itself for that.

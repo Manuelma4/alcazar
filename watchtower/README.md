@@ -62,7 +62,8 @@ Files and safety:
 - Directories are walked recursively and in a stable order. Extensions (any case): COBOL `.cob .cbl
   .cpy .cobol`; free-form Fortran `.f90 .f95 .f03 .f08 .f18`; fixed-form Fortran `.f .for .ftn .f77`.
   A file named explicitly is scanned whatever its extension (its language is sniffed).
-- `node_modules`, `.git`, `build` and `dist` are always excluded. A pattern without `/` matches any
+- Exclusions apply to explicit input paths and paths found during directory scans.
+  `node_modules`, `.git`, `build` and `dist` are always excluded. A pattern without `/` matches any
   path segment (`--exclude '*.cpy'`), a pattern with `/` matches the relative path
   (`--exclude 'examples/**'`).
 - Symbolic links are never followed (files are opened with `O_NOFOLLOW`), files larger than 2 MB are

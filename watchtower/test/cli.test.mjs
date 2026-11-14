@@ -144,6 +144,15 @@ describe('CLI file handling', () => {
     assert.equal((await run(['scan', 'src', '--fail-on', 'medium'], { cwd: dir })).code, 1);
   });
 
+  it('applies exclusions to explicit directory and file arguments', async () => {
+    const { code, stdout } = await run([
+      'scan', 'src/MEDIUM.cbl', 'node_modules', 'legacy', '--format', 'json', '--fail-on', 'none',
+      '--exclude', '**/M?DIUM.*', '--exclude', 'legacy/**',
+    ], { cwd: dir });
+    assert.equal(code, 0);
+    assert.deepEqual(JSON.parse(stdout).results, []);
+  });
+
   it('writes only the --output file', async () => {
     const out = join(dir, 'report.sarif');
     const { code, stdout } = await run(['scan', 'src', '--format', 'sarif', '--output', out, '--fail-on', 'none'], { cwd: dir });

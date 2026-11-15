@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -150,6 +150,31 @@ describe('CLI file handling', () => {
     assert.equal(code, 0);
     assert.equal(stdout, '');
     assert.equal(JSON.parse(readFileSync(out, 'utf8')).version, '2.1.0');
+  });
+
+  it('preserves an existing --output report when a selected source cannot be read', {
+    skip: process.platform === 'win32' || process.getuid?.() === 0,
+  }, async () => {
+    const unreadable = join(dir, 'src', 'UNREADABLE.cbl');
+    const out = join(dir, 'previous.sarif');
+    const first = await run(
+      ['scan', 'src', 'legacy', '--format', 'sarif', '--output', out, '--fail-on', 'none'], { cwd: dir },
+    );
+    assert.equal(first.code, 0);
+    const previous = readFileSync(out);
+    writeFileSync(unreadable, '       IDENTIFICATION DIVISION.\n');
+    chmodSync(unreadable, 0o000);
+    try {
+      const { code, stdout, stderr } = await run(
+        ['scan', 'src', '--format', 'sarif', '--output', out, '--fail-on', 'none'], { cwd: dir },
+      );
+      assert.equal(code, 2);
+      assert.equal(stdout, '');
+      assert.match(stderr, /cannot read src\/UNREADABLE\.cbl/);
+      assert.deepEqual(readFileSync(out), previous);
+    } finally {
+      rmSync(unreadable);
+    }
   });
 
   it('refuses to write the report through a symbolic link', async () => {

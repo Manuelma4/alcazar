@@ -174,6 +174,7 @@ function runScan(argv) {
     const result = scan(source, { filename: file.rel, resolveCopybook: copybookResolver(file.path) });
     results.push({ file: file.rel, ...result });
   }
+  if (ioError && args.output) return EXIT_USAGE;
   const report = render(results, args);
   try {
     if (args.output) writeReport(resolve(cwd, args.output), report);

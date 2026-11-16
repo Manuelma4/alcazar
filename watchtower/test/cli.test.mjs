@@ -139,6 +139,24 @@ describe('CLI file handling', () => {
     assert.deepEqual(JSON.parse(glob.stdout).results.map((r) => r.file), ['legacy/OLD.cob']);
   });
 
+  it('rejects an explicitly selected source with invalid UTF-8', async () => {
+    const source = join(dir, 'ENCODING.cob');
+    const body = cobolProgram({ procedure: ['    GOBACK'] });
+    try {
+      writeFileSync(source, body + '      * café\n');
+      const control = await run(['scan', 'ENCODING.cob', '--fail-on', 'none', '--format', 'json'], { cwd: dir });
+      assert.equal(control.code, 0, control.stderr);
+      assert.deepEqual(JSON.parse(control.stdout).results.map((item) => item.file), ['ENCODING.cob']);
+      writeFileSync(source, Buffer.concat([Buffer.from(body), Buffer.from([0xff])]));
+      const invalid = await run(['scan', 'ENCODING.cob', '--fail-on', 'none', '--format', 'json'], { cwd: dir });
+      assert.equal(invalid.code, 2);
+      assert.match(invalid.stderr, /cannot read ENCODING\.cob: .*utf-8/i);
+      assert.deepEqual(JSON.parse(invalid.stdout).results, []);
+    } finally {
+      rmSync(source, { force: true });
+    }
+  });
+
   it('uses the threshold on unsuppressed findings only', async () => {
     assert.equal((await run(['scan', 'src', '--fail-on', 'high'], { cwd: dir })).code, 0);
     assert.equal((await run(['scan', 'src', '--fail-on', 'medium'], { cwd: dir })).code, 1);

@@ -15,7 +15,7 @@ const MAX_DEPTH = 64;
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 // O_NONBLOCK: a path swapped for a FIFO must not hang the scan on open().
 const NONBLOCK = constants.O_NONBLOCK ?? 0;
-const decoder = new TextDecoder('utf-8');
+const decoder = new TextDecoder('utf-8', { fatal: true });
 
 /**
  * @typedef {object} SourceFile
@@ -152,7 +152,7 @@ function addFile(absolute, size, ctx) {
  * Read a regular file as UTF-8 without following symbolic links.
  * @param {string} path
  * @returns {string}
- * @throws {Error} when the file is a link, not regular, or too large
+ * @throws {Error} when the file is a link, not regular, too large, or invalid UTF-8
  */
 export function readSourceFile(path) {
   const fd = openSync(path, constants.O_RDONLY | NOFOLLOW | NONBLOCK);

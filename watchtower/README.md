@@ -67,6 +67,7 @@ Files and safety:
   (`--exclude 'examples/**'`).
 - Symbolic links are never followed (files are opened with `O_NOFOLLOW`), files larger than 2 MB are
   skipped with a warning, and the only file ever written is the `--output` file (not through a link).
+  An unreadable selected source exits with code 2 before creating or replacing an output file.
   Nothing is executed.
 - COBOL `COPY name.` members are resolved from the directory of the including file (no paths, no
   links, size-limited, recursion-guarded) to type the data items they declare. Findings are never

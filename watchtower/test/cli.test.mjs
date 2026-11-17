@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -224,6 +224,13 @@ describe('CLI file handling', () => {
       const retried = await run(args, { cwd: folder });
       assert.equal(retried.code, 0, retried.stderr);
       assert.equal(JSON.parse(readFileSync(report, 'utf8')).version, '2.1.0');
+
+      const sourceBytes = readFileSync(copybook);
+      const collision = await run(['scan', 'PROG.cbl', '--output', 'ACCTREC.cpy'], { cwd: folder });
+      assert.deepEqual(readFileSync(copybook), sourceBytes);
+      assert.equal(collision.code, 2);
+      assert.match(collision.stderr, /report would overwrite a scan input/);
+
       rmSync(copybook);
       assert.equal((await run(args, { cwd: folder })).code, 0);
     } finally {
@@ -259,6 +266,30 @@ describe('CLI file handling', () => {
       assert.deepEqual(readFileSync(out), previous);
     } finally {
       rmSync(source, { force: true });
+    }
+  });
+
+  it('preserves the target of a hard-linked report destination', async () => {
+    const target = join(dir, 'report-original.txt');
+    const alias = join(dir, 'report-alias.txt');
+    writeFileSync(target, 'keep');
+    linkSync(target, alias);
+    const { code, stderr } = await run(['scan', 'src', '--output', alias, '--fail-on', 'none'], { cwd: dir });
+    assert.equal(code, 2);
+    assert.match(stderr, /cannot write/);
+    assert.equal(readFileSync(target, 'utf8'), 'keep');
+  });
+
+  it('preserves a scanned source used as the output path', async () => {
+    const source = join(dir, 'src', 'MEDIUM.cbl');
+    const original = readFileSync(source);
+    const alias = join(dir, 'source-alias');
+    symlinkSync(join(dir, 'src'), alias);
+    for (const output of [source, join(alias, 'MEDIUM.cbl')]) {
+      const { code, stderr } = await run(['scan', source, '--output', output, '--fail-on', 'none'], { cwd: dir });
+      assert.deepEqual(readFileSync(source), original);
+      assert.equal(code, 2);
+      assert.match(stderr, /report would overwrite a scan input/);
     }
   });
 

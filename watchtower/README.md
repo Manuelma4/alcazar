@@ -66,8 +66,9 @@ Files and safety:
   path segment (`--exclude '*.cpy'`), a pattern with `/` matches the relative path
   (`--exclude 'examples/**'`).
 - Symbolic links are never followed (files are opened with `O_NOFOLLOW`), files larger than 2 MB are
-  skipped with a warning, and the only file ever written is the `--output` file (not through a link).
-  An unreadable selected source exits with code 2 before creating or replacing an output file.
+  skipped with a warning, and reports go only to regular `--output` files with a single hard link.
+  Watchtower refuses a destination that refers to an opened source or copybook.
+  An unreadable selected source or resolved copybook exits with code 2 before writing a report.
   Nothing is executed.
 - COBOL `COPY name.` members are resolved from the directory of the including file (no paths, no
   links, size-limited, recursion-guarded) to type the data items they declare. Findings are never

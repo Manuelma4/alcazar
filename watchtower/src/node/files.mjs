@@ -148,19 +148,26 @@ function addFile(absolute, size, ctx) {
   ctx.collected.files.push({ path: absolute, rel });
 }
 
+/** @param {import('node:fs').BigIntStats} stats */
+export function fileIdentity(stats) {
+  return `${stats.dev}:${stats.ino}`;
+}
+
 /**
  * Read a regular file as UTF-8 without following symbolic links.
  * @param {string} path
  * @returns {string}
+ * @param {Set<string>} [inputs] Opened input file identities
  * @throws {Error} when the file is a link, not regular, too large, or invalid UTF-8
  */
-export function readSourceFile(path) {
+export function readSourceFile(path, inputs) {
   const fd = openSync(path, constants.O_RDONLY | NOFOLLOW | NONBLOCK);
   try {
-    const stats = fstatSync(fd);
+    const stats = fstatSync(fd, { bigint: true });
     if (!stats.isFile()) throw new Error('not a regular file');
+    inputs?.add(fileIdentity(stats));
     if (stats.size > MAX_FILE_BYTES) throw new Error('larger than 2 MB');
-    const buffer = new Uint8Array(stats.size);
+    const buffer = new Uint8Array(Number(stats.size));
     let offset = 0;
     while (offset < buffer.length) {
       const read = readSync(fd, buffer, offset, buffer.length - offset, offset);
@@ -179,10 +186,11 @@ const COPYBOOK_SUFFIXES = ['', '.cpy', '.cob', '.cbl', '.cobol'];
  * Resolve COPY names against the directory of the including file only
  * (case-insensitive, no path separators, no links, size-limited).
  * @param {string} sourcePath
+ * @param {Set<string>} [inputs] Opened input file identities
  * @param {(filename: string, error: unknown) => void} [onReadError]
  * @returns {(name: string) => string|null}
  */
-export function copybookResolver(sourcePath, onReadError) {
+export function copybookResolver(sourcePath, inputs, onReadError) {
   const dir = dirname(sourcePath);
   /** @type {Map<string, string>|null} */
   let listing = null;
@@ -203,7 +211,7 @@ export function copybookResolver(sourcePath, onReadError) {
       const actual = listing.get(`${clean}${suffix}`.toLowerCase());
       if (!actual || actual === basename(sourcePath)) continue;
       try {
-        return readSourceFile(join(dir, actual));
+        return readSourceFile(join(dir, actual), inputs);
       } catch (error) {
         onReadError?.(actual, error);
         return null;

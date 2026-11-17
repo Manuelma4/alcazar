@@ -262,8 +262,10 @@ Only `watchtower/bin/` and `watchtower/src/node/` use Node.js APIs.
 - Heuristic analysis: there is no full data-flow or inter-procedural analysis. Money, secret and
   credential detection relies on naming conventions; unusual names are missed, and generic words are
   deliberately excluded to keep false positives low.
-- Sources are read as UTF-8 (ASCII is a subset). Invalid UTF-8 in a selected source produces a
-  read error and exit code 2. Convert EBCDIC and other encodings to UTF-8 before scanning.
+- Sources and resolved copybooks are read as UTF-8 (ASCII is a subset). A read or
+  decoding failure in an opened copybook produces exit code 2, and an existing
+  `--output` report is preserved. Unresolved COPY names remain best effort.
+  Convert EBCDIC and other encodings to UTF-8 before scanning.
 - COBOL `COPY` members are expanded for DATA DIVISION typing only, never in the PROCEDURE DIVISION,
   and members used with `REPLACING` are skipped. `REPLACE` and conditional compilation (`>>IF`) are
   not evaluated.

@@ -179,9 +179,10 @@ const COPYBOOK_SUFFIXES = ['', '.cpy', '.cob', '.cbl', '.cobol'];
  * Resolve COPY names against the directory of the including file only
  * (case-insensitive, no path separators, no links, size-limited).
  * @param {string} sourcePath
+ * @param {(filename: string, error: unknown) => void} [onReadError]
  * @returns {(name: string) => string|null}
  */
-export function copybookResolver(sourcePath) {
+export function copybookResolver(sourcePath, onReadError) {
   const dir = dirname(sourcePath);
   /** @type {Map<string, string>|null} */
   let listing = null;
@@ -203,7 +204,8 @@ export function copybookResolver(sourcePath) {
       if (!actual || actual === basename(sourcePath)) continue;
       try {
         return readSourceFile(join(dir, actual));
-      } catch {
+      } catch (error) {
+        onReadError?.(actual, error);
         return null;
       }
     }

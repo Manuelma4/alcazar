@@ -171,7 +171,11 @@ function runScan(argv) {
       ioError = true;
       continue;
     }
-    const result = scan(source, { filename: file.rel, resolveCopybook: copybookResolver(file.path) });
+    const resolveCopybook = copybookResolver(file.path, (name, error) => {
+      warn(`error: cannot read COPY ${name} from ${file.rel}: ${/** @type {Error} */ (error).message}`);
+      ioError = true;
+    });
+    const result = scan(source, { filename: file.rel, resolveCopybook });
     results.push({ file: file.rel, ...result });
   }
   if (ioError && args.output) return EXIT_USAGE;

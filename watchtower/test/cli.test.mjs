@@ -195,6 +195,42 @@ describe('CLI file handling', () => {
     }
   });
 
+  it('preserves an existing report when a selected COPY file cannot be decoded', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'watchtower-copy-'));
+    try {
+      const source = join(folder, 'PROG.cbl');
+      const copybook = join(folder, 'ACCTREC.cpy');
+      const report = join(folder, 'report.sarif');
+      writeFileSync(source, [
+        '       IDENTIFICATION DIVISION.',
+        '       PROGRAM-ID. PROG.',
+        '       DATA DIVISION.',
+        '       WORKING-STORAGE SECTION.',
+        '           COPY ACCTREC.',
+        '       PROCEDURE DIVISION.',
+        '           GOBACK.',
+        '',
+      ].join('\n'));
+      writeFileSync(copybook, Buffer.from([0x20, 0xff, 0x0a]));
+      writeFileSync(report, 'previous report\n');
+      const args = ['scan', 'PROG.cbl', '--format', 'sarif', '--output', 'report.sarif'];
+      const result = await run(args, { cwd: folder });
+      assert.equal(result.code, 2);
+      assert.match(result.stderr, /cannot read COPY ACCTREC.cpy from PROG.cbl/);
+      assert.equal(result.stdout, '');
+      assert.equal(readFileSync(report, 'utf8'), 'previous report\n');
+
+      writeFileSync(copybook, '       01 ACCOUNT-CODE PIC X(10).\n');
+      const retried = await run(args, { cwd: folder });
+      assert.equal(retried.code, 0, retried.stderr);
+      assert.equal(JSON.parse(readFileSync(report, 'utf8')).version, '2.1.0');
+      rmSync(copybook);
+      assert.equal((await run(args, { cwd: folder })).code, 0);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
   it('refuses to write the report through a symbolic link', async () => {
     const target = join(dir, 'target.txt');
     writeFileSync(target, 'keep');

@@ -172,7 +172,7 @@ export function readSourceFile(path, inputs) {
     let offset = 0;
     while (offset < buffer.length) {
       const read = readSync(fd, buffer, offset, buffer.length - offset, offset);
-      if (read === 0) break;
+      if (read === 0) throw new Error('source ended before the expected size');
       offset += read;
     }
     return decoder.decode(buffer.subarray(0, offset));

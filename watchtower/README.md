@@ -266,7 +266,8 @@ Only `watchtower/bin/` and `watchtower/src/node/` use Node.js APIs.
   deliberately excluded to keep false positives low.
 - Sources and resolved copybooks are read as UTF-8 (ASCII is a subset). A read or
   decoding failure in an opened copybook produces exit code 2, and an existing
-  `--output` report is preserved. Unresolved COPY names remain best effort.
+  `--output` report is preserved. Premature end-of-file during a source read
+  also produces a read error. Unresolved COPY names remain best effort.
   Convert EBCDIC and other encodings to UTF-8 before scanning.
 - COBOL `COPY` members are expanded for DATA DIVISION typing only, never in the PROCEDURE DIVISION,
   and members used with `REPLACING` are skipped. `REPLACE` and conditional compilation (`>>IF`) are

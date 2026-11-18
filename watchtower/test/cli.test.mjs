@@ -162,6 +162,35 @@ describe('CLI file handling', () => {
     assert.equal((await run(['scan', 'src', '--fail-on', 'medium'], { cwd: dir })).code, 1);
   });
 
+  it('excludes malformed explicit sources before decoding and preserves the previous report on a real read failure', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'watchtower-exclude-'));
+    try {
+      writeFileSync(join(folder, 'GOOD.cbl'), cobolProgram({ procedure: ['    GOBACK'] }));
+      writeFileSync(join(folder, 'BAD.cbl'), Buffer.from([0xff]));
+      mkdirSync(join(folder, 'ignored'));
+      writeFileSync(join(folder, 'ignored', 'BAD.cbl'), Buffer.from([0xff]));
+      const args = ['scan', 'GOOD.cbl', 'BAD.cbl', 'ignored', '--format', 'json', '--output', 'report.json'];
+      const excluded = await run([...args, '--exclude', 'BAD.cbl', '--exclude', 'ignored/**'], { cwd: folder });
+      assert.equal(excluded.code, 0, excluded.stderr);
+      const report = readFileSync(join(folder, 'report.json'));
+      assert.deepEqual(JSON.parse(report).results.map((r) => r.file), ['GOOD.cbl']);
+      const invalid = await run(args, { cwd: folder });
+      assert.equal(invalid.code, 2);
+      assert.deepEqual(readFileSync(join(folder, 'report.json')), report);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('applies exclusions to explicit directory and file arguments', async () => {
+    const { code, stdout } = await run([
+      'scan', 'src/MEDIUM.cbl', 'node_modules', 'legacy', '--format', 'json', '--fail-on', 'none',
+      '--exclude', '**/M?DIUM.*', '--exclude', 'legacy/**',
+    ], { cwd: dir });
+    assert.equal(code, 0);
+    assert.deepEqual(JSON.parse(stdout).results, []);
+  });
+
   it('writes only the --output file', async () => {
     const out = join(dir, 'report.sarif');
     const { code, stdout } = await run(['scan', 'src', '--format', 'sarif', '--output', out, '--fail-on', 'none'], { cwd: dir });

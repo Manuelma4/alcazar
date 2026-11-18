@@ -64,7 +64,8 @@ Files and safety:
   A file named explicitly is scanned whatever its extension (its language is sniffed).
 - `node_modules`, `.git`, `build` and `dist` are always excluded. A pattern without `/` matches any
   path segment (`--exclude '*.cpy'`), a pattern with `/` matches the relative path
-  (`--exclude 'examples/**'`).
+  (`--exclude 'examples/**'`). Exclusions apply before opening explicit file and
+  directory arguments as well as files found during traversal.
 - Symbolic links are never followed (files are opened with `O_NOFOLLOW`), files larger than 2 MB are
   skipped with a warning, and reports go only to regular `--output` files with a single hard link.
   Watchtower refuses a destination that refers to an opened source or copybook.

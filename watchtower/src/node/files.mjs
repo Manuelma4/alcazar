@@ -53,6 +53,7 @@ export function collectFiles(inputs, { cwd, excludes, extensions }) {
   const seen = new Set();
   for (const input of inputs) {
     const absolute = resolve(cwd, input);
+    if (globs.some((glob) => matchGlob(glob, relativePath(cwd, absolute)))) continue;
     let stats;
     try {
       stats = lstatSync(absolute);

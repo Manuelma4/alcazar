@@ -287,6 +287,32 @@ Only `watchtower/bin/` and `watchtower/src/node/` use Node.js APIs.
 npm run test:watchtower
 ```
 
+For a focused check of file decoding and report preservation, run from the
+repository root:
+
+```sh
+node --test watchtower/test/read-source.test.mjs watchtower/test/cli.test.mjs
+```
+
+These checks use temporary synthetic files and the Node.js CLI; they do not
+compile COBOL or Fortran. The input behavior they cover includes:
+
+| File input | Expected behavior |
+| --- | --- |
+| ASCII text without a BOM | No BOM-related `ALZ-GEN-002` finding |
+| One initial UTF-8 BOM | The shared scanner ignores that initial mark |
+| Two or three initial BOMs | Remaining marks are reported by `ALZ-GEN-002` |
+| A BOM inside the text | It is reported as an invisible character |
+| Invalid UTF-8 in a selected source or resolved copybook | Exit 2; an existing output report retains its bytes |
+| Source truncated before the initially recorded size is read | Read error and exit 2; the previous report retains its bytes |
+| Short reads that eventually supply the complete file | Scanning proceeds normally |
+
+The [file-input regression](test/read-source.test.mjs) compares the exact
+findings from direct text, `readSourceFile` and CLI JSON for the BOM cases.
+The [CLI regressions](test/cli.test.mjs) also check decoding failures,
+exclusions and preservation of the output report. Unresolved optional COPY
+members retain the best-effort behavior described above.
+
 The suite covers both lexers, PICTURE parsing and the symbol table, every rule (positive and
 negative cases), suppressions, SARIF/JSON/text output, the CLI (exit codes, formats, symlinks,
 size limit, `--exclude`, `--output`), rule coverage of `examples/vulnerable`, zero findings on

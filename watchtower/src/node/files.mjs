@@ -15,7 +15,8 @@ const MAX_DEPTH = 64;
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 // O_NONBLOCK: a path swapped for a FIFO must not hang the scan on open().
 const NONBLOCK = constants.O_NONBLOCK ?? 0;
-const decoder = new TextDecoder('utf-8', { fatal: true });
+// Preserve the initial BOM here; the shared scanner removes exactly one.
+const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 /**
  * @typedef {object} SourceFile

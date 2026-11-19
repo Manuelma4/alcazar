@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,29 @@ import { join } from 'node:path';
 import { it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { readSourceFile } from '../src/node/files.mjs';
+import { scan } from '../src/index.mjs';
+
+it('handles byte-order marks identically in direct scans and file input', () => {
+  const folder = fs.mkdtempSync(join(tmpdir(), 'watchtower-bom-'));
+  try {
+    const source = join(folder, 'INPUT.txt');
+    const cli = fileURLToPath(new URL('../bin/watchtower.mjs', import.meta.url));
+    const bom = String.fromCodePoint(0xfeff);
+    const findings = (result) => result.findings.filter((f) => f.ruleId === 'ALZ-GEN-002');
+    for (const content of ['hello\n', `${bom}hello\n`, `${bom}${bom}hello\n`,
+      `${bom}${bom}${bom}hello\n`, `he${bom}llo\n`]) {
+      fs.writeFileSync(source, content);
+      const expected = findings(scan(content, { filename: 'INPUT.txt' }));
+      assert.deepEqual(findings(scan(readSourceFile(source), { filename: 'INPUT.txt' })), expected);
+      const result = spawnSync(process.execPath, [cli, 'scan', 'INPUT.txt', '--format', 'json'],
+        { cwd: folder, encoding: 'utf8' });
+      assert.ok(result.status === 0 || result.status === 1, result.stderr);
+      assert.deepEqual(findings(JSON.parse(result.stdout).results[0]), expected);
+    }
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
 
 it('preserves a report when a source is truncated during the read', () => {
   const folder = fs.mkdtempSync(join(tmpdir(), 'watchtower-truncate-'));

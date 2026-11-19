@@ -269,6 +269,8 @@ Only `watchtower/bin/` and `watchtower/src/node/` use Node.js APIs.
   `--output` report is preserved. Premature end-of-file during a source read
   also produces a read error. Unresolved COPY names remain best effort.
   Convert EBCDIC and other encodings to UTF-8 before scanning.
+  The scanner ignores one initial byte-order mark; additional or interior BOM
+  characters remain visible to the invisible-character rule, as in direct text scans.
 - COBOL `COPY` members are expanded for DATA DIVISION typing only, never in the PROCEDURE DIVISION,
   and members used with `REPLACING` are skipped. `REPLACE` and conditional compilation (`>>IF`) are
   not evaluated.

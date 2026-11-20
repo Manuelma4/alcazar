@@ -93,3 +93,54 @@ it('accepts empty sources and reads short chunks to completion', () => {
     fs.rmSync(folder, { recursive: true, force: true });
   }
 });
+
+
+it('preserves reports when selected sources or copybooks change during reading', () => {
+  const cli = fileURLToPath(new URL('../bin/watchtower.mjs', import.meta.url));
+  for (const member of [false, true]) {
+    for (const change of ['append', 'rewrite']) {
+      const folder = fs.mkdtempSync(join(tmpdir(), 'watchtower-change-'));
+      try {
+        const source = join(folder, 'INPUT.cbl');
+        const target = member ? join(folder, 'FIELDS.cpy') : source;
+        const report = join(folder, 'report.json');
+        fs.writeFileSync(source, '       IDENTIFICATION DIVISION.\n       PROGRAM-ID. SAMPLE.\n' +
+          (member ? '       DATA DIVISION.\n       WORKING-STORAGE SECTION.\n       COPY FIELDS.\n' : ''));
+        if (member) fs.writeFileSync(target, '       01 FIELD-A PIC X(8).\n');
+        fs.writeFileSync(report, 'previous report\n');
+        const script = `
+          const fs = require('node:fs');
+          const { syncBuiltinESMExports } = require('node:module');
+          const { pathToFileURL } = require('node:url');
+          const [source, target, report, cli, change] = process.argv.slice(1);
+          const inode = fs.statSync(target).ino;
+          const read = fs.readSync;
+          let changed = false;
+          fs.readSync = function(fd, buffer, offset, length, position) {
+            const count = read(fd, buffer, offset, length, position);
+            if (!changed && fs.fstatSync(fd).ino === inode) {
+              changed = true;
+              if (change === 'append') fs.appendFileSync(target, '       DISPLAY "added".\\n');
+              else {
+                const stats = fs.statSync(target);
+                fs.writeFileSync(target, 'X'.repeat(stats.size));
+                fs.utimesSync(target, stats.atime, new Date(stats.mtimeMs + 1000));
+              }
+            }
+            return count;
+          };
+          syncBuiltinESMExports();
+          process.argv = [process.execPath, cli, 'scan', source, '--format', 'json', '--output', report];
+          import(pathToFileURL(cli).href);
+        `;
+        const result = spawnSync(process.execPath, ['-e', script, source, target, report, cli, change],
+          { encoding: 'utf8' });
+        assert.equal(result.status, 2, `${member}/${change}: ${result.stderr}`);
+        assert.match(result.stderr, /source changed while being read/);
+        assert.equal(fs.readFileSync(report, 'utf8'), 'previous report\n');
+      } finally {
+        fs.rmSync(folder, { recursive: true, force: true });
+      }
+    }
+  }
+});

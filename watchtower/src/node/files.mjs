@@ -176,6 +176,10 @@ export function readSourceFile(path, inputs) {
       if (read === 0) throw new Error('source ended before the expected size');
       offset += read;
     }
+    const after = fstatSync(fd, { bigint: true });
+    if (after.size !== stats.size || after.mtimeNs !== stats.mtimeNs || after.ctimeNs !== stats.ctimeNs) {
+      throw new Error('source changed while being read');
+    }
     return decoder.decode(buffer.subarray(0, offset));
   } finally {
     closeSync(fd);

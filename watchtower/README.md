@@ -305,13 +305,16 @@ compile COBOL or Fortran. The input behavior they cover includes:
 | A BOM inside the text | It is reported as an invisible character |
 | Invalid UTF-8 in a selected source or resolved copybook | Exit 2; an existing output report retains its bytes |
 | Source truncated before the initially recorded size is read | Read error and exit 2; the previous report retains its bytes |
+| Size or modification/change time changes while reading a selected source or resolved copybook | Read error and exit 2; the previous report retains its bytes |
 | Short reads that eventually supply the complete file | Scanning proceeds normally |
 
 The [file-input regression](test/read-source.test.mjs) compares the exact
 findings from direct text, `readSourceFile` and CLI JSON for the BOM cases.
 The [CLI regressions](test/cli.test.mjs) also check decoding failures,
 exclusions and preservation of the output report. Unresolved optional COPY
-members retain the best-effort behavior described above.
+members retain the best-effort behavior described above. The metadata comparison
+detects changes observed across the read; it does not lock files or guarantee an
+immutable view against a writer that changes them after the final check.
 
 The suite covers both lexers, PICTURE parsing and the symbol table, every rule (positive and
 negative cases), suppressions, SARIF/JSON/text output, the CLI (exit codes, formats, symlinks,

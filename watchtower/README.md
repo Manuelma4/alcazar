@@ -47,15 +47,28 @@ watchtower scan [paths...]          scan files and directories (default: .)
   --output <file>                   write the report to a file instead of stdout
   --fail-on critical|high|medium|low|info|none
                                     exit 1 when an unsuppressed finding is at or above the
-                                    severity (default: high; none never fails)
+                                    severity (default: high; none disables the finding threshold)
   --exclude <glob>                  skip matching paths; repeatable; supports **, * and ?
   --no-color                        no ANSI colours (NO_COLOR is honoured as well)
 watchtower rules                    print the rule table
 watchtower --version | --help
 ```
 
-Exit codes: **0** no unsuppressed finding at or above `--fail-on`, **1** findings at or above it,
-**2** usage or I/O error (unknown option, missing path, unreadable file, output not writable).
+A completed scan writes its report before applying the finding threshold.
+Exit **0** means no unsuppressed finding reached the threshold, or the
+threshold was disabled. Exit **1** means the scan completed and found an
+unsuppressed finding at or above the threshold. Exit **2** means a usage or
+I/O error, including when `--fail-on none` is set. Check warnings for
+inputs skipped by the scanner.
+
+If reading a selected input fails during the scan, standard output may
+contain results from the files that could be read. With `--output`, that
+failure leaves an existing report in place. Consumers should check the
+exit status before treating either result as evidence of the current scan.
+A failure while writing the report can leave incomplete bytes in the
+destination because the writer truncates the file before writing. See the
+[scan and report paths](bin/watchtower.mjs) and the
+[CLI checks](test/cli.test.mjs).
 
 Files and safety:
 
@@ -114,10 +127,13 @@ critical/high = `error`, medium = `warning`, low/info = `note`.
 
 ### GitHub code scanning — the Watchtower action
 
-`watchtower/action.yml` packages the CLI as a composite GitHub Action: it
-installs Node 24, writes the SARIF report first (so an upload step with
-`if: always()` has it even when the gate fails), then prints the text report
-and fails the job at the chosen severity.
+The [composite action](action.yml) installs Node 24 and runs separate SARIF
+and text scans. The SARIF scan disables the finding threshold. When it
+succeeds, the text scan applies the configured threshold, so an upload
+step with `if: always()` can retain the report after a severity failure.
+If the first scan fails, the action stops before the text scan. Use a fresh
+report destination for each run and check the scan diagnostics before
+uploading after an I/O error. An existing file can belong to an earlier run.
 
 ```yaml
 name: watchtower

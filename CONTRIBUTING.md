@@ -13,13 +13,25 @@ Thank you for helping legacy code stay safe.
 There is nothing to `npm install`: Alcazar has **zero** runtime and
 development dependencies, and new ones are not accepted.
 
+From the repository root, run the Unicode guard and native checks.
+
 ```bash
-make            # build the COBOL / Fortran core (warnings are errors)
-make test       # Fortran and COBOL test suites
-npm test        # Gatehouse, Siege, Watchtower and Lookout tests
-make check      # everything above + the Watchtower self-scan
-npm run start:dev   # Gatehouse on http://localhost:8080 with live static reload
+npm run check:unicode
+make check
 ```
+
+`make check` builds the COBOL and Fortran code with warnings treated as errors,
+runs the native tests, runs the Node test runner and finishes with the Watchtower
+self-scan. The Unicode guard is a separate command.
+
+For a focused Node change, use `npm run test:gatehouse` or
+`npm run test:watchtower`. Gatehouse tests that require the legacy executables
+skip when they are absent from `build/bin/`. Build with `make` first and inspect
+the skip summary before reporting native integration coverage. Watchtower skips
+its example syntax checks when the corresponding compiler is unavailable.
+
+`npm run start:dev` starts Gatehouse on `http://localhost:8080` with live static
+reload.
 
 ## Rules of the house
 

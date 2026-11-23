@@ -213,17 +213,33 @@ systems, with a vulnerable and a fixed example.
 
 ## Use as a library (Node.js or browser)
 
-```js
-import { scan, RULES, VERSION, toSarif, formatText, summarize, detectLanguage } from '/watchtower/src/index.mjs';
+From the repository root, run this Node example with a relative module import.
 
-const result = scan(code, { filename: 'PAYROLL.cob' });
-// { language: 'cobol', format: 'fixed', findings: [...], suppressed: [...] }
+```bash
+node --input-type=module <<'JS'
+import { scan, formatText, summarize, toSarif } from './watchtower/src/index.mjs';
 
-const results = [{ file: 'PAYROLL.cob', ...result }];
-summarize(results);                    // { files, findings, suppressed, bySeverity, byRule }
-toSarif(results, { srcRoot: '/repo' }); // SARIF 2.1.0 object
-formatText(results, { color: false, failOn: 'high' });
+const source = [
+  '       IDENTIFICATION DIVISION.',
+  '       PROGRAM-ID. SAMPLE.',
+  '       PROCEDURE DIVISION.',
+  '           STOP RUN.',
+].join('\n');
+const filename = 'sample.cob';
+const result = scan(source, { filename });
+const results = [{ file: filename, ...result }];
+
+console.log(summarize(results));
+console.log(formatText(results, { color: false, failOn: 'high' }));
+const sarif = toSarif(results, { srcRoot: process.cwd() });
+console.log(sarif.version);
+JS
 ```
+
+In a browser served by Gatehouse, import the same module via
+`/watchtower/src/index.mjs`, as [Lookout](../lookout/README.md) does.
+The library scans the text supplied as `source`. Its `filename` helps detect
+language and source form. To provide copybook contents, supply a resolver.
 
 `scan(source, options)` options: `filename` (used for language and source-form detection),
 `language` (`'cobol' | 'fortran' | 'unknown'`, skips detection), `format` (`'fixed' | 'free'`), and

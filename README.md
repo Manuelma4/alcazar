@@ -97,20 +97,34 @@ cobol-fortran  BROKEN at entry 2: MAC-MISMATCH (1 verified before it)
 verdict        BROKEN
 ```
 
-An auditor checks a sealed job the same way, outside Gatehouse, with
-`K_ledger` and Gatehouse's public key — no master key, no token key, nothing
-that can sign an anchor (`K_ledger` can recompute a chain, but not the
-signature that pins its head). Gatehouse signs every job's anchor (Ed25519),
-and with `ALCAZAR_EVIDENCE_DIR` keeps each sealed job read-only after it
-expires:
+Gatehouse signs each sealed job's anchor with Ed25519. When
+`ALCAZAR_EVIDENCE_DIR` is configured, it retains a read-only evidence bundle
+after the job expires. The key custodian derives the audit material from the
+master key. Run this from the repository root with the custodian's protected
+key file and a fresh audit directory. The tool refuses to overwrite existing files.
 
 ```bash
-node scripts/audit-keys.mjs --master-key-file master.key --out audit/   # K_LEDGER.key + ANCHOR.pub
-node scripts/verify-ledger.mjs evidence/<job-id> <job-id> --ledger-key-file audit/K_LEDGER.key \
-     --anchor evidence/<job-id>/ANCHOR.json --anchor-key "$(cat audit/ANCHOR.pub)"
+master_key_file="var/private/master.key"
+audit_dir="var/audit-material"
+node scripts/audit-keys.mjs --master-key-file "$master_key_file" --out "$audit_dir"
 ```
 
-Without an anchor the verdict is UNANCHORED (exit 3), never INTACT.
+The auditor needs the evidence bundle, `K_LEDGER.key` and the independently
+trusted `ANCHOR.pub`. Keep the master key with the custodian and keep the ledger
+key and evidence outside version control. On Unix, give the ledger key file
+owner-only permissions, such as mode 0600. Use the paths and ID of the sealed job.
+
+```bash
+job_id="job-123"
+job_dir="var/evidence/$job_id"
+audit_dir="var/audit-material"
+node scripts/verify-ledger.mjs "$job_dir" "$job_id" --ledger-key-file "$audit_dir/K_LEDGER.key" \
+  --anchor "$job_dir/ANCHOR.json" --anchor-key "$(cat "$audit_dir/ANCHOR.pub")"
+```
+
+Build with `make` to include the COBOL/Fortran verifier. When `ledgerck` is
+absent, the CLI reports a Node-only verdict. A valid nonempty chain yields
+UNANCHORED (exit 3) when neither an anchor nor an expected count and head were supplied.
 
 ## How a transfer is judged
 

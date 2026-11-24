@@ -71,7 +71,8 @@ npm start                        # Gatehouse under the Node.js permission model;
 Node.js ≥ 22.13 is required (24 recommended). There is no `npm install`:
 Alcazar has no dependencies, runtime or development.
 
-**Just the batch core**, from a terminal:
+**Just the batch core**, from a terminal. See the [sample batch guide](examples/batch/README.md)
+for the working directory and which files the demo recreates.
 
 ```console
 $ make demo

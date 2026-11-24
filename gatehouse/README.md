@@ -17,6 +17,31 @@ into Lookout's sign-in screen. Production runs `node scripts/start-hardened.mjs`
 (demo mode off) with `ALCAZAR_API_TOKEN_FILE`, `ALCAZAR_KEY_FILE` and
 `ALCAZAR_EVIDENCE_DIR` set.
 
+## Check local batch readiness
+
+With Gatehouse running locally, read the public health endpoint:
+
+```bash
+(
+  set -o pipefail
+  curl -fsS --max-time 5 http://127.0.0.1:8080/api/health |
+    node --input-type=module -e '
+      import { readFileSync } from "node:fs";
+      const report = JSON.parse(readFileSync(0, "utf8"));
+      const ready = report.status === "ok" && report.selftest?.status === "pass";
+      if (!ready) console.error("Gatehouse batch self-test did not pass");
+      process.exitCode = ready ? 0 : 1;
+    '
+)
+```
+
+The health route can return HTTP 200 with `status: degraded` after a failed
+power-on self-test. The self-test gates batch submission, and its failure
+causes those operations to return HTTP 503. Check the server's startup log and
+whether the compiled batch tools are in `ALCAZAR_BIN_DIR`. Restart after
+correcting the startup failure to run the self-test again. This probe checks
+readiness without an operator token or a transaction payload.
+
 ## What it guarantees
 
 | Concern | Behaviour |

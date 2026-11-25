@@ -32,11 +32,19 @@ throw-away profile) while Gatehouse runs.
 
 ## Run it
 
-Lookout is served by Gatehouse; there is nothing to build or install.
+Lookout's static assets need no frontend build or npm install. For the live
+batch, risk and ledger views, build the native programs first. From the Alcazar
+repository root, with the [development toolchain](../CONTRIBUTING.md):
 
 ```sh
-npm run start:dev   # ALCAZAR_STATIC_RELOAD=1 ALCAZAR_DEMO=1 node gatehouse/src/server.mjs
+make -j2
+npm run start:dev
 ```
+
+The development script enables static reload and demo mode. By default
+Gatehouse binds to loopback on port 8080 and looks for native executables in
+`build/bin/`. The [Gatehouse guide](../gatehouse/README.md) lists configuration
+and the separate hardened start command.
 
 Open the sign-in link Gatehouse prints (`http://localhost:8080/#signin=…`),
 or paste its token into the sign-in screen: Lookout trades it for an
@@ -51,7 +59,9 @@ static files are re-read on every page request: edit, reload. Gatehouse serves
 and examples are built when Gatehouse starts, so restart it after changing
 `examples/`.
 
-Tests (pure modules, string table, CSP/Trusted Types lint — no browser, no network):
+Run the Lookout tests from the repository root with Node.js 22.13 or later.
+They exercise the pure modules, string table, and CSP/Trusted Types lint
+without a browser, network or native build:
 
 ```sh
 node --test 'lookout/test/*.test.mjs'

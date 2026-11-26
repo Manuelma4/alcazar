@@ -38,8 +38,25 @@ gfortran -fsyntax-only -ffixed-form examples/vulnerable/loancalc.f
 gfortran -fsyntax-only -J /tmp examples/vulnerable/risk_engine.f90
 ```
 
-(and the same for `examples/hardened/`). All COBOL examples are fixed format, so `-free` is not
-needed. Excluded from the check:
+To check only the hardened programs from the repository root, keep generated
+Fortran module files in a temporary directory.
+
+```bash
+(
+  set -eu
+  modules=$(mktemp -d)
+  trap 'rm -rf "$modules"' EXIT
+  for program in examples/hardened/*.cob examples/hardened/*.cbl; do
+    cobc -fsyntax-only -I examples/hardened "$program"
+  done
+  gfortran -fsyntax-only -ffixed-form -J "$modules" examples/hardened/loancalc.f
+  gfortran -fsyntax-only -J "$modules" examples/hardened/risk_engine.f90
+)
+```
+
+These commands check three COBOL and two Fortran programs without linking or
+executing them. The COBOL include path lets the compiler resolve `EMPREC.cpy`.
+The broader Watchtower example check excludes the following two files.
 
 - `CUSTSQL.cbl` contains `EXEC SQL` blocks and needs an SQL precompiler (IBM Db2 precompiler,
   `ocesql`, ...) before `cobc` can compile it.

@@ -9,10 +9,18 @@ make the safe way the easy way in legacy languages.
   secure wiping, robust statistics and safe JSON — callable from Fortran,
   COBOL and C through one C ABI.
 
+From the repository root, use the native toolchain listed in the
+[contribution guide](../CONTRIBUTING.md).
+
 ```bash
-make lib     # build/lib/librampart_cob.a and build/lib/librampart_f.a
-make test    # 183 COBOL checks, 98 Fortran checks
+make -j2 lib           # build/lib/librampart_cob.a and build/lib/librampart_f.a
+make -j2 test-fortran  # build/bin/test_crypto and build/bin/test_stats
+make -j2 test-cobol    # build/bin/test_rampart_cob, linked against both libraries
 ```
+
+Each test target builds and runs its own executables. `make -j2 test` runs
+both native suites. These commands need GnuCOBOL and gfortran, and run without
+Node.js or the Gatehouse server.
 
 ## COBOL modules
 

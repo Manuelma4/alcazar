@@ -168,22 +168,35 @@ mean "stop". Static analysis is necessary, not sufficient — which is why
 Alcazar also tests its batch core against an independent model of the
 business rules (`gatehouse/test/model.test.mjs`).
 
-## 4. Keep it fixed — CI
+## 4. Keep it fixed in CI
 
-```yaml
-- uses: Manuelma4/alcazar/watchtower@main   # pin a release commit SHA in production
-  with:
-    paths: src/cobol src/fortran
-    fail-on: high
-- uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
-  if: always()
-  with:
-    sarif_file: watchtower.sarif
+Watchtower's composite action writes SARIF before it applies the configured
+severity gate. Use the [complete workflow example](../watchtower/README.md#github-code-scanning--the-watchtower-action)
+for the report path, upload permissions and a step that attempts the upload
+even when the gate fails. The default gate fails on unsuppressed findings at
+high severity or above.
+
+From the repository root, run the same two phases locally on Alcazar's
+hardened library and applications. This example uses the stricter threshold
+that Alcazar's own CI applies to these paths.
+
+```bash
+(
+  set -eu
+  report_dir=$(mktemp -d)
+  node watchtower/bin/watchtower.mjs scan rampart apps \
+    --format sarif --output "$report_dir/watchtower.sarif" --fail-on none
+  printf 'SARIF report: %s\n' "$report_dir/watchtower.sarif"
+  node watchtower/bin/watchtower.mjs scan rampart apps --fail-on info
+)
 ```
 
-Findings then appear in the repository's *Security → Code scanning* tab, and
-a pull request that adds a sign-losing `MOVE` fails. When a finding is a
-deliberate, reviewed exception, say why in the code:
+If the second command finds an unsuppressed issue at the chosen severity,
+it exits with status 1 and the SARIF file remains available for inspection.
+A usage or I/O error exits with status 2. The report retains findings that
+have a valid in-source suppression and records their reasons.
+
+For a deliberate, reviewed exception, record the reason in the code:
 
 ```cobol
       *> watchtower-ignore ALZ-COB-006 -- amount validated positive above

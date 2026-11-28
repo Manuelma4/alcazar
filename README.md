@@ -111,6 +111,8 @@ node scripts/verify-ledger.mjs evidence/<job-id> <job-id> --ledger-key-file audi
 ```
 
 Without an anchor the verdict is UNANCHORED (exit 3), never INTACT.
+Unknown or repeated flags and missing flag values exit with usage status 2
+before verification starts.
 
 ## How a transfer is judged
 

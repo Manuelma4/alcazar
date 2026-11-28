@@ -41,12 +41,17 @@ function usage(message) {
 
 function parseArgs(argv) {
   const positional = [];
+  const allowed = new Set(['ledger-key-file', 'anchor', 'anchor-key', 'entries', 'head']);
   const options = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg.startsWith('--')) {
-      if (i + 1 >= argv.length) usage(`${arg} needs a value`);
-      options[arg.slice(2)] = argv[i + 1];
+      const name = arg.slice(2);
+      if (!allowed.has(name)) usage(`unknown option ${arg}`);
+      if (Object.hasOwn(options, name)) usage(`${arg} may only be specified once`);
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith('--')) usage(`${arg} needs a value`);
+      options[name] = value;
       i += 1;
     } else {
       positional.push(arg);

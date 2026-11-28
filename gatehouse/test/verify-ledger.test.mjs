@@ -18,6 +18,29 @@ import { SKIP_REASON } from './helpers.mjs';
 const JOB = 'j-audit';
 const SCRIPT = join(ROOT, 'scripts', 'verify-ledger.mjs');
 
+describe('verify-ledger option validation', () => {
+  const run = (...args) => spawnSync(process.execPath, [SCRIPT, 'unused-job', JOB, ...args], { encoding: 'utf8' });
+
+  it('reports an unknown flag before reading any input file', () => {
+    const result = run('--ledger-key-file', 'unused.key', '--anchor-keys', 'unused.pem');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /unknown option --anchor-keys/);
+  });
+
+  it('rejects duplicate anchor arguments instead of choosing the last one', () => {
+    const result = run('--ledger-key-file', 'unused.key', '--anchor', 'first.json',
+      '--anchor-key', 'unused.pem', '--anchor', 'second.json');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /--anchor may only be specified once/);
+  });
+
+  it('reports an option where a value is required', () => {
+    const result = run('--ledger-key-file', '--anchor', 'unused.json');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /--ledger-key-file needs a value/);
+  });
+});
+
 describe('verify-ledger (auditor, K_ledger only)', { skip: SKIP_REASON }, () => {
   const master = Buffer.alloc(32, 0x3c);
   const keys = deriveKeys(master);
